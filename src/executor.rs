@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(returns[0].to_i32(), 8);
     }
 
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_executor_run_async_func() -> Result<(), Box<dyn std::error::Error>> {
         fn async_hello<T>(
