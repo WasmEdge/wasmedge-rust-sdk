@@ -99,7 +99,7 @@ mod tests {
         // load a WASM module
         let path = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/test.wasm");
+            .join("examples/data/test.wasm");
         let result = loader.from_file(path);
         assert!(result.is_ok());
         let module = result.unwrap();
@@ -131,7 +131,7 @@ mod tests {
             // load a WASM module
             let path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/test.wasm");
+                .join("examples/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
@@ -162,7 +162,7 @@ mod tests {
             // load a WASM module
             let path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/test.wasm");
+                .join("examples/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();

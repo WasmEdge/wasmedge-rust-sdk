@@ -176,7 +176,7 @@ mod tests {
             // compile a file for universal WASM output format
             let in_path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/test.wat");
+                .join("examples/data/test.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot.so");
             #[cfg(target_os = "macos")]
@@ -212,7 +212,7 @@ mod tests {
             let compiler = result.unwrap();
             let in_path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/test.wat");
+                .join("examples/data/test.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_from_file.so");
             #[cfg(target_os = "macos")]
@@ -321,7 +321,7 @@ mod tests {
             // compile a file for universal WASM output format
             let in_path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+                .join("examples/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_fib_send.so");
             #[cfg(target_os = "macos")]
@@ -364,7 +364,7 @@ mod tests {
             // compile a file for universal WASM output format
             let in_path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+                .join("examples/data/fibonacci.wat");
             let out_path = std::path::PathBuf::from("fibonacci_sync_thread_aot.wasm");
             assert!(!out_path.exists());
             let result = compiler.compile_from_file(in_path, &out_path);
@@ -380,7 +380,7 @@ mod tests {
             // compile a file for universal WASM output format
             let in_path = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+                .join("examples/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_fib_sync.so");
             #[cfg(target_os = "macos")]
