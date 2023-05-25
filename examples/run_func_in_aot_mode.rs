@@ -29,8 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_host_registration_config(HostRegistrationConfigOptions::default().wasi(true))
             .build()?;
 
-        let wasm_file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+        let wasm_file = std::env::current_dir()?.join("examples/data/fibonacci.wat");
+        dbg!(&wasm_file);
         let out_dir = std::env::current_dir()?;
         let aot_filename = "example_aot_fibonacci";
 

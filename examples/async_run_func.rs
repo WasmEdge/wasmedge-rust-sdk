@@ -17,8 +17,7 @@ use wasmedge_sdk::{
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "async")]
     {
-        let wasm_file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+        let wasm_file = std::env::current_dir()?.join("examples/data/fibonacci.wat");
 
         let config = ConfigBuilder::new(CommonConfigOptions::default()).build()?;
         assert!(config.bulk_memory_operations_enabled());

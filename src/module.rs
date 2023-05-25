@@ -171,8 +171,9 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_module_from_wasm() {
         // load wasm module from a specified wasm file
-        let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("examples/data/fibonacci.wat");
 
         let result = Module::from_file(None, file);
         assert!(result.is_ok());
@@ -192,8 +193,9 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_module_from_wat() {
         // load wasm module from a specified wasm file
-        let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sys/tests/data/fibonacci.wat");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/tests/data/fibonacci.wat");
 
         let result = Module::from_file(None, file);
         assert!(result.is_ok());

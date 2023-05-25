@@ -263,8 +263,9 @@ mod tests {
         assert!(result.is_ok());
 
         // add a wasm module from a file
-        let file =
-            std::path::PathBuf::from(env!("WASMEDGE_DIR")).join("examples/wasm/fibonacci.wasm");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("examples/wasm/fibonacci.wasm");
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
         let module = result.unwrap();

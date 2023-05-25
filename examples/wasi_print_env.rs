@@ -36,8 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(wasi_module.exit_code(), 0);
 
         // load wasm module
-        let wasm_file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sdk/examples/wasi_print_env/target/wasm32-wasi/release/wasi_print_env.wasm");
+        let wasm_file = std::env::current_dir()?
+            .join("examples/wasi_print_env/target/wasm32-wasi/release/wasi_print_env.wasm");
 
         vm.run_func_from_file(wasm_file, "print_env", params!())?;
     }

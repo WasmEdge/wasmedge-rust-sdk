@@ -823,8 +823,9 @@ mod tests {
         let mut vm = result.unwrap();
 
         // register a wasm module from a specified wasm file
-        let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("examples/data/fibonacci.wat");
 
         // run `fib` function from the wasm file
         let result = vm.run_func_from_file(file, "fib", params!(10));
@@ -1134,8 +1135,9 @@ mod tests {
             let vm = result.unwrap();
 
             // register a wasm module from a specified wasm file
-            let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+            let file = std::env::current_dir()
+                .unwrap()
+                .join("examples/data/fibonacci.wat");
             let result = vm.register_module_from_file("extern", file);
             assert!(result.is_ok());
             let vm = result.unwrap();
@@ -1151,8 +1153,9 @@ mod tests {
             let vm = result.unwrap();
 
             // register a wasm module from a specified wasm file
-            let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/tests/data/fibonacci.wat");
+            let file = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/tests/data/fibonacci.wat");
             let result = vm.register_module_from_file("extern", file);
             assert!(result.is_ok());
             let vm = result.unwrap();

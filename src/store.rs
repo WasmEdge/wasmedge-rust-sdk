@@ -262,8 +262,9 @@ mod tests {
         let mut store = result.unwrap();
 
         // load wasm module
-        let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("examples/data/fibonacci.wat");
 
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
@@ -305,8 +306,9 @@ mod tests {
         let mut store = result.unwrap();
 
         // load wasm module
-        let file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sdk/examples/data/fibonacci.wat");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("examples/data/fibonacci.wat");
 
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
@@ -385,8 +387,9 @@ mod tests {
         assert!(result.is_ok());
 
         // add a wasm module from a file
-        let file =
-            std::path::PathBuf::from(env!("WASMEDGE_DIR")).join("examples/wasm/fibonacci.wasm");
+        let file = std::env::current_dir()
+            .unwrap()
+            .join("examples/wasm/fibonacci.wasm");
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
         let module = result.unwrap();

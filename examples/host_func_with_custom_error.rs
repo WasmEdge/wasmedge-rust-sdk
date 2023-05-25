@@ -111,8 +111,7 @@ fn main() -> anyhow::Result<()> {
         .register_import_module(import)?;
 
     // run the export wasm function named "call_add" from func.wasm
-    let wasm_file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sys/examples/data/funcs.wat");
+    let wasm_file = std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/funcs.wat");
     let add_ref = ExternRef::new(&mut real_add::<NeverType>);
     let a: i32 = 1234;
     let b: i32 = 5678;
