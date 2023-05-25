@@ -54,9 +54,7 @@ fn test_executor_with_statistics() {
     let result = Loader::create(Some(&config));
     assert!(result.is_ok());
     let loader = result.unwrap();
-    let path = std::env::current_dir()
-        .unwrap()
-        .join("crates/wasmedge-sys/tests/data/test.wat");
+    let path = std::env::current_dir().unwrap().join("tests/data/test.wat");
     let result = loader.from_file(path);
     assert!(result.is_ok());
     let module = result.unwrap();
@@ -82,9 +80,7 @@ fn test_executor_with_statistics() {
     let result = Loader::create(Some(&config));
     assert!(result.is_ok());
     let loader = result.unwrap();
-    let path = std::env::current_dir()
-        .unwrap()
-        .join("crates/wasmedge-sys/tests/data/test.wat");
+    let path = std::env::current_dir().unwrap().join("tests/data/test.wat");
     let result = loader.from_file(path);
     assert!(result.is_ok());
     let module = result.unwrap();
