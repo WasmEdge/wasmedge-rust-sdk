@@ -203,15 +203,17 @@ mod tests {
         // load from file
         {
             // load .wasm file
-            let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/fibonacci.wat");
+            let path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
             assert!(!module.inner.0.is_null());
 
-            let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/fibonacci.wat");
+            let path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
 
