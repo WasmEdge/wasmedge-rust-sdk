@@ -1,79 +1,82 @@
-# WasmEdge Rust Bindings
+# Overview
 
-WasmEdge Rust bindings consist of the following crates. They together provide different levels of APIs for Rust developers to use WasmEdge runtime. For example, `wasmedge-sdk` defines the high-level APIs for application development.
+The [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) crate defines a group of high-level Rust APIs, which are used to build up business applications.
 
-## Versioning Table
+* Notice that [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) requires **Rust v1.66 or above** in the **stable** channel.
 
-The following table provides the versioning information about each crate of WasmEdge Rust bindings.
+## Build
 
-| wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro|
-| :-----------: | :-----------: | :-----------: | :-----------: | :-----------: |
-| 0.8.1         | 0.12.1        | 0.13.1        | 0.4.1         | 0.3.0         |
-| 0.8.0         | 0.12.0        | 0.13.0        | 0.4.1         | 0.3.0         |
-| 0.7.1         | 0.11.2        | 0.12.2        | 0.3.1         | 0.3.0         |
-| 0.7.0         | 0.11.2        | 0.12          | 0.3.1         | 0.3.0         |
-| 0.6.0         | 0.11.2        | 0.11          | 0.3.0         | 0.2.0         |
-| 0.5.0         | 0.11.1        | 0.10          | 0.3.0         | 0.1.0         |
-| 0.4.0         | 0.11.0        | 0.9           | 0.2.1         | -             |
-| 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             |
-| 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             |
+To use or build the `wasmedge-sdk` crate, the `WasmEdge` library is required. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the `WasmEdge` library.
 
-## wasmedge-sdk
+* The following table provides the versioning information about each crate of WasmEdge Rust bindings.
 
-The `wasmedge-sdk` crate defines a group of high-level Rust APIs, which are used to build up business applications.
+  | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro|
+  | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: |
+  | 0.8.1         | 0.12.1        | 0.13.1        | 0.4.1         | 0.3.0         |
+  | 0.8.0         | 0.12.0        | 0.13.0        | 0.4.1         | 0.3.0         |
+  | 0.7.1         | 0.11.2        | 0.12.2        | 0.3.1         | 0.3.0         |
+  | 0.7.0         | 0.11.2        | 0.12          | 0.3.1         | 0.3.0         |
+  | 0.6.0         | 0.11.2        | 0.11          | 0.3.0         | 0.2.0         |
+  | 0.5.0         | 0.11.1        | 0.10          | 0.3.0         | 0.1.0         |
+  | 0.4.0         | 0.11.0        | 0.9           | 0.2.1         | -             |
+  | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             |
+  | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             |
+  
+## Example
 
-<p align = "left">
-    <strong>
-        <a href="https://github.com/WasmEdge/WasmEdge/blob/master/bindings/rust/wasmedge-sdk/README.md">README</a> | <a href="https://wasmedge.github.io/WasmEdge/wasmedge_sdk/">API Documentation</a>
-    </strong>
-</p>
-<p align="left">
-    <a href="https://crates.io/crates/wasmedge-sdk">
-        <img src="https://img.shields.io/crates/v/wasmedge-sdk.svg">
-    </a>
-</p>
+The example below is using `wasmedge-sdk` to run a WebAssembly module written with its WAT format (textual format). If you would like more examples, please refer to [Examples of WasmEdge RustSDK](https://github.com/second-state/wasmedge-rustsdk-examples).
 
-## wasmedge-sys
+```rust
+use wasmedge_sdk::{
+    error::HostFuncError, host_function, params, wat2wasm, Caller, ImportObjectBuilder, Module,
+    VmBuilder, WasmValue,
+};
 
-The `wasmedge-sys` crate defines a group of low-level Rust APIs for WasmEdge, a light-weight, high-performance, and extensible WebAssembly runtime for cloud-native, edge, and decentralized applications.
+// We define a function to act as our "env" "say_hello" function imported in the
+// Wasm program above.
+#[host_function]
+pub fn say_hello(_caller: Caller, _args: Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError> {
+    println!("Hello, world!");
 
-<p align = "left">
-    <strong>
-        <a href="https://github.com/WasmEdge/WasmEdge/blob/master/bindings/rust/wasmedge-sys/README.md">README</a> | <a href="https://wasmedge.github.io/WasmEdge/wasmedge_sys/">API Documentation</a>
-    </strong>
-</p>
-<p align="left">
-    <a href="https://crates.io/crates/wasmedge-sys">
-        <img src="https://img.shields.io/crates/v/wasmedge-sys.svg">
-    </a>
-</p>
+    Ok(vec![])
+}
 
-## wasmedge-types
+#[cfg_attr(test, test)]
+fn main() -> anyhow::Result<()> {
+    // create an import module
+    let import = ImportObjectBuilder::new()
+        .with_func::<(), ()>("say_hello", say_hello)?
+        .build("env")?;
 
-The `wasmedge-types` crate defines a group of common data structures used by both [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) and [wasmedge-sys](https://crates.io/crates/wasmedge-sys) crates.
+    let wasm_bytes = wat2wasm(
+        br#"
+    (module
+      ;; First we define a type with no parameters and no results.
+      (type $no_args_no_rets_t (func (param) (result)))
+    
+      ;; Then we declare that we want to import a function named "env" "say_hello" with
+      ;; that type signature.
+      (import "env" "say_hello" (func $say_hello (type $no_args_no_rets_t)))
+    
+      ;; Finally we create an entrypoint that calls our imported function.
+      (func $run (type $no_args_no_rets_t)
+        (call $say_hello))
+      ;; And mark it as an exported function named "run".
+      (export "run" (func $run)))
+    "#,
+    )?;
 
-<p align = "left">
-    <strong>
-        <a href="https://github.com/WasmEdge/WasmEdge/blob/master/bindings/rust/wasmedge-types/README.md">README</a> | <a href="https://wasmedge.github.io/WasmEdge/wasmedge_types/">API Documentation</a>
-    </strong>
-</p>
-<p align="left">
-    <a href="https://crates.io/crates/wasmedge-types">
-        <img src="https://img.shields.io/crates/v/wasmedge-types.svg">
-    </a>
-</p>
+    // loads a wasm module from the given in-memory bytes
+    let module = Module::from_bytes(None, wasm_bytes)?;
 
-## wasmedge-macro
+    // create an executor
+    VmBuilder::new()
+        .build()?
+        .register_import_module(import)?
+        .register_module(Some("extern"), module)?
+        .run_func(Some("extern"), "run", params!())?;
 
-The [wasmedge-macro](https://crates.io/crates/wasmedge-macro) crate defines a group of procedural macros used by both [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) and [wasmedge-sys](https://crates.io/crates/wasmedge-sys) crates.
+    Ok(())
+}
 
-<p align = "left">
-    <strong>
-        <a href="https://github.com/WasmEdge/WasmEdge/blob/master/bindings/rust/wasmedge-macro/README.md">README</a> | <a href="https://wasmedge.github.io/WasmEdge/wasmedge_macro/">API Documentation</a>
-    </strong>
-</p>
-<p align="left">
-    <a href="https://crates.io/crates/wasmedge-macro">
-        <img src="https://img.shields.io/crates/v/wasmedge-macro.svg">
-    </a>
-</p>
+```
