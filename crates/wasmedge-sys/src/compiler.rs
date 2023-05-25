@@ -174,8 +174,9 @@ mod tests {
             let compiler = result.unwrap();
 
             // compile a file for universal WASM output format
-            let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/test.wat");
+            let in_path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/test.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot.so");
             #[cfg(target_os = "macos")]
@@ -209,8 +210,9 @@ mod tests {
             let result = Compiler::create(Some(&config));
             assert!(result.is_ok());
             let compiler = result.unwrap();
-            let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/test.wat");
+            let in_path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/test.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_from_file.so");
             #[cfg(target_os = "macos")]
@@ -317,8 +319,9 @@ mod tests {
 
         let handle = thread::spawn(move || {
             // compile a file for universal WASM output format
-            let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/fibonacci.wasm");
+            let in_path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_fib_send.so");
             #[cfg(target_os = "macos")]
@@ -359,8 +362,9 @@ mod tests {
             let compiler = result.unwrap();
 
             // compile a file for universal WASM output format
-            let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/fibonacci.wasm");
+            let in_path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
             let out_path = std::path::PathBuf::from("fibonacci_sync_thread_aot.wasm");
             assert!(!out_path.exists());
             let result = compiler.compile_from_file(in_path, &out_path);
@@ -374,8 +378,9 @@ mod tests {
             assert!(result.is_ok());
             let compiler_main = result.unwrap();
             // compile a file for universal WASM output format
-            let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("bindings/rust/wasmedge-sys/examples/data/fibonacci.wasm");
+            let in_path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_fib_sync.so");
             #[cfg(target_os = "macos")]

@@ -97,8 +97,9 @@ mod tests {
         let loader = result.unwrap();
 
         // load a WASM module
-        let path =
-            std::path::PathBuf::from(env!("WASMEDGE_DIR")).join("test/api/apiTestData/test.wasm");
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/examples/data/test.wasm");
         let result = loader.from_file(path);
         assert!(result.is_ok());
         let module = result.unwrap();
@@ -128,8 +129,9 @@ mod tests {
             let loader = result.unwrap();
 
             // load a WASM module
-            let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("test/api/apiTestData/test.wasm");
+            let path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
@@ -158,8 +160,9 @@ mod tests {
             let loader = result.unwrap();
 
             // load a WASM module
-            let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-                .join("test/api/apiTestData/test.wasm");
+            let path = std::env::current_dir()
+                .unwrap()
+                .join("crates/wasmedge-sys/examples/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();

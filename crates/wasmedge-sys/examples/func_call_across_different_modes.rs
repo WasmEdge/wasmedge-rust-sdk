@@ -64,8 +64,7 @@ fn interpreter_call_aot() -> Result<(), Box<dyn std::error::Error>> {
     executor.register_import_object(&mut store, &import_obj)?;
 
     // compile the "module2" into AOT mode
-    let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sys/examples/data/module2.wat");
+    let in_path = std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/module2.wat");
     #[cfg(target_os = "linux")]
     let out_path = std::path::PathBuf::from("module2-uni.so");
     #[cfg(target_os = "macos")]
@@ -81,8 +80,7 @@ fn interpreter_call_aot() -> Result<(), Box<dyn std::error::Error>> {
     let _instance = executor.register_named_module(&mut store, &module, "module")?;
 
     // register an active module from "module1.wasm"
-    let wasm_file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sys/examples/data/module1.wat");
+    let wasm_file = std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/module1.wat");
     let active_module = Loader::create(Some(&config))?.from_file(wasm_file)?;
     Validator::create(Some(&config))?.validate(&active_module)?;
     let active_instance = executor.register_active_module(&mut store, &active_module)?;
@@ -151,15 +149,13 @@ fn aot_call_interpreter() -> Result<(), Box<dyn std::error::Error>> {
     executor.register_import_object(&mut store, &import_obj)?;
 
     // register a named module from "module2.wasm"
-    let wasm_file = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sys/examples/data/module2.wat");
+    let wasm_file = std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/module2.wat");
     let module2 = Loader::create(Some(&config))?.from_file(wasm_file)?;
     Validator::create(Some(&config))?.validate(&module2)?;
     let _named_instance = executor.register_named_module(&mut store, &module2, "module")?;
 
     // compile the "module1" into AOT mode
-    let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sys/examples/data/module1.wat");
+    let in_path = std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/module1.wat");
     #[cfg(target_os = "linux")]
     let out_path = std::path::PathBuf::from("module1-uni.so");
     #[cfg(target_os = "macos")]

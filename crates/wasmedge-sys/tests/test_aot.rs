@@ -42,8 +42,9 @@ fn test_aot() -> Result<(), Box<dyn std::error::Error>> {
     let compiler = result.unwrap();
 
     // compile a file for universal WASM output format
-    let in_path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-        .join("bindings/rust/wasmedge-sys/tests/data/fibonacci.wat");
+    let in_path = std::env::current_dir()
+        .unwrap()
+        .join("crates/wasmedge-sys/tests/data/fibonacci.wat");
     #[cfg(target_os = "macos")]
     let out_path = std::path::PathBuf::from("fibonacci_aot.dylib");
     #[cfg(target_os = "linux")]

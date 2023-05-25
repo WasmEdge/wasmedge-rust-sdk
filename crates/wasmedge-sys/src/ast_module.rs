@@ -424,8 +424,9 @@ mod tests {
 
     #[test]
     fn test_module_clone() {
-        let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sys/examples/data/import.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/examples/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -452,8 +453,9 @@ mod tests {
 
     #[test]
     fn test_module_import() {
-        let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sys/examples/data/import.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/examples/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -604,8 +606,9 @@ mod tests {
 
     #[test]
     fn test_module_export() {
-        let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sys/examples/data/import.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/examples/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -754,8 +757,9 @@ mod tests {
 
     #[test]
     fn test_module_send() {
-        let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sys/examples/data/import.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/examples/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -908,8 +912,9 @@ mod tests {
 
     #[test]
     fn test_module_sync() {
-        let path = std::path::PathBuf::from(env!("WASMEDGE_DIR"))
-            .join("bindings/rust/wasmedge-sys/examples/data/import.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("crates/wasmedge-sys/examples/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
