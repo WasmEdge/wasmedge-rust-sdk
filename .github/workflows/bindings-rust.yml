@@ -16,6 +16,8 @@ on:
       - "ci/*"
     paths:
       - ".github/workflows/bindings-rust.yml"
+      - "examples/*"
+      - "src/*"
       - "crates/wasmedge-sys/*"
       - "crates/wasmedge-types/*"
       - "crates/wasmedge-macro/*"
