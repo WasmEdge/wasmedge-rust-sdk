@@ -35,6 +35,11 @@ jobs:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
     steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Checkout WasmEdge Runtime
         uses: actions/checkout@v3
         with:
@@ -42,6 +47,7 @@ jobs:
           path: WasmEdge
 
       - name: Build WasmEdge with Release mode
+        working-directory: WasmEdge
         run: |
           apt update
           apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
@@ -50,11 +56,6 @@ jobs:
           cmake --install build
           ldconfig
           which wasmedge
-
-      - name: Checkout WasmEdge Rust SDK
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       # - name: Install Rust-nightly
       #   uses: dtolnay/rust-toolchain@nightly
