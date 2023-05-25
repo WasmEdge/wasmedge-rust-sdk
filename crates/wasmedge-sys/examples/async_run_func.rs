@@ -8,14 +8,14 @@
 //! cargo run -p wasmedge-sys --features async --example async_run_func
 //! ```
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", target_os = "linux"))]
 use wasmedge_sys::{r#async::AsyncState, Config, Executor, Loader, Store, Validator, WasmValue};
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", target_os = "linux"))]
 use wasmedge_types::wat2wasm;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_os = "linux"))]
     {
         let wasm_bytes = wat2wasm(
             br#"
