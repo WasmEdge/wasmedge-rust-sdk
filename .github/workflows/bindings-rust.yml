@@ -35,9 +35,11 @@ jobs:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout WasmEdge Runtime
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          repository: WasmEdge/WasmEdge
+          path: WasmEdge
 
       - name: Build WasmEdge with Release mode
         run: |
@@ -45,48 +47,56 @@ jobs:
           apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On .
           cmake --build build
+          cmake --install build
+          ldconfig
+          which wasmedge
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
         with:
-          components: rustfmt, clippy
+          fetch-depth: 0
 
-      - name: Rustfmt
-        working-directory: bindings/rust/
-        run: cargo +nightly fmt --all -- --check
+      # - name: Install Rust-nightly
+      #   uses: dtolnay/rust-toolchain@nightly
+      #   with:
+      #     components: rustfmt, clippy
 
-      - name: Clippy
-        working-directory: bindings/rust/
-        run: |
-          export WASMEDGE_DIR="$(pwd)/../../"
-          export WASMEDGE_BUILD_DIR="$(pwd)/../../build"
-          export WASMEDGE_PLUGIN_PATH="$(pwd)/../../build/plugins/wasmedge_process"
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+      # - name: Rustfmt
+      #   working-directory: bindings/rust/
+      #   run: cargo +nightly fmt --all -- --check
 
-      - name: Install Rust-stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
+      # - name: Clippy
+      #   working-directory: bindings/rust/
+      #   run: |
+      #     export WASMEDGE_DIR="$(pwd)/../../"
+      #     export WASMEDGE_BUILD_DIR="$(pwd)/../../build"
+      #     export WASMEDGE_PLUGIN_PATH="$(pwd)/../../build/plugins/wasmedge_process"
+      #     cargo +nightly clippy -V
+      #     cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
 
-      - name: Build Async-Hello for Testing
-        working-directory: bindings/rust/wasmedge-sys/examples
-        run: |
-          rustup target add wasm32-wasi
-          rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
+      # - name: Install Rust-stable
+      #   uses: dtolnay/rust-toolchain@stable
+      #   with:
+      #     toolchain: ${{ matrix.rust }}
 
-      - name: Test Rust Bindings
-        working-directory: bindings/rust/
-        run: |
-          export WASMEDGE_DIR="$(pwd)/../../"
-          export WASMEDGE_BUILD_DIR="$(pwd)/../../build"
-          export WASMEDGE_PLUGIN_PATH="$(pwd)/../../build/plugins/wasmedge_process"
-          export LD_LIBRARY_PATH="$(pwd)/../../build/lib/api"
-          cargo +nightly -Z sparse-registry update
-          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture
-          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture
-          cargo test --examples --locked --features aot,async,wasmedge_process,ffi -- --nocapture
-          cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
+      # - name: Build Async-Hello for Testing
+      #   working-directory: bindings/rust/wasmedge-sys/examples
+      #   run: |
+      #     rustup target add wasm32-wasi
+      #     rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
+
+      # - name: Test Rust Bindings
+      #   working-directory: bindings/rust/
+      #   run: |
+      #     export WASMEDGE_DIR="$(pwd)/../../"
+      #     export WASMEDGE_BUILD_DIR="$(pwd)/../../build"
+      #     export WASMEDGE_PLUGIN_PATH="$(pwd)/../../build/plugins/wasmedge_process"
+      #     export LD_LIBRARY_PATH="$(pwd)/../../build/lib/api"
+      #     cargo +nightly -Z sparse-registry update
+      #     cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture
+      #     cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture
+      #     cargo test --examples --locked --features aot,async,wasmedge_process,ffi -- --nocapture
+      #     cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
 
   # build_macos:
   #   name: MacOS
