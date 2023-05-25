@@ -308,7 +308,7 @@ mod tests {
         // register a wasm module from a wasm file
         let path = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+            .join("examples/data/fibonacci.wat");
         let module = Loader::create(Some(&config))?.from_file(path)?;
         Validator::create(Some(&config))?.validate(&module)?;
         let instance = executor.register_named_module(&mut store, &module, "extern")?;

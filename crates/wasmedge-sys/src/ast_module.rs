@@ -759,7 +759,7 @@ mod tests {
     fn test_module_send() {
         let path = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/import.wat");
+            .join("examples/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
