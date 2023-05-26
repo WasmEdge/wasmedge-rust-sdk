@@ -23,7 +23,7 @@ wasmedge-types = {path = "../wasmedge-types", version = "0.4"}
 wat = "1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wasmedge-async-wasi = {git = "https://github.com/second-state/async-wasi.git", branch = "main", optional = true}
+async-wasi = {git = "https://github.com/second-state/async-wasi.git", branch = "main", optional = true}
 
 [build-dependencies]
 bindgen = {version = "0.65", default-features = false, features = ["runtime"]}
@@ -35,7 +35,7 @@ tokio = {version = "1", features = ["full"]}
 
 [features]
 aot = []
-async = ["dep:fiber-for-wasmedge", "dep:wasmedge-async-wasi"]
+async = ["dep:fiber-for-wasmedge", "dep:async-wasi"]
 default = []
 ffi = []
 standalone = []
