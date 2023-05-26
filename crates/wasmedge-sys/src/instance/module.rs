@@ -9,9 +9,9 @@ use crate::{
     types::WasmEdgeString,
     Function, Global, Memory, Table, WasmEdgeResult,
 };
-use std::sync::Arc;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use wasmedge_async_wasi::snapshots::WasiCtx as AsyncWasiCtx;
+use async_wasi::snapshots::WasiCtx as AsyncWasiCtx;
+use std::sync::Arc;
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]

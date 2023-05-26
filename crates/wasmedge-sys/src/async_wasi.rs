@@ -2,6 +2,7 @@ use crate::{
     instance::function::{AsyncHostFn, HostFn},
     CallingFrame, Memory, WasmValue,
 };
+use async_wasi as wasi;
 use wasi::snapshots::{
     common::{
         error::Errno,
@@ -10,7 +11,6 @@ use wasi::snapshots::{
     },
     preview_1 as p, WasiCtx,
 };
-use wasmedge_async_wasi as wasi;
 use wasmedge_macro::{sys_async_host_function_new, sys_host_function};
 use wasmedge_types::{error::HostFuncError, ValType};
 
@@ -19,7 +19,7 @@ fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
     vec![WasmValue::from_i32(code as i32)]
 }
 
-impl wasmedge_async_wasi::snapshots::common::memory::Memory for Memory {
+impl async_wasi::snapshots::common::memory::Memory for Memory {
     fn get_data<T: Sized>(&self, offset: WasmPtr<T>) -> Result<&T, Errno> {
         unsafe {
             let r = std::mem::size_of::<T>();
@@ -82,8 +82,8 @@ impl wasmedge_async_wasi::snapshots::common::memory::Memory for Memory {
 
     fn mut_iovec(
         &mut self,
-        iovec_ptr: WasmPtr<wasmedge_async_wasi::snapshots::env::wasi_types::__wasi_iovec_t>,
-        iovec_len: wasmedge_async_wasi::snapshots::env::wasi_types::__wasi_size_t,
+        iovec_ptr: WasmPtr<async_wasi::snapshots::env::wasi_types::__wasi_iovec_t>,
+        iovec_len: async_wasi::snapshots::env::wasi_types::__wasi_size_t,
     ) -> Result<Vec<std::io::IoSliceMut<'_>>, Errno> {
         unsafe {
             let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
