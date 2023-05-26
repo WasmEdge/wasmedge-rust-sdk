@@ -19,21 +19,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout WasmEdge Runtime
-        uses: actions/checkout@v3
-        with:
-          repository: WasmEdge/WasmEdge
-          path: WasmEdge
+      # - name: Checkout WasmEdge Runtime
+      #   uses: actions/checkout@v3
+      #   with:
+      #     repository: WasmEdge/WasmEdge
+      #     path: WasmEdge
 
-      - name: Build WasmEdge with Release mode
-        working-directory: WasmEdge
-        run: |
-          apt update
-          apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On .
-          cmake --build build
-          cmake --install build
-          ldconfig
+      # - name: Build WasmEdge with Release mode
+      #   working-directory: WasmEdge
+      #   run: |
+      #     apt update
+      #     apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
+      #     cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On .
+      #     cmake --build build
+      #     cmake --install build
+      #     ldconfig
 
       - name: Install Rust v1.68
         uses: dtolnay/rust-toolchain@stable
