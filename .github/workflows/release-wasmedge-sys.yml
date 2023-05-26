@@ -4,13 +4,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-on:
-  # workflow_dispatch
-  push:
-    branches:
-      - feat/migrate-rust-sdk
-    paths:
-      - ".github/workflows/release-wasmedge-sys.yml"
+on: workflow_dispatch
 
 jobs:
   release_wasmedge_sys:
