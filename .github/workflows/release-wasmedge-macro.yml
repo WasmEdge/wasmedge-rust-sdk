@@ -11,6 +11,8 @@ on:
   push:
     branches:
       - feat/migrate-rust-sdk
+    paths:
+      - ".github/workflows/release-wasmedge-macro.yml"
 
 jobs:
   release_wasmedge_macro:
