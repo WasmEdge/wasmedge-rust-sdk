@@ -136,6 +136,7 @@ jobs:
           git config --global --add safe.directory $(pwd)
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On -DWASMEDGE_BUILD_TESTS=ON -DWASMEDGE_BUILD_PACKAGE="TGZ;DEB;RPM" .
           cmake --build build
+          cmake --install build
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
