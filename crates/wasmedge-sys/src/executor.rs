@@ -370,12 +370,12 @@ mod tests {
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
         MemType, Memory, Statistics, Table, TableType,
     };
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    use async_wasi::snapshots::WasiCtx;
     use std::{
         sync::{Arc, Mutex},
         thread,
     };
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use wasmedge_async_wasi::snapshots::WasiCtx;
     #[cfg(all(feature = "async", target_os = "linux"))]
     use wasmedge_macro::sys_async_host_function_new;
     use wasmedge_macro::sys_host_function;
