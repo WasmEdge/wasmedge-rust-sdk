@@ -274,7 +274,8 @@ jobs:
         with:
           args: install cmake ninja vswhere
 
-      - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
+      - name: Set up Windows 10 SDK
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
         with:
           sdk-version: 19041
 
