@@ -110,11 +110,6 @@ jobs:
     strategy:
       matrix:
         rust: [1.69, 1.68]
-    env:
-      WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
-      WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build
-      WASMEDGE_PLUGIN_PATH: ${{ github.workspace }}\WasmEdge\build\wasmedge\plugins\wasmedge_process
-      LD_LIBRARY_PATH: ${{ github.workspace }}\WasmEdge\build\lib\api
     container:
       image: fedora:latest
     steps:
@@ -170,6 +165,10 @@ jobs:
 
       - name: Test Rust SDK
         run: |
+          export WASMEDGE_DIR="$(pwd)/WasmEdge"
+          export WASMEDGE_BUILD_DIR="$(pwd)/WasmEdge/build"
+          export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
+          export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
           cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture
           cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
