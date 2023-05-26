@@ -123,6 +123,7 @@ jobs:
           path: WasmEdge
 
       - name: Build WasmEdge with Release mode
+        working-directory: WasmEdge
         run: |
           dnf update -y
           dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
@@ -198,6 +199,7 @@ jobs:
         run: brew install llvm ninja boost cmake
 
       - name: Build WasmEdge with Release mode
+        working-directory: WasmEdge
         run: |
           export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
           export CC=clang
@@ -239,76 +241,87 @@ jobs:
           cargo test --workspace --locked --features aot,ffi -- --test-threads=1
           cargo test --examples --locked --features aot,ffi -- --test-threads=1
 
-  # build_windows:
-  #   name: Windows
-  #   runs-on: windows-2022
-  #   strategy:
-  #     matrix:
-  #       rust: [1.69, 1.68]
-  #   env:
-  #     WASMEDGE_DIR: ${{ github.workspace }}
-  #     WASMEDGE_BUILD_DIR: ${{ github.workspace }}\build
-  #     WASMEDGE_PLUGIN_PATH: ${{ github.workspace }}\build\wasmedge\plugins\wasmedge_process
-  #     LD_LIBRARY_PATH: ${{ github.workspace }}\build\lib\api
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 0
+  build_windows:
+    name: Windows
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        rust: [1.69, 1.68]
+    env:
+      WASMEDGE_DIR: ${{ github.workspace }}
+      WASMEDGE_BUILD_DIR: ${{ github.workspace }}\build
+      WASMEDGE_PLUGIN_PATH: ${{ github.workspace }}\build\wasmedge\plugins\wasmedge_process
+      LD_LIBRARY_PATH: ${{ github.workspace }}\build\lib\api
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-  #     - name: Install dependency
-  #       uses: crazy-max/ghaction-chocolatey@v2
-  #       with:
-  #         args: install cmake ninja vswhere
+      - name: Checkout WasmEdge Runtime
+        uses: actions/checkout@v3
+        with:
+          repository: WasmEdge/WasmEdge
+          path: WasmEdge
 
-  #     - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
-  #       with:
-  #         sdk-version: 19041
+      - name: Install dependency
+        uses: crazy-max/ghaction-chocolatey@v2
+        with:
+          args: install cmake ninja vswhere
 
-  #     - name: Build WasmEdge with Release mode
-  #       run: |
-  #         $vsPath = (vswhere -latest -property installationPath)
-  #         Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
-  #         Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
-  #         $llvm = "LLVM-13.0.1-win64.zip"
-  #         curl -sLO https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-13.0.1/LLVM-13.0.1-win64.zip -o $llvm
-  #         Expand-Archive -Path $llvm
-  #         $llvm_dir = "$pwd\\LLVM-13.0.1-win64\\LLVM-13.0.1-win64\\lib\\cmake\\llvm"
-  #         $Env:CC = "clang-cl"
-  #         $Env:CXX = "clang-cl"
-  #         $cmake_sys_version = "10.0.19041.0"
-  #         cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
-  #         cmake --build build
+      - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
+        with:
+          sdk-version: 19041
 
-  #     - name: Install Rust-nightly
-  #       uses: dtolnay/rust-toolchain@nightly
-  #       with:
-  #         components: rustfmt, clippy
+      - name: Build WasmEdge with Release mode
+        working-directory: WasmEdge
+        run: |
+          $vsPath = (vswhere -latest -property installationPath)
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          $llvm = "LLVM-13.0.1-win64.zip"
+          curl -sLO https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-13.0.1/LLVM-13.0.1-win64.zip -o $llvm
+          Expand-Archive -Path $llvm
+          $llvm_dir = "$pwd\\LLVM-13.0.1-win64\\LLVM-13.0.1-win64\\lib\\cmake\\llvm"
+          $Env:CC = "clang-cl"
+          $Env:CXX = "clang-cl"
+          $cmake_sys_version = "10.0.19041.0"
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
+          cmake --build build
+          cmake --install build
 
-  #     - name: Rustfmt
-  #       working-directory: bindings/rust/
-  #       run: cargo +nightly fmt --all -- --check
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
 
-  #     - name: Clippy
-  #       run: |
-  #         $vsPath = (vswhere -latest -property installationPath)
-  #         Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
-  #         Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
-  #         cd bindings/rust/
-  #         cargo +nightly clippy -V
-  #         cargo +nightly clippy --lib --examples --features aot,ffi -- -D warnings
+      - name: Rustfmt
+        run: cargo +nightly fmt --all -- --check
 
-  #     - name: Install Rust-stable
-  #       uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         toolchain: ${{ matrix.rust }}
+      - name: Clippy
+        run: |
+          $vsPath = (vswhere -latest -property installationPath)
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,ffi -- -D warnings
 
-  #     - name: Test Rust Bindings
-  #       run: |
-  #         $vsPath = (vswhere -latest -property installationPath)
-  #         Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
-  #         Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
-  #         $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\WasmEdge\WasmEdge\build\lib\api"
-  #         cd bindings\rust
-  #         cargo +nightly -Z sparse-registry update
-  #         cargo test --workspace --features aot,ffi --locked -- --test-threads=1
-  #         cargo test --examples --features aot,ffi --locked -- --test-threads=1
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Build wasi_print_env for Testing
+        working-directory: examples/wasi_print_env
+        run: |
+          rustup target add wasm32-wasi
+          cargo build --target=wasm32-wasi --release
+
+      - name: Test Rust Bindings
+        run: |
+          $vsPath = (vswhere -latest -property installationPath)
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\WasmEdge\WasmEdge\build\lib\api"
+          cargo +nightly -Z sparse-registry update
+          cargo test --workspace --features aot,ffi --locked -- --test-threads=1
+          cargo test --examples --features aot,ffi --locked -- --test-threads=1
