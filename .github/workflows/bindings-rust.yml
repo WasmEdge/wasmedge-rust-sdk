@@ -60,6 +60,7 @@ jobs:
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On .
           cmake --build build
           cmake --install build
+          ldconfig
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -131,7 +132,7 @@ jobs:
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On -DWASMEDGE_BUILD_TESTS=ON -DWASMEDGE_BUILD_PACKAGE="TGZ;DEB;RPM" .
           cmake --build build
           cmake --install build
-          which wasmedge
+          ldconfig
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -208,7 +209,7 @@ jobs:
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release .
           cmake --build build
           cmake --install build
-          which wasmedge
+          ldconfig
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -235,7 +236,6 @@ jobs:
           cargo build --target=wasm32-wasi --release
 
       - name: Test Rust Bindings
-        working-directory: bindings/rust/
         run: |
           cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,ffi -- --test-threads=1
@@ -288,6 +288,7 @@ jobs:
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
           cmake --build build
           cmake --install build
+          which wasmedge
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
