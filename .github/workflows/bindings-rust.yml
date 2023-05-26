@@ -133,6 +133,7 @@ jobs:
           cmake --build build
           cmake --install build
           ldconfig
+          which wasmedge
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -166,6 +167,8 @@ jobs:
 
       - name: Test Rust SDK
         run: |
+          export WASMEDGE_INCLUDE_DIR="/usr/local/include"
+          export WASMEDGE_LIB_DIR="/usr/local/lib64"
           cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture
           cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
