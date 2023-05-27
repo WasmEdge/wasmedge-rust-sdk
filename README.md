@@ -1,14 +1,16 @@
-# Overview
+# WasmEdge Rust SDK
 
-The [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) crate defines a group of high-level Rust APIs, which are used to build up business applications.
+WasmEdge Rust SDK provides idiomatic [Rust](https://www.rust-lang.org/) language bindings for [WasmEdge](https://wasmedge.org/)
 
-* Notice that [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) requires **Rust v1.66 or above** in the **stable** channel.
+**Notice:** This project is still under active development and not guaranteed to have a stable API.
 
-## Build
+- [Documentation]()
+- [WasmEdge website](https://wasmedge.org/)
+- [WasmEdge GitHub page](https://github.com/WasmEdge/WasmEdge)
 
-To use or build the `wasmedge-sdk` crate, the `WasmEdge` library is required. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the `WasmEdge` library.
+## Get Started
 
-* The following table provides the versioning information about each crate of WasmEdge Rust bindings.
+Since this crate depends on the WasmEdge C API, it needs to be installed in your system first. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the WasmEdge library. The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: |
@@ -21,62 +23,16 @@ To use or build the `wasmedge-sdk` crate, the `WasmEdge` library is required. Pl
   | 0.4.0         | 0.11.0        | 0.9           | 0.2.1         | -             |
   | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             |
   | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             |
-  
-## Example
 
-The example below is using `wasmedge-sdk` to run a WebAssembly module written with its WAT format (textual format). If you would like more examples, please refer to [Examples of WasmEdge RustSDK](https://github.com/second-state/wasmedge-rustsdk-examples).
+WasmEdge Rust SDK can automatically search the following paths for the WasmEdge library:
 
-```rust
-use wasmedge_sdk::{
-    error::HostFuncError, host_function, params, wat2wasm, Caller, ImportObjectBuilder, Module,
-    VmBuilder, WasmValue,
-};
+- `/usr/local` (Linux/macOS)
+- `$HOME/.wasmedge` (Linux/macOS)
 
-// We define a function to act as our "env" "say_hello" function imported in the
-// Wasm program above.
-#[host_function]
-pub fn say_hello(_caller: Caller, _args: Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError> {
-    println!("Hello, world!");
+If you have installed the WasmEdge library in a different path, you can set the `WASMEDGE_INCLUDE_DIR` and `WASMEDGE_LIB_DIR` environment variables to the path of the WasmEdge library.
 
-    Ok(vec![])
-}
+**Notice:** The minimum supported Rust version is 1.67.
 
-#[cfg_attr(test, test)]
-fn main() -> anyhow::Result<()> {
-    // create an import module
-    let import = ImportObjectBuilder::new()
-        .with_func::<(), ()>("say_hello", say_hello)?
-        .build("env")?;
+## Examples
 
-    let wasm_bytes = wat2wasm(
-        br#"
-    (module
-      ;; First we define a type with no parameters and no results.
-      (type $no_args_no_rets_t (func (param) (result)))
-    
-      ;; Then we declare that we want to import a function named "env" "say_hello" with
-      ;; that type signature.
-      (import "env" "say_hello" (func $say_hello (type $no_args_no_rets_t)))
-    
-      ;; Finally we create an entrypoint that calls our imported function.
-      (func $run (type $no_args_no_rets_t)
-        (call $say_hello))
-      ;; And mark it as an exported function named "run".
-      (export "run" (func $run)))
-    "#,
-    )?;
-
-    // loads a wasm module from the given in-memory bytes
-    let module = Module::from_bytes(None, wasm_bytes)?;
-
-    // create an executor
-    VmBuilder::new()
-        .build()?
-        .register_import_module(import)?
-        .register_module(Some("extern"), module)?
-        .run_func(Some("extern"), "run", params!())?;
-
-    Ok(())
-}
-
-```
+The [Examples of WasmEdge RustSDK](https://github.com/second-state/wasmedge-rustsdk-examples) repo contains a number of examples that demonstrate how to use the WasmEdge Rust SDK.
