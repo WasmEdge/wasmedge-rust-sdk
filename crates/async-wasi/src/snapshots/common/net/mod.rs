@@ -3,10 +3,25 @@ pub mod async_tokio;
 
 pub use super::vfs::*;
 
-use std::future::Future;
-use std::io::{self, Read, Write};
-use std::net;
-use std::time::{Duration, SystemTime};
+use super::{
+    error::Errno,
+    types::{self as wasi_types, __wasi_subscription_t},
+};
+use std::{
+    future::Future,
+    io::{self, Read, Write},
+    net,
+    time::{Duration, SystemTime},
+};
+use wasi_types::{
+    __wasi_clockid_t::{
+        __WASI_CLOCKID_MONOTONIC as CLOCKID_MONOTONIC, __WASI_CLOCKID_REALTIME as CLOCKID_REALTIME,
+    },
+    __wasi_eventtype_t::{
+        __WASI_EVENTTYPE_CLOCK as CLOCK, __WASI_EVENTTYPE_FD_READ as RD,
+        __WASI_EVENTTYPE_FD_WRITE as WR,
+    },
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum AddressFamily {
@@ -62,9 +77,6 @@ pub struct WasiSocketState {
     pub so_send_timeout: Option<Duration>,
     pub fs_rights: WASIRights,
 }
-
-use super::error::Errno;
-use super::types::{self as wasi_types, __wasi_subscription_t};
 
 #[derive(Debug, Clone, Copy)]
 pub enum SubscriptionFdType {
@@ -135,13 +147,6 @@ pub enum Subscription {
 
 impl Subscription {
     pub fn from(s: &__wasi_subscription_t) -> Result<Subscription, Errno> {
-        use wasi_types::__wasi_clockid_t::__WASI_CLOCKID_MONOTONIC as CLOCKID_MONOTONIC;
-        use wasi_types::__wasi_clockid_t::__WASI_CLOCKID_REALTIME as CLOCKID_REALTIME;
-        use wasi_types::__wasi_eventtype_t::{
-            __WASI_EVENTTYPE_CLOCK as CLOCK, __WASI_EVENTTYPE_FD_READ as RD,
-            __WASI_EVENTTYPE_FD_WRITE as WR,
-        };
-
         let userdata = s.userdata;
         match s.u.tag {
             CLOCK => {

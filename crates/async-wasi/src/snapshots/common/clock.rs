@@ -1,6 +1,8 @@
 use crate::snapshots::{
-    common::error::Errno,
-    common::types::{__wasi_clockid_t, __wasi_errno_t, __wasi_timestamp_t},
+    common::{
+        error::Errno,
+        types::{__wasi_clockid_t, __wasi_errno_t, __wasi_timestamp_t},
+    },
     WasiCtx,
 };
 

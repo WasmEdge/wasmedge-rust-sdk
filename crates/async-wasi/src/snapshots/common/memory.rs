@@ -1,7 +1,11 @@
-use super::error::Errno;
-use super::types::{__wasi_ciovec_t, __wasi_iovec_t, __wasi_size_t};
-use std::io::{IoSlice, IoSliceMut};
-use std::ops::{Add, Deref, DerefMut, Sub};
+use super::{
+    error::Errno,
+    types::{__wasi_ciovec_t, __wasi_iovec_t, __wasi_size_t},
+};
+use std::{
+    io::{IoSlice, IoSliceMut},
+    ops::{Add, Deref, DerefMut, Sub},
+};
 
 pub trait Memory {
     fn get_data<'a, T: Sized>(&'a self, offset: WasmPtr<T>) -> Result<&'a T, Errno>;

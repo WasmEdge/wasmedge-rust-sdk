@@ -1,11 +1,13 @@
+use crate::snapshots::{
+    common::{
+        memory::{Memory, WasmPtr},
+        net::{self, AddressFamily, SocketType, WasiSocketState},
+        types::*,
+    },
+    env::{self, VFD},
+    Errno, WasiCtx,
+};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-
-use crate::snapshots::common::memory::{Memory, WasmPtr};
-use crate::snapshots::common::net::{self, AddressFamily, SocketType, WasiSocketState};
-use crate::snapshots::common::types::*;
-use crate::snapshots::env::{self, VFD};
-use crate::snapshots::Errno;
-use crate::snapshots::WasiCtx;
 
 cfg_if::cfg_if! {
     if #[cfg(any(

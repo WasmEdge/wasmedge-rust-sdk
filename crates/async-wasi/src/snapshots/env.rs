@@ -1,6 +1,4 @@
-pub use super::common::error::Errno;
-pub use super::common::types as wasi_types;
-pub use super::common::vfs;
+pub use super::common::{error::Errno, types as wasi_types, vfs};
 
 #[cfg(all(unix, feature = "async_tokio"))]
 pub use super::common::net::async_tokio::AsyncWasiSocket;

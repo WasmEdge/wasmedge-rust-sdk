@@ -1,10 +1,16 @@
-use super::common::clock;
-
-use super::common::error::Errno;
-use super::common::memory::{Memory, WasmPtr};
-use super::common::types::*;
-use super::env::{self, AsyncVM};
-use super::WasiCtx;
+use super::{
+    common::{
+        clock,
+        error::Errno,
+        memory::{Memory, WasmPtr},
+        types::*,
+    },
+    env::{
+        vfs::{self, FdFlags, INode, WASIRights},
+        AsyncVM, VFD,
+    },
+    WasiCtx,
+};
 
 #[cfg(all(unix, feature = "async_tokio"))]
 pub mod async_poll;
@@ -144,9 +150,6 @@ pub fn fd_prestat_get<M: Memory>(
     fd: __wasi_fd_t,
     prestat_ptr: WasmPtr<__wasi_prestat_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let prestat = mem.mut_data(prestat_ptr)?;
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
@@ -171,9 +174,6 @@ pub fn fd_prestat_dir_name<M: Memory>(
     path_buf_ptr: WasmPtr<u8>,
     path_max_len: __wasi_size_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
@@ -212,8 +212,6 @@ pub fn fd_advise<M: Memory>(
     _len: __wasi_filesize_t,
     _advice: __wasi_advice_t::Type,
 ) -> Result<(), Errno> {
-    use env::VFD;
-
     if let VFD::Inode(_) = ctx.get_mut_vfd(fd)? {
         Ok(())
     } else {
@@ -228,9 +226,6 @@ pub fn fd_allocate<M: Memory>(
     offset: __wasi_filesize_t,
     len: __wasi_filesize_t,
 ) -> Result<(), Errno> {
-    use super::env::vfs::INode;
-    use super::env::VFD;
-
     if let VFD::Inode(INode::File(f)) = ctx.get_mut_vfd(fd)? {
         f.fd_allocate(offset, len)
     } else {
@@ -251,8 +246,6 @@ pub fn fd_seek<M: Memory>(
     whence: __wasi_whence_t::Type,
     newoffset_ptr: WasmPtr<__wasi_filesize_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::File(fs)) => {
@@ -265,8 +258,6 @@ pub fn fd_seek<M: Memory>(
 }
 
 pub fn fd_sync<M: Memory>(ctx: &mut WasiCtx, _mem: &mut M, fd: __wasi_fd_t) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::File(fs)) => fs.fd_sync(),
@@ -282,8 +273,6 @@ pub fn fd_datasync<M: Memory>(
     _mem: &mut M,
     fd: __wasi_fd_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::File(fs)) => fs.fd_datasync(),
@@ -300,8 +289,6 @@ pub fn fd_tell<M: Memory>(
     fd: __wasi_fd_t,
     offset: WasmPtr<__wasi_filesize_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::File(fs)) => mem.write_data(offset, fs.fd_tell()?),
@@ -318,9 +305,6 @@ pub fn fd_fdstat_get<M: Memory>(
     fd: __wasi_fd_t,
     buf_ptr: WasmPtr<__wasi_fdstat_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::File(fs)) => {
@@ -350,10 +334,6 @@ pub fn fd_fdstat_set_flags<M: Memory>(
     fd: __wasi_fd_t,
     flags: __wasi_fdflags_t::Type,
 ) -> Result<(), Errno> {
-    use env::vfs::FdFlags;
-    use env::vfs::INode;
-    use env::VFD;
-
     let fdflags = FdFlags::from_bits_truncate(flags);
 
     let fd = ctx.get_mut_vfd(fd)?;
@@ -377,10 +357,6 @@ pub fn fd_fdstat_set_rights<M: Memory>(
     fs_rights_base: __wasi_rights_t::Type,
     fs_rights_inheriting: __wasi_rights_t::Type,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::vfs::WASIRights;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
     let fs_rights_base = WASIRights::from_bits_truncate(fs_rights_base);
     let fs_rights_inheriting = WASIRights::from_bits_truncate(fs_rights_inheriting);
@@ -402,9 +378,6 @@ pub fn fd_filestat_get<M: Memory>(
     fd: __wasi_fd_t,
     buf: WasmPtr<__wasi_filestat_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
 
     match fd {
@@ -438,9 +411,6 @@ pub fn fd_filestat_set_size<M: Memory>(
     fd: __wasi_fd_t,
     st_size: __wasi_filesize_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::File(fs)) => fs.fd_filestat_set_size(st_size),
@@ -456,9 +426,6 @@ pub fn fd_filestat_set_times<M: Memory>(
     st_mtim: __wasi_timestamp_t,
     fst_flags: __wasi_fstflags_t::Type,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
 
     match fd {
@@ -482,9 +449,6 @@ pub fn fd_read<M: Memory>(
     iovs_len: __wasi_size_t,
     nread: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
 
     match fd {
@@ -511,9 +475,6 @@ pub fn fd_pread<M: Memory>(
     offset: __wasi_filesize_t,
     nread: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
 
     match fd {
@@ -539,9 +500,6 @@ pub fn fd_write<M: Memory>(
     iovs_len: __wasi_size_t,
     nwritten: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
 
     match fd {
@@ -573,9 +531,6 @@ pub fn fd_pwrite<M: Memory>(
     offset: __wasi_filesize_t,
     nwritten: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
-
     let fd = ctx.get_mut_vfd(fd)?;
 
     match fd {
@@ -607,8 +562,6 @@ pub fn fd_readdir<M: Memory>(
     cookie: __wasi_dircookie_t,
     bufused_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(fd)?;
     let buf = mem.mut_slice(buf, buf_len as usize)?;
     match fd {
@@ -635,8 +588,6 @@ pub fn path_create_directory<M: Memory>(
     path_ptr: WasmPtr<u8>,
     path_len: __wasi_size_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(dirfd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
@@ -659,8 +610,6 @@ pub fn path_filestat_get<M: Memory>(
     path_len: __wasi_size_t,
     file_stat_ptr: WasmPtr<__wasi_filestat_t>,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(dirfd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
@@ -719,9 +668,6 @@ pub fn path_open<M: Memory>(
     fs_flags: __wasi_fdflags_t::Type,
     fd_ptr: WasmPtr<__wasi_fd_t>,
 ) -> Result<(), Errno> {
-    use env::vfs;
-    use env::vfs::INode;
-    use env::VFD;
     let vfd = ctx.get_mut_vfd(dirfd)?;
     match vfd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
@@ -777,8 +723,6 @@ pub fn path_remove_directory<M: Memory>(
     path_ptr: WasmPtr<u8>,
     path_len: __wasi_size_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(dirfd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
@@ -802,8 +746,6 @@ pub fn path_rename<M: Memory>(
     new_path: WasmPtr<u8>,
     new_path_len: __wasi_size_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let old_fd = ctx.get_vfd(old_fd)?;
     let new_fd = ctx.get_vfd(new_fd)?;
 
@@ -847,8 +789,6 @@ pub fn path_unlink_file<M: Memory>(
     path_ptr: WasmPtr<u8>,
     path_len: __wasi_size_t,
 ) -> Result<(), Errno> {
-    use env::vfs::INode;
-    use env::VFD;
     let fd = ctx.get_mut_vfd(dirfd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {

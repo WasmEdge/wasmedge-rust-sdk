@@ -1,14 +1,11 @@
 use super::*;
-
-use std::fs;
-use std::io;
-use std::io::Seek;
-use std::io::{Read, Write};
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::path::Path;
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::{
+    fs, io,
+    io::{Read, Seek, Write},
+    ops::{Deref, DerefMut},
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime},
+};
 
 fn systimespec(
     set: bool,

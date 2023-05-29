@@ -4,8 +4,7 @@ pub mod preview_1;
 use common::error::Errno;
 
 use crate::object_pool::ObjectPool;
-use env::wasi_types::__wasi_fd_t;
-use env::VFD;
+use env::{wasi_types::__wasi_fd_t, VFD};
 
 #[derive(Debug)]
 pub struct WasiCtx {
@@ -138,10 +137,8 @@ unsafe impl Sync for WasiCtx {}
 
 #[cfg(test)]
 mod vfs_test {
+    use super::{env::*, *};
     use std::path::PathBuf;
-
-    use super::env::*;
-    use super::*;
 
     #[test]
     fn vfd_opt() {
@@ -227,17 +224,20 @@ mod vfs_test {
 
 #[cfg(feature = "serialize")]
 pub mod serialize {
-    use std::net::SocketAddr;
-    use std::path::PathBuf;
-    use std::time::SystemTime;
-
-    use super::common::net::async_tokio::AsyncWasiSocket;
-    use super::common::net::{AddressFamily, ConnectState, SocketType, WasiSocketState};
-    use super::common::vfs::{self, INode, WASIRights};
-    use super::env::vfs::WasiPreOpenDir;
-    use super::VFD;
+    use super::{
+        common::{
+            net::{
+                async_tokio::AsyncWasiSocket, AddressFamily, ConnectState, SocketType,
+                WasiSocketState,
+            },
+            vfs::{self, INode, WASIRights},
+        },
+        env::vfs::WasiPreOpenDir,
+        VFD,
+    };
     use crate::object_pool::SerialObjectPool;
     use serde::{Deserialize, Serialize};
+    use std::{net::SocketAddr, path::PathBuf, time::SystemTime};
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub enum PollFdState {

@@ -1,9 +1,6 @@
-use std::future::Future;
-
-use super::error::Errno;
-use super::types as wasi_types;
+use super::{error::Errno, types as wasi_types};
 use bitflags::bitflags;
-use std::time::Duration;
+use std::{future::Future, time::Duration};
 
 pub mod sync;
 

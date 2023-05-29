@@ -1,16 +1,17 @@
-use std::ops::DerefMut;
-use std::os::unix::prelude::FromRawFd;
-
 use super::*;
-use crate::snapshots::common::types as wasi_types;
-use crate::snapshots::common::vfs;
-use crate::snapshots::env::Errno;
-
+use crate::snapshots::{
+    common::{types as wasi_types, vfs},
+    env::Errno,
+};
 use socket2::{SockAddr, Socket};
-use std::os::unix::prelude::{AsRawFd, RawFd};
-use tokio::io::unix::AsyncFdReadyGuard;
-use tokio::io::unix::{AsyncFd, TryIoError};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::{
+    ops::DerefMut,
+    os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
+};
+use tokio::io::{
+    unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
+    AsyncReadExt, AsyncWriteExt,
+};
 
 #[derive(Debug)]
 pub(crate) enum AsyncWasiSocketInner {

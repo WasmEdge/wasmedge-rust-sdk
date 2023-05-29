@@ -1,16 +1,16 @@
-use std::time::Duration;
-
+use crate::snapshots::{
+    common::{
+        memory::{Memory, WasmPtr},
+        net::{self, SubscriptionClock},
+        types::*,
+    },
+    env::VFD,
+    Errno, WasiCtx,
+};
 use futures::{stream::FuturesUnordered, StreamExt};
+use net::{async_tokio::AsyncWasiSocket, PrePoll, SubscriptionFd, SubscriptionFdType};
+use std::time::Duration;
 use tokio::io::unix::AsyncFdReadyGuard;
-
-use crate::snapshots::common::memory::{Memory, WasmPtr};
-use crate::snapshots::common::net::{self, SubscriptionClock};
-use crate::snapshots::common::types::*;
-use crate::snapshots::env::VFD;
-use crate::snapshots::Errno;
-use crate::snapshots::WasiCtx;
-use net::async_tokio::AsyncWasiSocket;
-use net::{PrePoll, SubscriptionFd, SubscriptionFdType};
 
 fn handle_event_err(type_: SubscriptionFdType, errno: Errno) -> __wasi_event_t {
     let mut r = __wasi_event_t {
