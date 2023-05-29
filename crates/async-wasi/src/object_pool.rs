@@ -4,7 +4,11 @@ use serde::{Deserialize, Serialize};
 pub struct ObjectPool<T> {
     stores: Vec<Vec<ObjectNode<T>>>,
 }
-
+impl<T> Default for ObjectPool<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<T> ObjectPool<T> {
     const DEFAULT_CAPACITY: usize = 512;
 
@@ -157,6 +161,7 @@ impl<T> ObjectPool<T> {
         }
     }
 
+    #[allow(clippy::never_loop)]
     fn first_none(&self) -> Option<ObjectIndex> {
         for (store_index, store) in self.stores.iter().enumerate() {
             'next_chunk: loop {
@@ -298,8 +303,20 @@ impl<T> SerialObjectPool<T> {
                     next_chunk: node.header.next_chunk_offset,
                     values: vec![],
                 };
-                for i in chunk_index..node.header.next_none_offset {
-                    serial_chunk.values.push(f(&store[i].obj.as_ref().unwrap()));
+                for item in store
+                    .iter()
+                    .take(node.header.next_none_offset)
+                    .skip(chunk_index)
+                {
+                    serial_chunk.values.push(f(item.obj.as_ref().unwrap()));
+                }
+
+                for item in store
+                    .iter()
+                    .take(node.header.next_none_offset)
+                    .skip(chunk_index)
+                {
+                    serial_chunk.values.push(f(item.obj.as_ref().unwrap()));
                 }
 
                 chunk_index = node.header.next_chunk_offset;
@@ -329,8 +346,12 @@ impl<T> SerialObjectPool<T> {
                     next_chunk: chunk_header.next_chunk_offset,
                     values: vec![],
                 };
-                for i in chunk_index..chunk_header.next_none_offset {
-                    let v = &mut store[i].obj;
+                for item in store
+                    .iter_mut()
+                    .take(chunk_header.next_none_offset)
+                    .skip(chunk_index)
+                {
+                    let v = &mut item.obj;
                     serial_chunk.values.push(f(v.take().unwrap()));
                 }
                 serial_chunks.push(serial_chunk);
@@ -377,7 +398,7 @@ impl<T: Clone> Clone for ObjectNode<T> {
     fn clone(&self) -> Self {
         ObjectNode {
             obj: self.obj.clone(),
-            header: self.header.clone(),
+            header: self.header,
         }
     }
 }

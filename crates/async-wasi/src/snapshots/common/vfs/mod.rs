@@ -123,12 +123,12 @@ bitflags! {
     }
 }
 
-impl Into<std::net::Shutdown> for SdFlags {
-    fn into(self) -> std::net::Shutdown {
+impl From<SdFlags> for std::net::Shutdown {
+    fn from(val: SdFlags) -> Self {
         use std::net::Shutdown;
-        if self == SdFlags::RD {
+        if val == SdFlags::RD {
             Shutdown::Read
-        } else if self == SdFlags::WR {
+        } else if val == SdFlags::WR {
             Shutdown::Write
         } else {
             Shutdown::Both

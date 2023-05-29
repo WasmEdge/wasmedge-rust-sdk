@@ -73,7 +73,7 @@ pub fn sock_open<M: Memory>(
     }
 
     let s = net::async_tokio::AsyncWasiSocket::open(state)?;
-    let fd = ctx.insert_vfd(env::VFD::AsyncSocket(s).into())?;
+    let fd = ctx.insert_vfd(env::VFD::AsyncSocket(s))?;
     mem.write_data(ro_fd_ptr, fd)?;
     Ok(())
 }
@@ -141,7 +141,7 @@ pub async fn sock_accept<M: Memory>(
             ctx.io_state = IoState::Empty;
         }
         let cs = cs?;
-        let new_fd = ctx.insert_vfd(env::VFD::AsyncSocket(cs).into())?;
+        let new_fd = ctx.insert_vfd(env::VFD::AsyncSocket(cs))?;
         mem.write_data(ro_fd_ptr, new_fd)?;
         Ok(())
     } else {
@@ -459,11 +459,10 @@ pub fn sock_getsockopt<M: Memory>(
                 }
 
                 let (_, t) = s.get_so_type();
-                let s = match t {
-                    SocketType::Datagram => __wasi_sock_type_t::__WASI_SOCK_TYPE_SOCK_DGRAM,
-                    SocketType::Stream => __wasi_sock_type_t::__WASI_SOCK_TYPE_SOCK_STREAM,
-                } as i32;
-                s
+                match t {
+                    SocketType::Datagram => __wasi_sock_type_t::__WASI_SOCK_TYPE_SOCK_DGRAM as i32,
+                    SocketType::Stream => __wasi_sock_type_t::__WASI_SOCK_TYPE_SOCK_STREAM as i32,
+                }
             }
             __wasi_sock_opt_so_t::__WASI_SOCK_OPT_SO_ERROR => {
                 if let Some(e) = s.get_so_error()? {
@@ -561,7 +560,7 @@ pub fn sock_getsockopt<M: Memory>(
                     wasm_buf.copy_from_slice(&device[0..copy_len]);
                     mem.write_data(flag_size_ptr, (copy_len + 1) as u32)?;
                 } else {
-                    mem.write_data(flag_size_ptr, 0 as u32)?;
+                    mem.write_data(flag_size_ptr, 0_u32)?;
                 }
                 return Ok(());
             }

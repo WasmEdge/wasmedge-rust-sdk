@@ -23,28 +23,18 @@ use wasi_types::{
     },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum AddressFamily {
+    #[default]
     Inet4,
     Inet6,
 }
 
-impl Default for AddressFamily {
-    fn default() -> Self {
-        AddressFamily::Inet4
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum SocketType {
     Datagram,
+    #[default]
     Stream,
-}
-
-impl Default for SocketType {
-    fn default() -> Self {
-        SocketType::Stream
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -169,25 +159,22 @@ impl Subscription {
                                     err: Some(Errno::__WASI_ERRNO_INVAL),
                                 }))
                             }
+                        } else if clock.timeout == 0 {
+                            Ok(Subscription::RealClock(SubscriptionClock {
+                                timeout: None,
+                                userdata,
+                                err: None,
+                            }))
                         } else {
-                            if clock.timeout == 0 {
-                                Ok(Subscription::RealClock(SubscriptionClock {
-                                    timeout: None,
-                                    userdata,
-                                    err: None,
-                                }))
-                            } else {
-                                let duration =
-                                    Duration::from_nanos(clock.timeout + clock.precision);
+                            let duration = Duration::from_nanos(clock.timeout + clock.precision);
 
-                                let timeout = std::time::SystemTime::now().checked_add(duration);
+                            let timeout = std::time::SystemTime::now().checked_add(duration);
 
-                                Ok(Subscription::RealClock(SubscriptionClock {
-                                    timeout,
-                                    userdata,
-                                    err: None,
-                                }))
-                            }
+                            Ok(Subscription::RealClock(SubscriptionClock {
+                                timeout,
+                                userdata,
+                                err: None,
+                            }))
                         }
                     }
 

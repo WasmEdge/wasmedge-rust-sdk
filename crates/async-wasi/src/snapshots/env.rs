@@ -14,19 +14,11 @@ pub enum VFD {
 impl VFD {
     #[cfg(all(unix, feature = "async_tokio"))]
     pub fn is_socket(&self) -> bool {
-        if let VFD::AsyncSocket(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, VFD::AsyncSocket(_))
     }
 
     pub fn is_inode(&self) -> bool {
-        if let VFD::Inode(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, VFD::Inode(_))
     }
 }
 

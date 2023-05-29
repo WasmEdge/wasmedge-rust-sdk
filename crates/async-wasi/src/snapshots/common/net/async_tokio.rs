@@ -43,9 +43,7 @@ impl AsyncWasiSocketInner {
                 s.set_reuse_address(true)?;
                 s.bind(addr)
             }
-            AsyncWasiSocketInner::AsyncFd(_) => {
-                return Err(io::Error::from_raw_os_error(libc::EINVAL))
-            }
+            AsyncWasiSocketInner::AsyncFd(_) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
@@ -234,7 +232,7 @@ impl AsyncWasiSocket {
 
     pub fn bind(&mut self, addr: net::SocketAddr) -> io::Result<()> {
         use socket2::SockAddr;
-        let sock_addr = SockAddr::from(addr.clone());
+        let sock_addr = SockAddr::from(addr);
         self.inner.bind(&sock_addr)?;
         if let SocketType::Datagram = self.state.sock_type.1 {
             self.inner.register()?;
@@ -268,9 +266,11 @@ impl AsyncWasiSocket {
     }
 
     pub async fn accept(&mut self) -> io::Result<Self> {
-        let mut new_state = WasiSocketState::default();
-        new_state.nonblocking = self.state.nonblocking;
-        new_state.so_conn_state = ConnectState::Connect;
+        let mut new_state = WasiSocketState {
+            nonblocking: self.state.nonblocking,
+            so_conn_state: ConnectState::Connect,
+            ..Default::default()
+        };
 
         if self.state.nonblocking {
             let (cs, _) = self.inner.accept()?;
@@ -305,7 +305,7 @@ impl AsyncWasiSocket {
     }
 
     pub async fn connect(&mut self, addr: net::SocketAddr) -> io::Result<()> {
-        let address = SockAddr::from(addr.clone());
+        let address = SockAddr::from(addr);
         self.state.so_conn_state = ConnectState::Connect;
         self.state.peer_addr = Some(addr);
 
@@ -561,7 +561,7 @@ impl AsyncWasiSocket {
             Ok(addr)
         } else {
             let addr = self.inner.get_ref()?.peer_addr()?.as_socket().unwrap();
-            self.state.peer_addr = Some(addr.clone());
+            self.state.peer_addr = Some(addr);
             Ok(addr)
         }
     }
@@ -571,7 +571,7 @@ impl AsyncWasiSocket {
             Ok(addr)
         } else {
             let addr = self.inner.get_ref()?.local_addr()?.as_socket().unwrap();
-            self.state.local_addr = Some(addr.clone());
+            self.state.local_addr = Some(addr);
             Ok(addr)
         }
     }

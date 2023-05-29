@@ -24,8 +24,7 @@ pub fn args_get<M: Memory>(
     argv_buf: WasmPtr<u8>,
 ) -> Result<(), Errno> {
     let mut header_offset = 0;
-    let mut argv_index = 0;
-    for arg in &ctx.args {
+    for (argv_index, arg) in ctx.args.iter().enumerate() {
         let arg_buf = mem.mut_data(argv + argv_index)?;
         *arg_buf = ((argv_buf.0 + header_offset) as u32).to_le();
 
@@ -33,7 +32,6 @@ pub fn args_get<M: Memory>(
         let arg_buf = mem.mut_slice(argv_buf + header_offset, arg.len())?;
         arg_buf.copy_from_slice(arg_bytes);
 
-        argv_index += 1;
         header_offset += arg.len() + 1;
     }
     Ok(())
@@ -68,9 +66,8 @@ pub fn environ_get<M: Memory>(
     environ_buf: WasmPtr<u8>,
 ) -> Result<(), Errno> {
     let mut header_offset = 0;
-    let mut environ_index = 0;
 
-    for env in &ctx.envs {
+    for (environ_index, env) in ctx.envs.iter().enumerate() {
         let environ_ptr = mem.mut_data(environ + environ_index)?;
         *environ_ptr = ((environ_buf.0 + header_offset) as u32).to_le();
 
@@ -78,7 +75,6 @@ pub fn environ_get<M: Memory>(
         let env_buf = mem.mut_slice(environ_buf + header_offset, env.len())?;
         env_buf.copy_from_slice(env_bytes);
 
-        environ_index += 1;
         header_offset += env.len() + 1;
     }
     Ok(())

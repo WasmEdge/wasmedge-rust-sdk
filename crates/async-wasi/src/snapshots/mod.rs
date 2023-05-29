@@ -17,7 +17,11 @@ pub struct WasiCtx {
     pub io_state: serialize::IoState,
     pub exit_code: u32,
 }
-
+impl Default for WasiCtx {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl WasiCtx {
     pub fn new() -> Self {
         let wasi_stdin = VFD::Inode(env::vfs::INode::Stdin(env::vfs::WasiStdin));
@@ -28,7 +32,7 @@ impl WasiCtx {
         vfs.push(wasi_stdout);
         vfs.push(wasi_stderr);
 
-        let ctx = WasiCtx {
+        WasiCtx {
             args: vec![],
             envs: vec![],
             vfs,
@@ -37,9 +41,7 @@ impl WasiCtx {
             #[cfg(feature = "serialize")]
             io_state: serialize::IoState::Empty,
             exit_code: 0,
-        };
-
-        ctx
+        }
     }
 
     pub fn push_preopen(&mut self, preopen: env::vfs::WasiPreOpenDir) {
@@ -350,9 +352,9 @@ pub mod serialize {
         }
     }
 
-    impl Into<(AddressFamily, SocketType)> for SerialSocketType {
-        fn into(self) -> (AddressFamily, SocketType) {
-            match self {
+    impl From<SerialSocketType> for (AddressFamily, SocketType) {
+        fn from(val: SerialSocketType) -> Self {
+            match val {
                 SerialSocketType::TCP4 => (AddressFamily::Inet4, SocketType::Stream),
                 SerialSocketType::TCP6 => (AddressFamily::Inet6, SocketType::Stream),
                 SerialSocketType::UDP4 => (AddressFamily::Inet4, SocketType::Datagram),
@@ -378,9 +380,9 @@ pub mod serialize {
         }
     }
 
-    impl Into<ConnectState> for SerialConnectState {
-        fn into(self) -> ConnectState {
-            match self {
+    impl From<SerialConnectState> for ConnectState {
+        fn from(val: SerialConnectState) -> Self {
+            match val {
                 SerialConnectState::Empty => ConnectState::Empty,
                 SerialConnectState::Listening => ConnectState::Listening,
                 SerialConnectState::Connected => ConnectState::Connect,
@@ -425,92 +427,84 @@ pub mod serialize {
         }
     }
 
-    impl Into<WasiSocketState> for SerialWasiSocketState {
-        fn into(self) -> WasiSocketState {
+    impl From<SerialWasiSocketState> for WasiSocketState {
+        fn from(val: SerialWasiSocketState) -> Self {
             WasiSocketState {
-                sock_type: self.sock_type.into(),
-                local_addr: self.local_addr,
-                peer_addr: self.peer_addr,
-                bind_device: self.bind_device,
-                backlog: self.backlog,
+                sock_type: val.sock_type.into(),
+                local_addr: val.local_addr,
+                peer_addr: val.peer_addr,
+                bind_device: val.bind_device,
+                backlog: val.backlog,
                 shutdown: None,
-                nonblocking: self.nonblocking,
-                so_reuseaddr: self.so_reuseaddr,
-                so_conn_state: self.so_conn_state.into(),
-                so_recv_buf_size: self.so_recv_buf_size,
-                so_send_buf_size: self.so_send_buf_size,
-                so_recv_timeout: self
-                    .so_recv_timeout
-                    .map(|d| std::time::Duration::from_nanos(d)),
-                so_send_timeout: self
-                    .so_send_timeout
-                    .map(|d| std::time::Duration::from_nanos(d)),
-                fs_rights: WASIRights::from_bits_truncate(self.fs_rights),
+                nonblocking: val.nonblocking,
+                so_reuseaddr: val.so_reuseaddr,
+                so_conn_state: val.so_conn_state.into(),
+                so_recv_buf_size: val.so_recv_buf_size,
+                so_send_buf_size: val.so_send_buf_size,
+                so_recv_timeout: val.so_recv_timeout.map(std::time::Duration::from_nanos),
+                so_send_timeout: val.so_send_timeout.map(std::time::Duration::from_nanos),
+                fs_rights: WASIRights::from_bits_truncate(val.fs_rights),
             }
         }
     }
 
-    impl Into<WasiSocketState> for &SerialWasiSocketState {
-        fn into(self) -> WasiSocketState {
+    impl From<&SerialWasiSocketState> for WasiSocketState {
+        fn from(val: &SerialWasiSocketState) -> Self {
             WasiSocketState {
-                sock_type: self.sock_type.clone().into(),
-                local_addr: self.local_addr.clone(),
-                peer_addr: self.peer_addr.clone(),
-                bind_device: self.bind_device.clone(),
-                backlog: self.backlog,
+                sock_type: val.sock_type.into(),
+                local_addr: val.local_addr,
+                peer_addr: val.peer_addr,
+                bind_device: val.bind_device.clone(),
+                backlog: val.backlog,
                 shutdown: None,
-                nonblocking: self.nonblocking,
-                so_reuseaddr: self.so_reuseaddr,
-                so_conn_state: self.so_conn_state.into(),
-                so_recv_buf_size: self.so_recv_buf_size,
-                so_send_buf_size: self.so_send_buf_size,
-                so_recv_timeout: self
-                    .so_recv_timeout
-                    .map(|d| std::time::Duration::from_nanos(d)),
-                so_send_timeout: self
-                    .so_send_timeout
-                    .map(|d| std::time::Duration::from_nanos(d)),
-                fs_rights: WASIRights::from_bits_truncate(self.fs_rights),
+                nonblocking: val.nonblocking,
+                so_reuseaddr: val.so_reuseaddr,
+                so_conn_state: val.so_conn_state.into(),
+                so_recv_buf_size: val.so_recv_buf_size,
+                so_send_buf_size: val.so_send_buf_size,
+                so_recv_timeout: val.so_recv_timeout.map(std::time::Duration::from_nanos),
+                so_send_timeout: val.so_send_timeout.map(std::time::Duration::from_nanos),
+                fs_rights: WASIRights::from_bits_truncate(val.fs_rights),
             }
         }
     }
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct SerialStdin;
-    impl Into<VFD> for SerialStdin {
-        fn into(self) -> VFD {
+    impl From<SerialStdin> for VFD {
+        fn from(_: SerialStdin) -> Self {
             VFD::Inode(INode::Stdin(vfs::WasiStdin))
         }
     }
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct SerialStdout;
-    impl Into<VFD> for SerialStdout {
-        fn into(self) -> VFD {
+    impl From<SerialStdout> for VFD {
+        fn from(_: SerialStdout) -> Self {
             VFD::Inode(INode::Stdout(vfs::WasiStdout))
         }
     }
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct SerialStderr;
-    impl Into<VFD> for SerialStderr {
-        fn into(self) -> VFD {
+    impl From<SerialStderr> for VFD {
+        fn from(_: SerialStderr) -> Self {
             VFD::Inode(INode::Stderr(vfs::WasiStderr))
         }
     }
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct SerialWasiDir;
-    impl Into<VFD> for SerialWasiDir {
-        fn into(self) -> VFD {
+    impl From<SerialWasiDir> for VFD {
+        fn from(_: SerialWasiDir) -> Self {
             VFD::Closed
         }
     }
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct SerialWasiFile;
-    impl Into<VFD> for SerialWasiFile {
-        fn into(self) -> VFD {
+    impl From<SerialWasiFile> for VFD {
+        fn from(_: SerialWasiFile) -> Self {
             VFD::Closed
         }
     }

@@ -8,31 +8,27 @@ use std::{
 };
 
 pub trait Memory {
-    fn get_data<'a, T: Sized>(&'a self, offset: WasmPtr<T>) -> Result<&'a T, Errno>;
+    fn get_data<T: Sized>(&self, offset: WasmPtr<T>) -> Result<&T, Errno>;
 
-    fn get_slice<'a, T: Sized>(&'a self, offset: WasmPtr<T>, len: usize) -> Result<&'a [T], Errno>;
+    fn get_slice<T: Sized>(&self, offset: WasmPtr<T>, len: usize) -> Result<&[T], Errno>;
 
     fn get_iovec<'a>(
-        &'a self,
+        &self,
         iovec_ptr: WasmPtr<__wasi_ciovec_t>,
         iovec_len: __wasi_size_t,
     ) -> Result<Vec<IoSlice<'a>>, Errno>;
 
-    fn mut_data<'a, T: Sized>(&'a mut self, offset: WasmPtr<T>) -> Result<&'a mut T, Errno>;
+    fn mut_data<T: Sized>(&mut self, offset: WasmPtr<T>) -> Result<&mut T, Errno>;
 
-    fn mut_slice<'a, T: Sized>(
-        &'a mut self,
-        offset: WasmPtr<T>,
-        len: usize,
-    ) -> Result<&'a mut [T], Errno>;
+    fn mut_slice<T: Sized>(&mut self, offset: WasmPtr<T>, len: usize) -> Result<&mut [T], Errno>;
 
-    fn mut_iovec<'a>(
-        &'a mut self,
+    fn mut_iovec(
+        &mut self,
         iovec_ptr: WasmPtr<__wasi_iovec_t>,
         iovec_len: __wasi_size_t,
-    ) -> Result<Vec<IoSliceMut<'a>>, Errno>;
+    ) -> Result<Vec<IoSliceMut<'_>>, Errno>;
 
-    fn write_data<'a, T: Sized>(&'a mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno>;
+    fn write_data<T: Sized>(&mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno>;
 }
 
 #[derive(Clone, Copy)]
@@ -47,9 +43,9 @@ impl<T: Sized> From<usize> for WasmPtr<T> {
         WasmPtr(i, Default::default())
     }
 }
-impl<T: Sized> Into<usize> for WasmPtr<T> {
-    fn into(self) -> usize {
-        self.0
+impl<T: Sized> From<WasmPtr<T>> for usize {
+    fn from(val: WasmPtr<T>) -> Self {
+        val.0
     }
 }
 impl<T: Sized> Add<usize> for WasmPtr<T> {

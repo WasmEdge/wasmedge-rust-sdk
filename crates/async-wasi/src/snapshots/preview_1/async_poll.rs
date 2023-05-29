@@ -327,7 +327,7 @@ async fn poll_oneoff_impl<M: Memory>(
     nsubscriptions: __wasi_size_t,
     revents_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    if nsubscriptions <= 0 {
+    if nsubscriptions == 0 {
         return Ok(());
     }
 
@@ -351,7 +351,7 @@ async fn poll_oneoff_impl<M: Memory>(
             let clock = {
                 // resume
                 if let IoState::Poll { ddl, .. } = ctx.io_state {
-                    let mut clock_clone = clock.clone();
+                    let mut clock_clone = clock;
                     clock_clone.timeout = ddl;
                     clock_clone
                 } else {
@@ -375,7 +375,7 @@ async fn poll_oneoff_impl<M: Memory>(
                 let r_event = mem.mut_data(out_ptr)?;
                 r_event.userdata = clock.userdata;
                 r_event.type_ = __wasi_eventtype_t::__WASI_EVENTTYPE_CLOCK;
-                r_event.error = Errno::from(e).0;
+                r_event.error = e.0;
                 mem.write_data(revents_num_ptr, 1)?;
                 return Ok(());
             }

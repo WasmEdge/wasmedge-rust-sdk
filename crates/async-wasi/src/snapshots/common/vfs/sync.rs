@@ -105,25 +105,25 @@ impl WasiStdin {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_read<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<usize, Errno> {
+    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         Ok(std::io::stdin().read_vectored(bufs)?)
     }
 
-    pub fn fd_pread<'a>(
+    pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'a>],
+        bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
     }
 
-    pub fn fd_write<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<usize, Errno> {
+    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_pwrite<'a>(
+    pub fn fd_pwrite(
         &mut self,
-        bufs: &[io::IoSlice<'a>],
+        bufs: &[io::IoSlice<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
@@ -224,25 +224,25 @@ impl WasiStdout {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_read<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<usize, Errno> {
+    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_pread<'a>(
+    pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'a>],
+        bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_write<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<usize, Errno> {
+    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
         Ok(std::io::stdout().write_vectored(bufs)?)
     }
 
-    pub fn fd_pwrite<'a>(
+    pub fn fd_pwrite(
         &mut self,
-        bufs: &[io::IoSlice<'a>],
+        bufs: &[io::IoSlice<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
@@ -343,25 +343,25 @@ impl WasiStderr {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_read<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<usize, Errno> {
+    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_pread<'a>(
+    pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'a>],
+        bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_write<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<usize, Errno> {
+    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
         Ok(std::io::stderr().write_vectored(bufs)?)
     }
 
-    pub fn fd_pwrite<'a>(
+    pub fn fd_pwrite(
         &mut self,
-        bufs: &[io::IoSlice<'a>],
+        bufs: &[io::IoSlice<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
@@ -408,7 +408,7 @@ impl WasiFile {
         let file_len = metadata.len();
         let new_len = offset + len;
         if new_len > file_len {
-            let old_seek = f.seek(io::SeekFrom::Current(0))?;
+            let old_seek = f.stream_position()?;
             f.set_len(new_len)?;
             f.seek(io::SeekFrom::Start(old_seek))?;
         }
@@ -565,41 +565,41 @@ impl WasiFile {
         }
     }
 
-    pub fn fd_read<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<usize, Errno> {
+    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         self.right.can(WASIRights::FD_READ)?;
         Ok(self.fd.read_vectored(bufs)?)
     }
 
-    pub fn fd_pread<'a>(
+    pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'a>],
+        bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         use std::io::SeekFrom;
 
         self.right.can(WASIRights::FD_READ | WASIRights::FD_SEEK)?;
 
-        let old_seek = self.fd.seek(SeekFrom::Current(0))?;
+        let old_seek = self.fd.stream_position()?;
         let r = self.fd.read_vectored(bufs);
         self.fd.seek(SeekFrom::Start(old_seek))?;
         Ok(r?)
     }
 
-    pub fn fd_write<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<usize, Errno> {
+    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
         self.right.can(WASIRights::FD_WRITE)?;
         Ok(self.fd.write_vectored(bufs)?)
     }
 
-    pub fn fd_pwrite<'a>(
+    pub fn fd_pwrite(
         &mut self,
-        bufs: &[io::IoSlice<'a>],
+        bufs: &[io::IoSlice<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         use std::io::SeekFrom;
 
         self.right.can(WASIRights::FD_WRITE | WASIRights::FD_SEEK)?;
 
-        let old_seek = self.fd.seek(SeekFrom::Current(0))?;
+        let old_seek = self.fd.stream_position()?;
         let r = self.fd.write_vectored(bufs);
         self.fd.seek(SeekFrom::Start(old_seek))?;
         Ok(r?)
@@ -634,7 +634,7 @@ impl WasiFile {
     pub fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
         use std::io::SeekFrom;
         self.right.can(WASIRights::FD_TELL)?;
-        Ok(self.fd.seek(SeekFrom::Current(0))?)
+        Ok(self.fd.stream_position()?)
     }
 }
 
@@ -688,7 +688,7 @@ impl WasiPreOpenDir {
     ) -> Result<WasiFile, Errno> {
         let mut required_rights = WASIRights::PATH_OPEN;
         if oflags.contains(OFlags::CREATE) {
-            required_rights = required_rights | WASIRights::PATH_CREATE_FILE;
+            required_rights |= WASIRights::PATH_CREATE_FILE;
         }
         self.dir_rights.can(required_rights)?;
 

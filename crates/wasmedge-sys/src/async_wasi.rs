@@ -41,11 +41,11 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
         }
     }
 
-    fn get_iovec(
+    fn get_iovec<'a>(
         &self,
         iovec_ptr: WasmPtr<__wasi_ciovec_t>,
         iovec_len: __wasi_size_t,
-    ) -> Result<Vec<std::io::IoSlice<'_>>, Errno> {
+    ) -> Result<Vec<std::io::IoSlice<'a>>, Errno> {
         unsafe {
             let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
             let mut result = Vec::with_capacity(iovec.len());
