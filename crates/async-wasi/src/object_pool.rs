@@ -310,15 +310,6 @@ impl<T> SerialObjectPool<T> {
                 {
                     serial_chunk.values.push(f(item.obj.as_ref().unwrap()));
                 }
-
-                for item in store
-                    .iter()
-                    .take(node.header.next_none_offset)
-                    .skip(chunk_index)
-                {
-                    serial_chunk.values.push(f(item.obj.as_ref().unwrap()));
-                }
-
                 chunk_index = node.header.next_chunk_offset;
                 serial_chunks.push(serial_chunk);
                 if chunk_index == ObjectPool::<U>::DEFAULT_CAPACITY {
