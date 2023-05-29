@@ -70,7 +70,12 @@ jobs:
       - name: Rustfmt
         run: cargo +nightly fmt --all -- --check
 
-      - name: Clippy
+      - name: Clippy check
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
         run: |
           cargo +nightly clippy -V
           cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
