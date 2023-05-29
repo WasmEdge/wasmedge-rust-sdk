@@ -99,7 +99,7 @@ jobs:
         run: |
           cargo +nightly -Z sparse-registry update
           cargo test --workspace --exclude async-wasi --locked --features aot,wasmedge_process,ffi -- --nocapture
-          cargo test --examples --exclude async-wasi --locked --features aot,wasmedge_process,ffi -- --nocapture
+          cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
 
       - name: Test Rust SDK with async feature
         run: |
@@ -179,7 +179,7 @@ jobs:
           export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
           cargo +nightly -Z sparse-registry update
           cargo test --workspace --exclude async-wasi --locked --features aot,wasmedge_process,ffi -- --nocapture
-          cargo test --examples --exclude async-wasi --locked --features aot,wasmedge_process,ffi -- --nocapture
+          cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
 
       - name: Test Rust SDK with async feature
         run: |
@@ -253,7 +253,7 @@ jobs:
         run: |
           cargo +nightly -Z sparse-registry update
           cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --test-threads=1
-          cargo test --examples --exclude async-wasi --locked --features aot,ffi -- --test-threads=1
+          cargo test --examples --locked --features aot,ffi -- --test-threads=1
 
   build_windows:
     name: Windows
