@@ -166,6 +166,9 @@ pub mod r#async {
     pub type AsyncHostFn<T> = wasmedge_sys::AsyncHostFn<T>;
 }
 
+#[cfg(all(feature = "async", target_os = "linux"))]
+pub type WasiCtx = wasmedge_sys::WasiCtx;
+
 /// The object that is used to perform a [host function](crate::Func) is required to implement this trait.
 pub trait Engine {
     /// Runs a host function instance and returns the results.
