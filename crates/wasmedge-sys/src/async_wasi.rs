@@ -163,9 +163,9 @@ pub fn args_sizes_get(
 pub fn environ_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
+    ctx: Option<&mut WasiCtx>,
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
+    let data = ctx.unwrap();
 
     let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 

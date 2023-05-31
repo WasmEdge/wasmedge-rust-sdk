@@ -1,7 +1,10 @@
 //! Defines WasmEdge Instance and other relevant types.
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::async_wasi::{wasi_impls, WasiFunc};
+use crate::{
+    async_wasi::{wasi_impls, WasiFunc},
+    WasiCtx,
+};
 use crate::{
     error::{InstanceError, WasmEdgeError},
     ffi,
@@ -9,8 +12,6 @@ use crate::{
     types::WasmEdgeString,
     Function, Global, Memory, Table, WasmEdgeResult,
 };
-#[cfg(all(feature = "async", target_os = "linux"))]
-use async_wasi::snapshots::WasiCtx as AsyncWasiCtx;
 use std::sync::Arc;
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
@@ -888,7 +889,7 @@ impl Drop for AsyncWasiModule {
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
 impl AsyncWasiModule {
-    pub fn create(async_wasi_ctx: Option<&mut AsyncWasiCtx>) -> WasmEdgeResult<Self> {
+    pub fn create(wasi_ctx: Option<&mut WasiCtx>) -> WasmEdgeResult<Self> {
         let name = "wasi_snapshot_preview1";
         let raw_name = WasmEdgeString::from(name);
         let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
@@ -906,7 +907,7 @@ impl AsyncWasiModule {
         };
 
         // add sync/async host functions to the module
-        match async_wasi_ctx {
+        match wasi_ctx {
             Some(ctx_data) => {
                 for wasi_func in wasi_impls() {
                     match wasi_func {
