@@ -1,7 +1,5 @@
 //! Defines WasmEdge Vm struct.
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncState;
 use crate::{
     config::Config,
     error::{VmError, WasmEdgeError},
@@ -9,6 +7,8 @@ use crate::{
     Executor, HostRegistration, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
     WasmValue,
 };
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::{r#async::AsyncState, WasiCtx};
 use std::{collections::HashMap, path::Path};
 use wasmedge_sys as sys;
 
@@ -102,6 +102,7 @@ impl VmBuilder {
     /// # Error
     ///
     /// If fail to create, then an error is returned.
+    #[cfg(not(feature = "async"))]
     pub fn build(mut self) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
@@ -126,7 +127,6 @@ impl VmBuilder {
         };
 
         // * built-in host instances
-        #[cfg(not(feature = "async"))]
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
                 if let Ok(wasi_module) = sys::WasiModule::create(None, None, None) {
@@ -144,10 +144,57 @@ impl VmBuilder {
                 }
             }
         }
-        #[cfg(all(feature = "async", target_os = "linux"))]
+
+        // * load and register plugin instances
+        for (pname, mname) in self.plugins.iter() {
+            match Self::create_plugin_instance(pname, mname) {
+                Some(instance) => {
+                    vm.plugin_host_instances.push(instance);
+                    vm.executor.inner.register_plugin_instance(
+                        &mut vm.store.inner,
+                        &vm.plugin_host_instances.last().unwrap().inner,
+                    )?;
+                }
+                None => panic!("Not found {}::{} plugin", pname, mname),
+            }
+        }
+
+        Ok(vm)
+    }
+
+    /// Creates a new [Vm].
+    ///
+    /// # Error
+    ///
+    /// If fail to create, then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    pub fn build(mut self, wasi_ctx: Option<&mut WasiCtx>) -> WasmEdgeResult<Vm> {
+        // executor
+        let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
+
+        // store
+        let store = match self.store {
+            Some(store) => store,
+            None => Store::new()?,
+        };
+
+        // create a Vm instance
+        let mut vm = Vm {
+            config: self.config,
+            stat: self.stat,
+            executor,
+            store,
+            named_instances: HashMap::new(),
+            active_instance: None,
+            imports: Vec::new(),
+            builtin_host_instances: HashMap::new(),
+            plugin_host_instances: Vec::new(),
+        };
+
+        // * built-in host instances
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
-                if let Ok(wasi_module) = sys::AsyncWasiModule::create(None) {
+                if let Ok(wasi_module) = sys::AsyncWasiModule::create(wasi_ctx) {
                     vm.executor.inner.register_import_object(
                         &mut vm.store.inner,
                         &sys::ImportObject::AsyncWasi(wasi_module.clone()),
@@ -799,6 +846,7 @@ enum HostRegistrationInstance {
     Wasi(crate::wasi::WasiInstance),
 }
 
+#[cfg(not(feature = "async"))]
 #[cfg(test)]
 mod tests {
     use super::*;
