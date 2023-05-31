@@ -1,3 +1,4 @@
+#[cfg(not(feature = "async"))]
 use wasmedge_sdk::{
     self, error::HostFuncError, host_function, params, wat2wasm, Caller, ImportObjectBuilder,
     Module, NeverType, VmBuilder, WasmValue,
@@ -5,6 +6,7 @@ use wasmedge_sdk::{
 
 // We define a function to act as our "env" "say_hello" function imported in the
 // Wasm program above.
+#[cfg(not(feature = "async"))]
 #[host_function]
 pub fn say_hello<T>(
     _caller: Caller,
@@ -18,13 +20,15 @@ pub fn say_hello<T>(
 
 #[cfg_attr(test, test)]
 fn main() -> anyhow::Result<()> {
-    // create an import module
-    let import = ImportObjectBuilder::new()
-        .with_func::<(), (), NeverType>("say_hello", say_hello, None)?
-        .build("env")?;
+    #[cfg(not(feature = "async"))]
+    {
+        // create an import module
+        let import = ImportObjectBuilder::new()
+            .with_func::<(), (), NeverType>("say_hello", say_hello, None)?
+            .build("env")?;
 
-    let wasm_bytes = wat2wasm(
-        br#"
+        let wasm_bytes = wat2wasm(
+            br#"
     (module
       ;; First we define a type with no parameters and no results.
       (type $no_args_no_rets_t (func (param) (result)))
@@ -39,17 +43,17 @@ fn main() -> anyhow::Result<()> {
       ;; And mark it as an exported function named "run".
       (export "run" (func $run)))
     "#,
-    )?;
+        )?;
 
-    // loads a wasm module from the given in-memory bytes
-    let module = Module::from_bytes(None, wasm_bytes)?;
+        // loads a wasm module from the given in-memory bytes
+        let module = Module::from_bytes(None, wasm_bytes)?;
 
-    // create an executor
-    VmBuilder::new()
-        .build()?
-        .register_import_module(import)?
-        .register_module(Some("extern"), module)?
-        .run_func(Some("extern"), "run", params!())?;
-
+        // create an executor
+        VmBuilder::new()
+            .build()?
+            .register_import_module(import)?
+            .register_module(Some("extern"), module)?
+            .run_func(Some("extern"), "run", params!())?;
+    }
     Ok(())
 }

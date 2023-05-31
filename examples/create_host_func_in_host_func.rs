@@ -1,8 +1,10 @@
+#[cfg(not(feature = "async"))]
 use wasmedge_sdk::{
     error::HostFuncError, host_function, params, Caller, Executor, Func, ImportObjectBuilder,
     NeverType, ValType, VmBuilder, WasmVal, WasmValue,
 };
 
+#[cfg(not(feature = "async"))]
 #[host_function]
 fn func<T>(
     _caller: Caller,
@@ -65,15 +67,18 @@ fn func<T>(
 
 #[cfg_attr(test, test)]
 fn main() -> anyhow::Result<()> {
-    // create an import module
-    let import = ImportObjectBuilder::new()
-        .with_func::<(), (), NeverType>("outer-func", func, None)?
-        .build("extern")?;
+    #[cfg(not(feature = "async"))]
+    {
+        // create an import module
+        let import = ImportObjectBuilder::new()
+            .with_func::<(), (), NeverType>("outer-func", func, None)?
+            .build("extern")?;
 
-    let _ = VmBuilder::new()
-        .build()?
-        .register_import_module(import)?
-        .run_func(Some("extern"), "outer-func", params!())?;
+        let _ = VmBuilder::new()
+            .build()?
+            .register_import_module(import)?
+            .run_func(Some("extern"), "outer-func", params!())?;
+    }
 
     Ok(())
 }

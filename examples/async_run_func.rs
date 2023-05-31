@@ -5,7 +5,7 @@
 //! cd <wasmedge-root-dir>/bindings/rust/
 //! cargo run -p wasmedge-sdk --features async --example async_run_func
 //! ```
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", target_os = "linux"))]
 use wasmedge_sdk::{
     config::{CommonConfigOptions, ConfigBuilder},
     params,
@@ -15,7 +15,7 @@ use wasmedge_sdk::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_os = "linux"))]
     {
         let wasm_file = std::env::current_dir()?.join("examples/data/fibonacci.wat");
 
@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // create Vm instance
         let vm = VmBuilder::new()
             .with_config(config)
-            .build()?
+            .build(None)?
             .register_module_from_file("extern", wasm_file)?;
 
         // async run function

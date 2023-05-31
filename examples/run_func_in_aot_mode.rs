@@ -5,9 +5,9 @@
 //! cargo run -p wasmedge-sdk --example run_func_in_aot_mode -- --nocapture
 //! ```
 
-#[cfg(all(feature = "aot", target_family = "unix"))]
+#[cfg(all(feature = "aot", target_family = "unix", not(feature = "async")))]
 use std::os::unix::fs::PermissionsExt;
-#[cfg(all(feature = "aot", target_family = "unix"))]
+#[cfg(all(feature = "aot", target_family = "unix", not(feature = "async")))]
 use wasmedge_sdk::{
     config::{
         CommonConfigOptions, CompilerConfigOptions, ConfigBuilder, HostRegistrationConfigOptions,
@@ -17,7 +17,7 @@ use wasmedge_sdk::{
 
 #[cfg_attr(test, test)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(all(feature = "aot", target_family = "unix"))]
+    #[cfg(all(feature = "aot", target_family = "unix", not(feature = "async")))]
     {
         // create a Config context
         let config = ConfigBuilder::new(CommonConfigOptions::new().bulk_memory_operations(true))
