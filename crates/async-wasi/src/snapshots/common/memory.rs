@@ -31,7 +31,7 @@ pub trait Memory {
     fn write_data<T: Sized>(&mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno>;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct WasmPtr<T: Sized>(pub usize, std::marker::PhantomData<T>);
 impl<T: Sized> WasmPtr<T> {
     pub fn is_null(&self) -> bool {
