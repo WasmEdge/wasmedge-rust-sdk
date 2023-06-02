@@ -44,7 +44,8 @@ impl WasiCtx {
         }
     }
 
-    pub fn push_preopen(&mut self, preopen: env::vfs::WasiPreOpenDir) {
+    pub fn push_preopen(&mut self, host_path: std::path::PathBuf, guest_path: std::path::PathBuf) {
+        let preopen = env::vfs::WasiPreOpenDir::new(host_path, guest_path);
         self.vfs
             .push(VFD::Inode(env::vfs::INode::PreOpenDir(preopen)));
         self.vfs_preopen_limit += 1;
