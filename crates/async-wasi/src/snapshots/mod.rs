@@ -148,10 +148,7 @@ mod vfs_test {
         // [0,1,2]
         let mut ctx = WasiCtx::new();
         // [0,1,2,3(*)]
-        ctx.push_preopen(vfs::WasiPreOpenDir::new(
-            PathBuf::from("."),
-            PathBuf::from("."),
-        ));
+        ctx.push_preopen(PathBuf::from("."), PathBuf::from("."));
 
         assert_eq!(ctx.vfs_preopen_limit, 3, "vfs_preopen_limit");
 
@@ -645,10 +642,7 @@ pub mod serialize {
         let mut wasi_ctx = super::WasiCtx::new();
         wasi_ctx.push_arg("abc".to_string());
         wasi_ctx.push_env("a=1".to_string());
-        wasi_ctx.push_preopen(vfs::WasiPreOpenDir::new(
-            ".".parse().unwrap(),
-            ".".parse().unwrap(),
-        ));
+        wasi_ctx.push_preopen(".".parse().unwrap(), ".".parse().unwrap());
 
         // tcp4
         let state = net::WasiSocketState::default();
