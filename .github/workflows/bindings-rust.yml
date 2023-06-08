@@ -19,9 +19,7 @@ on:
       - ".github/workflows/bindings-rust.yml"
       - "examples/**"
       - "src/**"
-      - "crates/wasmedge-sys/**"
-      - "crates/wasmedge-types/**"
-      - "crates/wasmedge-macro/**"
+      - "crates/**"
 
   pull_request:
     branches:
@@ -70,7 +68,12 @@ jobs:
       - name: Rustfmt
         run: cargo +nightly fmt --all -- --check
 
-      - name: Clippy
+      - name: Clippy check
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
         run: |
           cargo +nightly clippy -V
           cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
@@ -95,7 +98,7 @@ jobs:
       - name: Test Rust SDK
         run: |
           cargo +nightly -Z sparse-registry update
-          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture
+          cargo test --workspace --exclude async-wasi --locked --features aot,wasmedge_process,ffi -- --nocapture
           cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
 
       - name: Test Rust SDK with async feature
@@ -141,7 +144,12 @@ jobs:
       - name: Rustfmt
         run: cargo +nightly fmt --all -- --check
 
-      - name: Clippy
+      - name: Clippy check
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
         run: |
           cargo +nightly clippy -V
           cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
@@ -170,7 +178,7 @@ jobs:
           export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
           export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
           cargo +nightly -Z sparse-registry update
-          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture
+          cargo test --workspace --exclude async-wasi --locked --features aot,wasmedge_process,ffi -- --nocapture
           cargo test --examples --locked --features aot,wasmedge_process,ffi -- --nocapture
 
       - name: Test Rust SDK with async feature
@@ -244,7 +252,7 @@ jobs:
       - name: Test Rust Bindings
         run: |
           cargo +nightly -Z sparse-registry update
-          cargo test --workspace --locked --features aot,ffi -- --test-threads=1
+          cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --test-threads=1
           cargo test --examples --locked --features aot,ffi -- --test-threads=1
 
   build_windows:
