@@ -1,5 +1,7 @@
 //! Defines WasmEdge Vm struct.
 
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::r#async::AsyncState;
 use crate::{
     config::Config,
     error::{VmError, WasmEdgeError},
@@ -7,8 +9,6 @@ use crate::{
     Executor, HostRegistration, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
     WasmValue,
 };
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::{r#async::AsyncState, WasiCtx};
 use std::{collections::HashMap, path::Path};
 use wasmedge_sys as sys;
 
@@ -168,7 +168,7 @@ impl VmBuilder {
     ///
     /// If fail to create, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn build(mut self, wasi_ctx: Option<&mut WasiCtx>) -> WasmEdgeResult<Vm> {
+    pub fn build(mut self) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
@@ -194,7 +194,7 @@ impl VmBuilder {
         // * built-in host instances
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
-                if let Ok(wasi_module) = sys::AsyncWasiModule::create(wasi_ctx) {
+                if let Ok(wasi_module) = sys::AsyncWasiModule::create(None, None, None) {
                     vm.executor.inner.register_import_object(
                         &mut vm.store.inner,
                         &sys::ImportObject::AsyncWasi(wasi_module.clone()),
