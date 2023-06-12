@@ -114,6 +114,9 @@ pub use types::WasmValue;
 pub use validator::Validator;
 use wasmedge_types::{error, WasmEdgeResult};
 
+#[cfg(all(feature = "async", target_os = "linux"))]
+pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
+
 /// The object that is used to perform a [host function](crate::Function) is required to implement this trait.
 pub trait Engine {
     /// Runs a host function instance and returns the results.

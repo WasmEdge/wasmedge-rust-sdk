@@ -370,8 +370,6 @@ mod tests {
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
         MemType, Memory, Statistics, Table, TableType,
     };
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use async_wasi::snapshots::WasiCtx;
     use std::{
         sync::{Arc, Mutex},
         thread,
@@ -593,13 +591,8 @@ mod tests {
         assert!(result.is_ok());
         let mut store = result.unwrap();
 
-        // create async wasi context
-        let mut async_wasi_ctx = WasiCtx::new();
-        async_wasi_ctx.push_arg("abc".into());
-        async_wasi_ctx.push_env("a=1".into());
-
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(Some(&mut async_wasi_ctx));
+        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 
@@ -650,13 +643,8 @@ mod tests {
         assert!(result.is_ok());
         let mut store = result.unwrap();
 
-        // create async wasi context
-        let mut async_wasi_ctx = WasiCtx::new();
-        async_wasi_ctx.push_arg("abc".into());
-        async_wasi_ctx.push_env("a=1".into());
-
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(Some(&mut async_wasi_ctx));
+        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 

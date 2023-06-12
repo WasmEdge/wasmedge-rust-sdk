@@ -177,6 +177,48 @@ pub struct WasiInstance {
     pub(crate) inner: sys::AsyncWasiModule,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
+impl WasiInstance {
+    /// Initializes the WASI host module with the given parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `args` - The commandline arguments. Note that the first argument is the program name.
+    ///
+    /// * `envs` - The environment variables.
+    ///
+    /// * `preopens` - The directories to pre-open.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let wasi_module = vm.wasi_module_mut().ok_or("failed to get wasi module")?;
+    /// wasi_module.initialize(
+    ///     None,
+    ///     Some(vec![("ENV", "VAL")]),
+    ///     Some(vec![(
+    ///         std::path::PathBuf::from("."),
+    ///         std::path::PathBuf::from("."),
+    ///     )]),
+    /// )?;
+    /// ```
+    ///
+    pub fn initialize(
+        &mut self,
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<(&str, &str)>>,
+        preopens: Option<Vec<(std::path::PathBuf, std::path::PathBuf)>>,
+    ) -> WasmEdgeResult<()> {
+        self.inner.init_wasi(args, envs, preopens)
+    }
+
+    /// Returns the WASI exit code.
+    ///
+    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
+    pub fn exit_code(&self) -> u32 {
+        self.inner.exit_code()
+    }
+}
+#[cfg(all(feature = "async", target_os = "linux"))]
 impl AsInstance for WasiInstance {
     fn name(&self) -> &str {
         self.inner.name()

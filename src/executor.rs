@@ -131,9 +131,9 @@ mod tests {
         config::{CommonConfigOptions, ConfigBuilder},
         params, wat2wasm, Module, Statistics, Store, WasmVal,
     };
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_os = "linux"))]
     use crate::{error::HostFuncError, CallingFrame};
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_os = "linux"))]
     use wasmedge_types::NeverType;
 
     #[test]

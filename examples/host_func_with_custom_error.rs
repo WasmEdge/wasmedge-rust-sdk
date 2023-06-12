@@ -13,7 +13,9 @@
 //! ```
 //! which means that the one or two input numbers of i32 type of the host function are out of upper bound (here is 100).
 
+#[cfg(not(feature = "async"))]
 use thiserror::Error;
+#[cfg(not(feature = "async"))]
 use wasmedge_sdk::{
     config::ConfigBuilder,
     error::{HostFuncError, WasmEdgeError},
@@ -23,6 +25,7 @@ use wasmedge_sdk::{
 };
 
 // Define custom error type
+#[cfg(not(feature = "async"))]
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 enum MyError {
     #[error("The number of arguments should be 3")]
@@ -34,6 +37,7 @@ enum MyError {
     #[error("The value of argument is out of upper bound.")]
     OutOfUpperBound,
 }
+#[cfg(not(feature = "async"))]
 impl From<MyError> for u32 {
     fn from(err: MyError) -> Self {
         match err {
@@ -44,6 +48,7 @@ impl From<MyError> for u32 {
         }
     }
 }
+#[cfg(not(feature = "async"))]
 impl From<u32> for MyError {
     fn from(err: u32) -> Self {
         match err {
@@ -57,6 +62,7 @@ impl From<u32> for MyError {
 }
 
 // compute the sum of two numbers, which are less than 100
+#[cfg(not(feature = "async"))]
 #[host_function]
 fn real_add<T>(
     _caller: Caller,
@@ -98,34 +104,38 @@ fn real_add<T>(
 
 #[cfg_attr(test, test)]
 fn main() -> anyhow::Result<()> {
-    // create import module
-    let import = ImportObjectBuilder::new()
-        .with_func::<(ExternRef, i32, i32), i32, NeverType>("add", real_add, None)?
-        .build("extern_module")?;
+    #[cfg(not(feature = "async"))]
+    {
+        // create import module
+        let import = ImportObjectBuilder::new()
+            .with_func::<(ExternRef, i32, i32), i32, NeverType>("add", real_add, None)?
+            .build("extern_module")?;
 
-    // create a vm instance
-    let config = ConfigBuilder::default().build()?;
-    let mut vm = VmBuilder::new()
-        .with_config(config)
-        .build()?
-        .register_import_module(import)?;
+        // create a vm instance
+        let config = ConfigBuilder::default().build()?;
+        let mut vm = VmBuilder::new()
+            .with_config(config)
+            .build()?
+            .register_import_module(import)?;
 
-    // run the export wasm function named "call_add" from func.wasm
-    let wasm_file = std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/funcs.wat");
-    let add_ref = ExternRef::new(&mut real_add::<NeverType>);
-    let a: i32 = 1234;
-    let b: i32 = 5678;
-    match vm.run_func_from_file(wasm_file, "call_add", params!(add_ref, a, b)) {
-        Ok(returns) => {
-            let ret = returns[0].to_i32();
-            assert_eq!(ret, 1234 + 5678);
-            println!("result from call_add: {ret}")
-        }
-        Err(e) => match *e {
-            WasmEdgeError::User(code) => println!("User error: {:?}", MyError::from(code)),
-            err => println!("Runtime error: {err:?}"),
-        },
-    };
+        // run the export wasm function named "call_add" from func.wasm
+        let wasm_file =
+            std::env::current_dir()?.join("crates/wasmedge-sys/examples/data/funcs.wat");
+        let add_ref = ExternRef::new(&mut real_add::<NeverType>);
+        let a: i32 = 1234;
+        let b: i32 = 5678;
+        match vm.run_func_from_file(wasm_file, "call_add", params!(add_ref, a, b)) {
+            Ok(returns) => {
+                let ret = returns[0].to_i32();
+                assert_eq!(ret, 1234 + 5678);
+                println!("result from call_add: {ret}")
+            }
+            Err(e) => match *e {
+                WasmEdgeError::User(code) => println!("User error: {:?}", MyError::from(code)),
+                err => println!("Runtime error: {err:?}"),
+            },
+        };
+    }
 
     Ok(())
 }

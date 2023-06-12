@@ -3,17 +3,21 @@
 // If the version of rust used is less than v1.63, please uncomment the follow attribute.
 // #![feature(explicit_generic_args_with_impl_trait)]
 
+#[cfg(not(feature = "async"))]
 use wasmedge_sdk::{params, VmBuilder, WasmVal};
+#[cfg(not(feature = "async"))]
 use wasmedge_types::wat2wasm;
 
 #[cfg_attr(test, test)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // create a Vm context
-    let vm = VmBuilder::new().build()?;
+    #[cfg(not(feature = "async"))]
+    {
+        // create a Vm context
+        let vm = VmBuilder::new().build()?;
 
-    // register a wasm module from the given in-memory wasm bytes
-    let wasm_bytes = wat2wasm(
-        br#"(module
+        // register a wasm module from the given in-memory wasm bytes
+        let wasm_bytes = wat2wasm(
+            br#"(module
         (export "fib" (func $fib))
         (func $fib (param $n i32) (result i32)
          (if
@@ -44,13 +48,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
        )
     "#,
-    )?;
-    let vm = vm.register_module_from_bytes("extern", wasm_bytes)?;
+        )?;
+        let vm = vm.register_module_from_bytes("extern", wasm_bytes)?;
 
-    // run `fib` function in the named module instance
-    let returns = vm.run_func(Some("extern"), "fib", params!(10))?;
-    assert_eq!(returns.len(), 1);
-    assert_eq!(returns[0].to_i32(), 89);
+        // run `fib` function in the named module instance
+        let returns = vm.run_func(Some("extern"), "fib", params!(10))?;
+        assert_eq!(returns.len(), 1);
+        assert_eq!(returns[0].to_i32(), 89);
+    }
 
     Ok(())
 }

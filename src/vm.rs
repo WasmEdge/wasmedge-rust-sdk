@@ -102,6 +102,7 @@ impl VmBuilder {
     /// # Error
     ///
     /// If fail to create, then an error is returned.
+    #[cfg(not(feature = "async"))]
     pub fn build(mut self) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
@@ -126,7 +127,6 @@ impl VmBuilder {
         };
 
         // * built-in host instances
-        #[cfg(not(feature = "async"))]
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
                 if let Ok(wasi_module) = sys::WasiModule::create(None, None, None) {
@@ -144,10 +144,57 @@ impl VmBuilder {
                 }
             }
         }
-        #[cfg(all(feature = "async", target_os = "linux"))]
+
+        // * load and register plugin instances
+        for (pname, mname) in self.plugins.iter() {
+            match Self::create_plugin_instance(pname, mname) {
+                Some(instance) => {
+                    vm.plugin_host_instances.push(instance);
+                    vm.executor.inner.register_plugin_instance(
+                        &mut vm.store.inner,
+                        &vm.plugin_host_instances.last().unwrap().inner,
+                    )?;
+                }
+                None => panic!("Not found {}::{} plugin", pname, mname),
+            }
+        }
+
+        Ok(vm)
+    }
+
+    /// Creates a new [Vm].
+    ///
+    /// # Error
+    ///
+    /// If fail to create, then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    pub fn build(mut self) -> WasmEdgeResult<Vm> {
+        // executor
+        let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
+
+        // store
+        let store = match self.store {
+            Some(store) => store,
+            None => Store::new()?,
+        };
+
+        // create a Vm instance
+        let mut vm = Vm {
+            config: self.config,
+            stat: self.stat,
+            executor,
+            store,
+            named_instances: HashMap::new(),
+            active_instance: None,
+            imports: Vec::new(),
+            builtin_host_instances: HashMap::new(),
+            plugin_host_instances: Vec::new(),
+        };
+
+        // * built-in host instances
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
-                if let Ok(wasi_module) = sys::AsyncWasiModule::create(None) {
+                if let Ok(wasi_module) = sys::AsyncWasiModule::create(None, None, None) {
                     vm.executor.inner.register_import_object(
                         &mut vm.store.inner,
                         &sys::ImportObject::AsyncWasi(wasi_module.clone()),
@@ -197,55 +244,57 @@ impl VmBuilder {
 /// ```rust
 /// // If the version of rust used is less than v1.63, please uncomment the follow attribute.
 /// // #![feature(explicit_generic_args_with_impl_trait)]
-///
-/// use wasmedge_sdk::{params, VmBuilder, WasmVal};
-/// use wasmedge_types::{wat2wasm, ValType};
+/// #[cfg(not(feature = "async"))]
+/// use wasmedge_sdk::{params, VmBuilder, WasmVal, wat2wasm, ValType};
 ///
 /// #[cfg_attr(test, test)]
 /// fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     // create a Vm context
-///     let vm = VmBuilder::new().build()?;
+///     #[cfg(not(feature = "async"))]
+///     {
+///         // create a Vm context
+///         let vm = VmBuilder::new().build()?;
 ///
-///     // register a wasm module from the given in-memory wasm bytes
-///     let wasm_bytes = wat2wasm(
-///         br#"(module
-///         (export "fib" (func $fib))
-///         (func $fib (param $n i32) (result i32)
-///          (if
-///           (i32.lt_s
-///            (get_local $n)
-///            (i32.const 2)
-///           )
-///           (return
-///            (i32.const 1)
-///           )
-///          )
-///          (return
-///           (i32.add
-///            (call $fib
-///             (i32.sub
-///              (get_local $n)
-///              (i32.const 2)
+///         // register a wasm module from the given in-memory wasm bytes
+///         let wasm_bytes = wat2wasm(
+///             br#"(module
+///             (export "fib" (func $fib))
+///             (func $fib (param $n i32) (result i32)
+///              (if
+///               (i32.lt_s
+///                (get_local $n)
+///                (i32.const 2)
+///               )
+///               (return
+///                (i32.const 1)
+///               )
+///              )
+///              (return
+///               (i32.add
+///                (call $fib
+///                 (i32.sub
+///                  (get_local $n)
+///                  (i32.const 2)
+///                 )
+///                )
+///                (call $fib
+///                 (i32.sub
+///                  (get_local $n)
+///                  (i32.const 1)
+///                 )
+///                )
+///               )
+///              )
 ///             )
 ///            )
-///            (call $fib
-///             (i32.sub
-///              (get_local $n)
-///              (i32.const 1)
-///             )
-///            )
-///           )
-///          )
-///         )
-///        )
-///     "#,
-///     )?;
-///     let mut vm = vm.register_module_from_bytes("extern", wasm_bytes)?;
+///         "#,
+///         )?;
+///         let mut vm = vm.register_module_from_bytes("extern", wasm_bytes)?;
 ///
-///     // run `fib` function in the named module instance
-///     let returns = vm.run_func(Some("extern"), "fib", params!(10))?;
-///     assert_eq!(returns.len(), 1);
-///     assert_eq!(returns[0].to_i32(), 89);
+///         // run `fib` function in the named module instance
+///         let returns = vm.run_func(Some("extern"), "fib", params!(10))?;
+///         assert_eq!(returns.len(), 1);
+///         assert_eq!(returns[0].to_i32(), 89);
+///     }
 ///
 ///     Ok(())
 /// }
@@ -799,6 +848,7 @@ enum HostRegistrationInstance {
     Wasi(crate::wasi::WasiInstance),
 }
 
+#[cfg(not(feature = "async"))]
 #[cfg(test)]
 mod tests {
     use super::*;

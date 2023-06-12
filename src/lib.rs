@@ -35,6 +35,7 @@
 //! The example below is using `wasmedge-sdk` to run a WebAssembly module written with its WAT format (textual format). If you would like more examples, please refer to [Examples of WasmEdge RustSDK](https://github.com/second-state/wasmedge-rustsdk-examples).
 //!
 //!  ```rust
+//!  #[cfg(not(feature = "async"))]
 //!  use wasmedge_sdk::{
 //!      error::HostFuncError, host_function, params, wat2wasm, Caller, ImportObjectBuilder, Module,
 //!      VmBuilder, WasmValue, NeverType
@@ -42,6 +43,7 @@
 //!  
 //!  // We define a function to act as our "env" "say_hello" function imported in the
 //!  // Wasm program above.
+//!  #[cfg(not(feature = "async"))]
 //!  #[host_function]
 //!  pub fn say_hello<T>(_caller: Caller, _args: Vec<WasmValue>, _data: Option<&mut T>) -> Result<Vec<WasmValue>, HostFuncError> {
 //!      println!("Hello, world!");
@@ -51,38 +53,41 @@
 //!  
 //!  #[cfg_attr(test, test)]
 //!  fn main() -> anyhow::Result<()> {
-//!      // create an import module
-//!      let import = ImportObjectBuilder::new()
-//!          .with_func::<(), (), NeverType>("say_hello", say_hello, None)?
-//!          .build("env")?;
-//!  
-//!      let wasm_bytes = wat2wasm(
-//!          br#"
-//!      (module
-//!        ;; First we define a type with no parameters and no results.
-//!        (type $no_args_no_rets_t (func (param) (result)))
+//!      #[cfg(not(feature = "async"))]
+//!      {
+//!          // create an import module
+//!          let import = ImportObjectBuilder::new()
+//!              .with_func::<(), (), NeverType>("say_hello", say_hello, None)?
+//!              .build("env")?;
 //!      
-//!        ;; Then we declare that we want to import a function named "env" "say_hello" with
-//!        ;; that type signature.
-//!        (import "env" "say_hello" (func $say_hello (type $no_args_no_rets_t)))
+//!          let wasm_bytes = wat2wasm(
+//!              br#"
+//!          (module
+//!            ;; First we define a type with no parameters and no results.
+//!            (type $no_args_no_rets_t (func (param) (result)))
+//!          
+//!            ;; Then we declare that we want to import a function named "env" "say_hello" with
+//!            ;; that type signature.
+//!            (import "env" "say_hello" (func $say_hello (type $no_args_no_rets_t)))
+//!          
+//!            ;; Finally we create an entrypoint that calls our imported function.
+//!            (func $run (type $no_args_no_rets_t)
+//!              (call $say_hello))
+//!            ;; And mark it as an exported function named "run".
+//!            (export "run" (func $run)))
+//!          "#,
+//!          )?;
 //!      
-//!        ;; Finally we create an entrypoint that calls our imported function.
-//!        (func $run (type $no_args_no_rets_t)
-//!          (call $say_hello))
-//!        ;; And mark it as an exported function named "run".
-//!        (export "run" (func $run)))
-//!      "#,
-//!      )?;
-//!  
-//!      // loads a wasm module from the given in-memory bytes
-//!      let module = Module::from_bytes(None, wasm_bytes)?;
-//!  
-//!      // create an executor
-//!      VmBuilder::new()
-//!          .build()?
-//!          .register_import_module(import)?
-//!          .register_module(Some("extern"), module)?
-//!          .run_func(Some("extern"), "run", params!())?;
+//!          // loads a wasm module from the given in-memory bytes
+//!          let module = Module::from_bytes(None, wasm_bytes)?;
+//!      
+//!          // create an executor
+//!          VmBuilder::new()
+//!              .build()?
+//!              .register_import_module(import)?
+//!              .register_module(Some("extern"), module)?
+//!              .run_func(Some("extern"), "run", params!())?;
+//!      }
 //!  
 //!      Ok(())
 //!  }
@@ -165,6 +170,9 @@ pub mod r#async {
     pub type AsyncState = wasmedge_sys::r#async::AsyncState;
     pub type AsyncHostFn<T> = wasmedge_sys::AsyncHostFn<T>;
 }
+
+#[cfg(all(feature = "async", target_os = "linux"))]
+pub type WasiCtx = wasmedge_sys::WasiCtx;
 
 /// The object that is used to perform a [host function](crate::Func) is required to implement this trait.
 pub trait Engine {

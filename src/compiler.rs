@@ -91,6 +91,7 @@ impl Compiler {
     }
 }
 
+#[cfg(not(feature = "async"))]
 #[cfg(test)]
 mod tests {
     use super::*;

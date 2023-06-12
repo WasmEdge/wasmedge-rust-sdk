@@ -1,10 +1,11 @@
 pub mod common;
 pub mod env;
 pub mod preview_1;
-use common::error::Errno;
 
 use crate::object_pool::ObjectPool;
+use common::error::Errno;
 use env::{wasi_types::__wasi_fd_t, VFD};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct WasiCtx {
@@ -44,7 +45,7 @@ impl WasiCtx {
         }
     }
 
-    pub fn push_preopen(&mut self, host_path: std::path::PathBuf, guest_path: std::path::PathBuf) {
+    pub fn push_preopen(&mut self, host_path: PathBuf, guest_path: PathBuf) {
         let preopen = env::vfs::WasiPreOpenDir::new(host_path, guest_path);
         self.vfs
             .push(VFD::Inode(env::vfs::INode::PreOpenDir(preopen)));
@@ -55,9 +56,17 @@ impl WasiCtx {
         self.args.push(arg);
     }
 
+    pub fn push_args(&mut self, args: Vec<String>) {
+        self.args.extend(args);
+    }
+
     /// The format of the `env` argument should be "KEY=VALUE"
     pub fn push_env(&mut self, env: String) {
         self.envs.push(env);
+    }
+
+    pub fn push_envs(&mut self, envs: Vec<String>) {
+        self.envs.extend(envs);
     }
 
     fn remove_closed(&mut self) {
@@ -642,7 +651,7 @@ pub mod serialize {
         let mut wasi_ctx = super::WasiCtx::new();
         wasi_ctx.push_arg("abc".to_string());
         wasi_ctx.push_env("a=1".to_string());
-        wasi_ctx.push_preopen(".".parse().unwrap(), ".".parse().unwrap());
+        wasi_ctx.push_preopen(PathBuf::from("."), PathBuf::from("."));
 
         // tcp4
         let state = net::WasiSocketState::default();

@@ -4,13 +4,13 @@
 //! cargo run -p wasmedge-sdk --features async --example async_hello_world -- --nocapture
 //! ```
 //!
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", target_os = "linux"))]
 use wasmedge_sdk::{
     async_host_function, error::HostFuncError, params, r#async::AsyncState, Caller,
     ImportObjectBuilder, NeverType, VmBuilder, WasmValue,
 };
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", target_os = "linux"))]
 #[async_host_function]
 async fn say_hello<T>(
     caller: Caller,
@@ -43,7 +43,7 @@ async fn say_hello<T>(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_os = "linux"))]
     {
         // create an import module
         let import = ImportObjectBuilder::new()
