@@ -173,7 +173,7 @@ mod tests {
         // load wasm module from a specified wasm file
         let file = std::env::current_dir()
             .unwrap()
-            .join("examples/data/fibonacci.wat");
+            .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
 
         let result = Module::from_file(None, file);
         assert!(result.is_ok());

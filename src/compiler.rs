@@ -114,7 +114,7 @@ mod tests {
             let compiler = Compiler::new(Some(&config))?;
             let wasm_file = std::env::current_dir()
                 .unwrap()
-                .join("examples/data/fibonacci.wat");
+                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
             let out_dir = std::env::current_dir()?;
             let aot_filename = "aot_fibonacci_1";
             let aot_file_path = compiler.compile_from_file(wasm_file, aot_filename, out_dir)?;
