@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // create Vm instance
         let vm = VmBuilder::new()
             .with_config(config)
-            .build(None)?
+            .build()?
             .register_module_from_file("extern", wasm_file)?;
 
         // async run function
