@@ -13,6 +13,8 @@ use crate::{
     Function, Global, Memory, Table, WasmEdgeResult,
 };
 use std::sync::Arc;
+#[cfg(all(feature = "async", target_os = "linux"))]
+use std::{path::PathBuf, sync::Mutex};
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]
@@ -876,6 +878,7 @@ pub struct AsyncWasiModule {
     pub(crate) inner: Arc<InnerInstance>,
     pub(crate) registered: bool,
     name: String,
+    wasi_ctx: Arc<Mutex<WasiCtx>>,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
 impl Drop for AsyncWasiModule {
@@ -889,61 +892,149 @@ impl Drop for AsyncWasiModule {
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
 impl AsyncWasiModule {
-    pub fn create(wasi_ctx: Option<&mut WasiCtx>) -> WasmEdgeResult<Self> {
+    pub fn create(
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<(&str, &str)>>,
+        preopens: Option<Vec<(PathBuf, PathBuf)>>,
+    ) -> WasmEdgeResult<Self> {
+        // create wasi context
+        let mut wasi_ctx = WasiCtx::new();
+        if let Some(args) = args {
+            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
+        }
+        if let Some(envs) = envs {
+            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+        }
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                wasi_ctx.push_preopen(host_dir, guest_dir)
+            }
+        }
+
+        // create wasi module
         let name = "wasi_snapshot_preview1";
         let raw_name = WasmEdgeString::from(name);
         let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
-
         if ctx.is_null() {
             return Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::CreateImportModule,
             )));
         }
-
         let mut async_wasi_module = Self {
             inner: std::sync::Arc::new(InnerInstance(ctx)),
             registered: false,
             name: name.to_string(),
+            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
         };
 
         // add sync/async host functions to the module
-        match wasi_ctx {
-            Some(ctx_data) => {
-                for wasi_func in wasi_impls() {
-                    match wasi_func {
-                        WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
-                            let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                            let func = Function::create(&func_ty, real_fn, Some(ctx_data), 0)?;
-                            async_wasi_module.add_func(name, func);
-                        }
-                        WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
-                            let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                            let func =
-                                Function::create_async(&func_ty, real_async_fn, Some(ctx_data), 0)?;
-                            async_wasi_module.add_func(name, func);
-                        }
-                    }
+        for wasi_func in wasi_impls() {
+            match wasi_func {
+                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create(
+                        &func_ty,
+                        real_fn,
+                        Some(
+                            &mut async_wasi_module
+                                .wasi_ctx
+                                .lock()
+                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
+                        ),
+                        0,
+                    )?;
+                    async_wasi_module.add_func(name, func);
+                }
+                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create_async(
+                        &func_ty,
+                        real_async_fn,
+                        Some(
+                            &mut async_wasi_module
+                                .wasi_ctx
+                                .lock()
+                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
+                        ),
+                        0,
+                    )?;
+                    async_wasi_module.add_func(name, func);
                 }
             }
-            None => {
-                for wasi_func in wasi_impls() {
-                    match wasi_func {
-                        WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
-                            let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                            let func = Function::create(&func_ty, real_fn, None, 0)?;
-                            async_wasi_module.add_func(name, func);
-                        }
-                        WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
-                            let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                            let func = Function::create_async(&func_ty, real_async_fn, None, 0)?;
-                            async_wasi_module.add_func(name, func);
-                        }
-                    }
-                }
-            }
-        };
+        }
 
         Ok(async_wasi_module)
+    }
+
+    pub fn init_wasi(
+        &mut self,
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<(&str, &str)>>,
+        preopens: Option<Vec<(PathBuf, PathBuf)>>,
+    ) -> WasmEdgeResult<()> {
+        // create wasi context
+        let mut wasi_ctx = WasiCtx::new();
+        if let Some(args) = args {
+            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
+        }
+        if let Some(envs) = envs {
+            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+        }
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                wasi_ctx.push_preopen(host_dir, guest_dir)
+            }
+        }
+
+        self.wasi_ctx = Arc::new(Mutex::new(wasi_ctx));
+
+        // add sync/async host functions to the module
+        for wasi_func in wasi_impls() {
+            match wasi_func {
+                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create(
+                        &func_ty,
+                        real_fn,
+                        Some(
+                            &mut self
+                                .wasi_ctx
+                                .lock()
+                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
+                        ),
+                        0,
+                    )?;
+                    self.add_func(name, func);
+                }
+                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create_async(
+                        &func_ty,
+                        real_async_fn,
+                        Some(
+                            &mut self
+                                .wasi_ctx
+                                .lock()
+                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
+                        ),
+                        0,
+                    )?;
+                    self.add_func(name, func);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns the WASI exit code.
+    ///
+    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
+    pub fn exit_code(&self) -> u32 {
+        self.wasi_ctx
+            .lock()
+            .expect("[wasmedge-sys] failed to get the lock on wasi_ctx")
+            .exit_code
     }
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
