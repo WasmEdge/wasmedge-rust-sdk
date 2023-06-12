@@ -26,6 +26,9 @@ on:
       - main
     paths:
       - ".github/workflows/bindings-rust.yml"
+      - "examples/**"
+      - "src/**"
+      - "crates/**"
 
 jobs:
   build_ubuntu:
