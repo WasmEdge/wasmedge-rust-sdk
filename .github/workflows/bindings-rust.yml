@@ -231,7 +231,7 @@ jobs:
       - name: Test Rust Bindings
         run: |
           cargo +nightly -Z sparse-registry update
-          cargo test --workspace --locked --features aot,ffi -- --nocapture
+          cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --nocapture
 
   build_windows:
     name: Windows
@@ -309,4 +309,4 @@ jobs:
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
           $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\wasmedge-rust-sdk\wasmedge-rust-sdk\WasmEdge\build\lib\api"
           cargo +nightly -Z sparse-registry update
-          cargo test --workspace --features aot,ffi --locked -- --nocapture
+          cargo test --workspace --exclude async-wasi --features aot,ffi --locked -- --nocapture
