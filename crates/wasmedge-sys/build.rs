@@ -415,7 +415,7 @@ fn install_libwasmedge() {
         output
     );
 
-    let output = Command::new("bash")
+    let output = Command::new("/bin/bash")
         .current_dir(&out_dir)
         .args(["install.sh", "-v", WASMEDGE_RELEASE_VERSION])
         .output()
