@@ -57,6 +57,7 @@ jobs:
           export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
           export CC=clang
           export CXX=clang++
+          export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
 
 #   build_ubuntu_2004:
