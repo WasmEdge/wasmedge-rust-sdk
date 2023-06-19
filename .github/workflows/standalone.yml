@@ -124,7 +124,6 @@ jobs:
         run: brew install llvm ninja boost cmake
 
       - name: Install libwasmedge
-        working-directory: bindings/rust/
         run: |
           export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
           export CC=clang
