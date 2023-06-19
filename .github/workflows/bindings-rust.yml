@@ -34,7 +34,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, ubuntu-20.04]
         rust: [1.70.0, 1.69, 1.68]
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
@@ -102,12 +102,13 @@ jobs:
 
   build_fedora:
     name: Fedora latest
-    runs-on: ubuntu-latest
+    runs-on: Fedora-latest
     strategy:
       matrix:
         rust: [1.70.0, 1.69, 1.68]
     container:
       image: fedora:latest
+      
     steps:
       - uses: actions/checkout@v3
         with:
