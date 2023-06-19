@@ -318,26 +318,6 @@ fn find_libwasmedge() -> Option<Paths> {
         }
     }
 
-    // search in /usr/local/
-    let inc_dir = PathBuf::from("/usr/local/include");
-    let lib_dir = if PathBuf::from("/usr/local/lib64").exists() {
-        PathBuf::from("/usr/local/lib64")
-    } else {
-        PathBuf::from("/usr/local/lib")
-    };
-    let header = inc_dir.join("wasmedge").join(WASMEDGE_H);
-    if inc_dir.join("wasmedge").exists() && lib_dir.exists() && header.exists() {
-        println!(
-            "cargo:warning=[wasmedge-sys] libwasmedge found in {}",
-            lib_dir.to_str().unwrap()
-        );
-        return Some(Paths {
-            header,
-            inc_dir,
-            lib_dir,
-        });
-    }
-
     // search in the official docker container
     let default_dir = env_path!("HOME").map(|d| d.join(".wasmedge"));
     if let Some(default_dir) = default_dir {
@@ -365,6 +345,26 @@ fn find_libwasmedge() -> Option<Paths> {
                 inc_dir,
             });
         }
+    }
+
+    // search in /usr/local/
+    let inc_dir = PathBuf::from("/usr/local/include");
+    let lib_dir = if PathBuf::from("/usr/local/lib64").exists() {
+        PathBuf::from("/usr/local/lib64")
+    } else {
+        PathBuf::from("/usr/local/lib")
+    };
+    let header = inc_dir.join("wasmedge").join(WASMEDGE_H);
+    if inc_dir.join("wasmedge").exists() && lib_dir.exists() && header.exists() {
+        println!(
+            "cargo:warning=[wasmedge-sys] libwasmedge found in {}",
+            lib_dir.to_str().unwrap()
+        );
+        return Some(Paths {
+            header,
+            inc_dir,
+            lib_dir,
+        });
     }
 
     // search in xdg
@@ -415,7 +415,7 @@ fn install_libwasmedge() {
         output
     );
 
-    let output = Command::new("bash")
+    let output = Command::new("/bin/bash")
         .current_dir(&out_dir)
         .args(["install.sh", "-v", WASMEDGE_RELEASE_VERSION])
         .output()
