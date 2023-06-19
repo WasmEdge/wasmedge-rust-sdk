@@ -21,4 +21,13 @@ impl Driver {
     {
         utils::driver_runtime_tool(args)
     }
+
+    /// Triggers the WasmEdge unified tool
+    pub fn unified_tool<I, V>(args: I) -> i32
+    where
+        I: IntoIterator<Item = V>,
+        V: AsRef<str>,
+    {
+        utils::driver_unified_tool(args)
+    }
 }

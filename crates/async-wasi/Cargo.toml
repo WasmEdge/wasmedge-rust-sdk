@@ -1,6 +1,12 @@
 [package]
+categories = ["WebAssembly"]
+description = "Async WASI for WasmEdge"
+documentation = "https://wasmedge.github.io/wasmedge_rust_sdk/async_wasi/"
 edition = "2021"
+license = "Apache-2.0"
 name = "async-wasi"
+readme = "README.md"
+repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
 version = "0.0.1"
 
 [dependencies]

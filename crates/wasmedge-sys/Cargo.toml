@@ -2,14 +2,14 @@
 build = "build.rs"
 categories = ["api-bindings", "wasm"]
 description = "WasmEdge Runtime is a high-performance, extensible, and hardware optimized WebAssembly Virtual Machine for automotive, cloud, AI, and blockchain applications."
-documentation = "https://wasmedge.github.io/WasmEdge/wasmedge_sys/"
+documentation = "https://wasmedge.github.io/wasmedge_rust_sdk/wasmedge_sys/"
 edition = "2021"
 exclude = ["tests/", "examples/"]
 license = "Apache-2.0"
 links = "wasmedge"
 name = "wasmedge-sys"
 readme = "README.md"
-repository = "https://github.com/WasmEdge/WasmEdge/blob/master/bindings/rust/wasmedge-sys"
+repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
 version = "0.14.0"
 
 [dependencies]
