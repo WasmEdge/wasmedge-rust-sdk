@@ -4,31 +4,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-# on: workflow_dispatch
-
-on:
-  push:
-    branches:
-      - main
-      - "feat/*"
-      - "refactor/*"
-      - "test/*"
-      - "fix/*"
-      - "doc/*"
-      - "ci/*"
-      - "release/*"
-    paths:
-      - ".github/workflows/standalone.yml"
-      - "src/**"
-      - "crates/**"
-
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/standalone.yml"
-      - "src/**"
-      - "crates/**"
+on: workflow_dispatch
 
 jobs:
   build_ubuntu_2204:
