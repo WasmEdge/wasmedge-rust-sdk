@@ -31,75 +31,75 @@ on:
       - "crates/**"
 
 jobs:
-  # build_ubuntu:
-  #   name: Ubuntu
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       os: [ubuntu-22.04, ubuntu-20.04]
-  #       rust: [1.70.0, 1.69, 1.68]
+  build_ubuntu:
+    name: Ubuntu
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-20.04]
+        rust: [1.70.0, 1.69, 1.68]
 
-  #   steps:
-  #     - name: Checkout WasmEdge Rust SDK
-  #       uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 0
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-  #     - name: Set up build environment
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
-  #         sudo apt-get install -y llvm-14-dev liblld-14-dev clang-14
-  #         sudo apt-get install -y gcc g++
-  #         sudo apt-get install -y libssl-dev pkg-config gh
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
+          sudo apt-get install -y llvm-14-dev liblld-14-dev clang-14
+          sudo apt-get install -y gcc g++
+          sudo apt-get install -y libssl-dev pkg-config gh
 
-  #     - name: Install Rust stable
-  #       uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         toolchain: ${{ matrix.rust }}
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
 
-  #     - name: Run in the standalone mode
-  #       run: |
-  #         export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
-  #         export CC=clang
-  #         export CXX=clang++
-  #         export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
-  #         cargo test -p wasmedge-sdk --all --examples --features standalone
+      - name: Run in the standalone mode
+        run: |
+          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
+          export CC=clang
+          export CXX=clang++
+          export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
+          cargo test -p wasmedge-sdk --all --examples --features standalone
 
-  # build_fedora:
-  #   name: Fedora latest
-  #   runs-on: Fedora-latest
-  #   strategy:
-  #     matrix:
-  #       rust: [1.70.0, 1.69, 1.68]
-  #   container:
-  #     image: fedora:latest
+  build_fedora:
+    name: Fedora latest
+    runs-on: Fedora-latest
+    strategy:
+      matrix:
+        rust: [1.70.0, 1.69, 1.68]
+    container:
+      image: fedora:latest
 
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 0
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-  #     - name: Set up build environment
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
-  #         sudo apt-get install -y llvm-12-dev liblld-12-dev clang-12
-  #         sudo apt-get install -y gcc g++
-  #         sudo apt-get install -y libssl-dev pkg-config gh
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
+          sudo apt-get install -y llvm-12-dev liblld-12-dev clang-12
+          sudo apt-get install -y gcc g++
+          sudo apt-get install -y libssl-dev pkg-config gh
 
-  #     - name: Install Rust stable
-  #       uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         toolchain: ${{ matrix.rust }}
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
 
-  #     - name: Run in the standalone mode
-  #       run: |
-  #         export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
-  #         export CC=clang
-  #         export CXX=clang++
-  #         export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
-  #         cargo test -p wasmedge-sdk --all --examples --features standalone
+      - name: Run in the standalone mode
+        run: |
+          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
+          export CC=clang
+          export CXX=clang++
+          export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
+          cargo test -p wasmedge-sdk --all --examples --features standalone
 
   build_macos:
     name: MacOS
