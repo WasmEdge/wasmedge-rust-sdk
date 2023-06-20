@@ -1498,7 +1498,6 @@ pub fn sock_getaddrinfo(
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    log::trace!("sock_getaddrinfo enter");
     let n = 8;
     let args: Vec<WasmVal> = args.into_iter().map(|v| v.into()).collect();
     let mut mem = if let Some(mem) = frame.memory_mut(0) {
@@ -1521,7 +1520,7 @@ pub fn sock_getaddrinfo(
         let max_len = *p7 as u32;
         let res_len = *p8 as usize;
 
-        Ok(to_wasm_return(p::async_socket::sock_getaddrinfo(
+        Ok(to_wasm_return(p::async_socket::addrinfo::sock_getaddrinfo(
             data,
             &mut mem,
             WasmPtr::from(node),
