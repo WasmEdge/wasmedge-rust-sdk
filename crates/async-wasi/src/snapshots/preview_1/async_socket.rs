@@ -750,7 +750,7 @@ pub async fn sock_lookup_ip<M: Memory>(
     }
 }
 
-mod addrinfo {
+pub mod addrinfo {
     use crate::snapshots::{
         common::memory::{Memory, WasmPtr},
         env::Errno,
@@ -840,5 +840,3 @@ mod addrinfo {
         Ok(())
     }
 }
-
-pub use addrinfo::sock_getaddrinfo;
