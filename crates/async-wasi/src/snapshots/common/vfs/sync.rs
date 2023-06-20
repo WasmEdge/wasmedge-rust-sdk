@@ -671,8 +671,7 @@ impl WasiPreOpenDir {
 
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
         use path_absolutize::*;
-        let mut new_path = self.real_path.clone();
-        new_path.join(sub_path);
+        let new_path = self.real_path.join(sub_path);
         let absolutize = new_path
             .absolutize_virtually(&self.real_path)
             .or(Err(Errno::__WASI_ERRNO_NOENT))?;

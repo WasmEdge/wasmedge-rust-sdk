@@ -749,3 +749,96 @@ pub async fn sock_lookup_ip<M: Memory>(
         _ => Err(Errno::__WASI_ERRNO_INVAL),
     }
 }
+
+mod addrinfo {
+    use crate::snapshots::{
+        common::memory::{Memory, WasmPtr},
+        env::Errno,
+        WasiCtx,
+    };
+
+    #[allow(dead_code)]
+    #[derive(Copy, Clone, Debug)]
+    #[repr(u8, align(1))]
+    pub enum AddressFamily {
+        Unspec,
+        Inet4,
+        Inet6,
+    }
+
+    #[derive(Debug, Clone)]
+    #[repr(C)]
+    pub struct WasiSockaddr {
+        pub family: AddressFamily,
+        pub sa_data_len: u32,
+        pub sa_data: u32, //*mut u8,
+    }
+
+    #[derive(Debug, Clone)]
+    #[repr(C, packed(4))]
+    pub struct WasiAddrinfo {
+        pub ai_flags: u16,
+        pub ai_family: AddressFamily,
+        pub ai_socktype: u8,
+        pub ai_protocol: u8,
+        pub ai_addrlen: u32,
+        pub ai_addr: u32,      //*mut WasiSockaddr,
+        pub ai_canonname: u32, //*mut u8,
+        pub ai_canonnamelen: u32,
+        pub ai_next: u32, //*mut WasiAddrinfo,
+    }
+
+    pub fn sock_getaddrinfo<M: Memory>(
+        _ctx: &mut WasiCtx,
+        mem: &mut M,
+        node: WasmPtr<u8>,
+        node_len: u32,
+        _server: WasmPtr<u8>,
+        _server_len: u32,
+        _hint: WasmPtr<()>,
+        res: WasmPtr<u32>, // WasmPtr<WasmPtr<WasiAddrinfo>>
+        max_len: u32,
+        res_len: WasmPtr<u32>,
+    ) -> Result<(), Errno> {
+        use std::net::ToSocketAddrs;
+        if max_len <= 0 {
+            return Err(Errno::__WASI_ERRNO_INVAL);
+        }
+        let node =
+            std::ffi::CString::from_vec_with_nul(mem.get_slice(node, node_len as usize)?.to_vec())
+                .unwrap_or_default();
+        let node = node.to_str().unwrap_or_default();
+
+        let addr = if node.is_empty() {
+            None
+        } else {
+            // let node = format!("{node}:0");
+            (node, 0).to_socket_addrs()?.next()
+        };
+
+        if let Some(std::net::SocketAddr::V4(ipv4)) = addr {
+            let addr_info_ptr = *mem.get_data(res)?;
+            let addr_info = mem.mut_data(WasmPtr::<WasiAddrinfo>::from(addr_info_ptr as usize))?;
+
+            addr_info.ai_addrlen = 4;
+            let wasi_addr_ptr: WasmPtr<WasiSockaddr> = (addr_info.ai_addr as usize).into();
+            let wasi_addr = mem.mut_data(wasi_addr_ptr)?;
+            wasi_addr.family = AddressFamily::Inet4;
+            let sa_data_ptr: WasmPtr<u8> = (wasi_addr.sa_data as usize).into();
+            let sa_data_len = wasi_addr.sa_data_len;
+            let sa_data = mem.mut_slice(sa_data_ptr, sa_data_len as usize)?;
+            let port_buf = ipv4.port().to_be_bytes();
+            sa_data[0] = port_buf[0];
+            sa_data[1] = port_buf[1];
+            let ip = ipv4.ip().octets();
+            sa_data[2..6].copy_from_slice(&ip);
+            mem.write_data(res_len, 1)?;
+        } else {
+            mem.write_data(res_len, 0)?;
+        }
+
+        Ok(())
+    }
+}
+
+pub use addrinfo::sock_getaddrinfo;
