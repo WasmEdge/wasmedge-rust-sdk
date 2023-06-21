@@ -1498,7 +1498,6 @@ pub fn sock_getaddrinfo(
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let n = 8;
     let args: Vec<WasmVal> = args.into_iter().map(|v| v.into()).collect();
     let mut mem = if let Some(mem) = frame.memory_mut(0) {
         WasiMem(mem)
@@ -1509,7 +1508,7 @@ pub fn sock_getaddrinfo(
 
     if let Some(
         [WasmVal::I32(p1), WasmVal::I32(p2), WasmVal::I32(p3), WasmVal::I32(p4), WasmVal::I32(p5), WasmVal::I32(p6), WasmVal::I32(p7), WasmVal::I32(p8)],
-    ) = args.get(0..n)
+    ) = args.get(0..8)
     {
         let node = *p1 as usize;
         let node_len = *p2 as u32;
@@ -1533,7 +1532,7 @@ pub fn sock_getaddrinfo(
             WasmPtr::from(res_len),
         )))
     } else {
-        Err(func_type_miss_match_error())
+        Err(HostFuncError::Runtime(0x83))
     }
 }
 
