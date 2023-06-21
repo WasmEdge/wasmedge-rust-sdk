@@ -801,7 +801,7 @@ pub mod addrinfo {
         res_len: WasmPtr<u32>,
     ) -> Result<(), Errno> {
         use std::net::ToSocketAddrs;
-        if max_len <= 0 {
+        if max_len == 0 {
             return Err(Errno::__WASI_ERRNO_INVAL);
         }
         let node =
