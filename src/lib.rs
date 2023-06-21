@@ -165,6 +165,8 @@ pub type CallingFrame = wasmedge_sys::CallingFrame;
 
 pub type HostFn<T> = wasmedge_sys::HostFn<T>;
 
+pub type Finalizer = wasmedge_sys::Finalizer;
+
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async {
     pub type AsyncState = wasmedge_sys::r#async::AsyncState;
