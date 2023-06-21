@@ -12,7 +12,7 @@ use crate::{
     types::WasmEdgeString,
     Function, Global, Memory, Table, WasmEdgeResult,
 };
-use std::sync::Arc;
+use std::{os::raw::c_void, sync::Arc};
 #[cfg(all(feature = "async", target_os = "linux"))]
 use std::{path::PathBuf, sync::Mutex};
 
@@ -266,6 +266,19 @@ impl Instance {
         }
     }
 
+    /// Returns the host data held by the module instance.
+    pub fn host_data<T>(&self) -> Option<&mut T> {
+        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceGetHostData(self.inner.0) };
+
+        match ctx.is_null() {
+            true => None,
+            false => {
+                let ctx = unsafe { &mut *(ctx as *mut T) };
+                Some(ctx)
+            }
+        }
+    }
+
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
@@ -357,6 +370,9 @@ pub trait AsInstance {
     fn global_names(&self) -> Option<Vec<String>>;
 }
 
+/// The finalizer funtion used to free the host data.
+pub type Finalizer = unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void);
+
 /// An [ImportModule] represents a host module with a name. A host module consists of one or more host [function](crate::Function), [table](crate::Table), [memory](crate::Memory), and [global](crate::Global) instances,  which are defined outside wasm modules and fed into wasm modules as imports.
 #[derive(Debug, Clone)]
 pub struct ImportModule {
@@ -386,6 +402,45 @@ impl ImportModule {
     pub fn create(name: impl AsRef<str>) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
         let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
+
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::CreateImportModule,
+            ))),
+            false => Ok(Self {
+                inner: std::sync::Arc::new(InnerInstance(ctx)),
+                registered: false,
+                name: name.as_ref().to_string(),
+            }),
+        }
+    }
+
+    /// Creates a module instance with the given host data. The module instance is used to import host functions, tables, memories, and globals into a wasm module.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the import module instance.
+    ///
+    /// * `host_data` - The host data to be stored in the module instance.
+    ///
+    /// * `finalizer` - the function to drop the host data.
+    ///
+    /// # Error
+    ///
+    /// If fail to create the import module instance, then an error is returned.
+    pub fn create_with_data<T>(
+        name: impl AsRef<str>,
+        host_data: &mut T,
+        finalizer: Option<Finalizer>,
+    ) -> WasmEdgeResult<Self> {
+        let raw_name = WasmEdgeString::from(name.as_ref());
+        let ctx = unsafe {
+            ffi::WasmEdge_ModuleInstanceCreateWithData(
+                raw_name.as_raw(),
+                host_data as *mut T as *mut c_void,
+                finalizer,
+            )
+        };
 
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Instance(
@@ -1868,6 +1923,9 @@ mod tests {
         let ty = result.unwrap();
         assert_eq!(ty.min(), 10);
         assert_eq!(ty.max(), Some(20));
+
+        // get host data
+        assert!(instance.host_data::<NeverType>().is_none());
     }
 
     #[sys_host_function]
@@ -2002,5 +2060,45 @@ mod tests {
             assert_eq!(std::sync::Arc::strong_count(&wasi_import_clone.inner), 1);
             drop(wasi_import_clone);
         }
+    }
+
+    #[test]
+    fn test_instance_create_import_with_data() {
+        let module_name = "extern_module";
+
+        // define host data
+        struct Circle {
+            radius: i32,
+        }
+        let mut circle = Circle { radius: 10 };
+
+        // create an import module
+        let result = ImportModule::create_with_data::<Circle>(module_name, &mut circle, None);
+        assert!(result.is_ok());
+        let import = result.unwrap();
+
+        let result = Config::create();
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        let result = Executor::create(Some(&config), None);
+        assert!(result.is_ok());
+        let mut executor = result.unwrap();
+
+        let result = Store::create();
+        assert!(result.is_ok());
+        let mut store = result.unwrap();
+
+        let import = ImportObject::Import(import);
+        let result = executor.register_import_object(&mut store, &import);
+        assert!(result.is_ok());
+
+        let result = store.module(module_name);
+        assert!(result.is_ok());
+        let instance = result.unwrap();
+
+        let result = instance.host_data::<Circle>();
+        assert!(result.is_some());
+        let host_data = result.unwrap();
+        assert_eq!(host_data.radius, 10);
     }
 }
