@@ -1494,30 +1494,23 @@ pub fn sock_setsockopt(
 
 #[sys_host_function]
 pub fn sock_getaddrinfo(
-    frame: &mut CallingFrame,
+    frame: CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
+    data: Option<&'static mut WasiCtx>,
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let args: Vec<WasmVal> = args.into_iter().map(|v| v.into()).collect();
-    let mut mem = if let Some(mem) = frame.memory_mut(0) {
-        WasiMem(mem)
-    } else {
-        // MemoryOutOfBounds
-        return Err(HostFuncError::Runtime(0x88));
-    };
+    let data = data.unwrap();
 
-    if let Some(
-        [WasmVal::I32(p1), WasmVal::I32(p2), WasmVal::I32(p3), WasmVal::I32(p4), WasmVal::I32(p5), WasmVal::I32(p6), WasmVal::I32(p7), WasmVal::I32(p8)],
-    ) = args.get(0..8)
-    {
-        let node = *p1 as usize;
-        let node_len = *p2 as u32;
-        let server = *p3 as usize;
-        let server_len = *p4 as u32;
-        let hint = *p5 as usize;
-        let res = *p6 as usize;
-        let max_len = *p7 as u32;
-        let res_len = *p8 as usize;
+    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+
+    if let Some([p1, p2, p3, p4, p5, p6, p7, p8]) = args.get(0..8) {
+        let node = p1.to_i32() as usize;
+        let node_len = p2.to_i32() as u32;
+        let server = p3.to_i32() as usize;
+        let server_len = p4.to_i32() as u32;
+        let hint = p5.to_i32() as usize;
+        let res = p6.to_i32() as usize;
+        let max_len = p7.to_i32() as u32;
+        let res_len = p8.to_i32() as usize;
 
         Ok(to_wasm_return(p::async_socket::addrinfo::sock_getaddrinfo(
             data,
