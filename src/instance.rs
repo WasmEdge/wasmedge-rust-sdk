@@ -127,6 +127,11 @@ impl Instance {
             ty,
         })
     }
+
+    /// Returns the host data held by the module instance.
+    pub fn host_data<T>(&self) -> Option<&mut T> {
+        self.inner.host_data()
+    }
 }
 
 /// The object used as an module instance is required to implement this trait.
