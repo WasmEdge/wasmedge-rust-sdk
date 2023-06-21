@@ -1,6 +1,6 @@
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::AsyncHostFn;
-use crate::{io::WasmValTypeList, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult};
+use crate::{io::WasmValTypeList, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult, Finalizer};
 use wasmedge_sys::{self as sys, AsImport};
 
 /// Creates a normal or wasi [import object](crate::ImportObject).
@@ -272,6 +272,50 @@ impl ImportObjectBuilder {
 
         Ok(ImportObject(sys::ImportObject::Import(inner)))
     }
+
+    /// Creates a new [ImportObject] with host data.
+    ///
+    /// # Argument
+    ///
+    /// * `name` - The name of the [ImportObject] to create.
+    /// 
+    /// * `host_data` - The host data to be stored in the module instance.
+    /// 
+    /// * `finalizer` - the function to drop the host data.
+    ///
+    /// # Error
+    ///
+    /// If fail to create the [ImportObject], then an error is returned.
+    pub fn build_with_data<T>(
+        self,
+        name: impl AsRef<str>,
+        host_data: &mut T,
+        finalizer: Option<Finalizer>,
+    ) -> WasmEdgeResult<ImportObject> {
+        let mut inner = sys::ImportModule::create_with_data(name.as_ref(), host_data, finalizer)?;
+
+        // add func
+        for (name, func) in self.funcs.into_iter() {
+            inner.add_func(name, func);
+        }
+
+        // add global
+        for (name, global) in self.globals.into_iter() {
+            inner.add_global(name, global);
+        }
+
+        // add memory
+        for (name, memory) in self.memories.into_iter() {
+            inner.add_memory(name, memory);
+        }
+
+        // add table
+        for (name, table) in self.tables.into_iter() {
+            inner.add_table(name, table);
+        }
+
+        Ok(ImportObject(sys::ImportObject::Import(inner)))
+    }
 }
 
 /// Defines an import object that contains the required import data used when instantiating a [module](crate::Module).
@@ -311,7 +355,7 @@ mod tests {
         params,
         types::Val,
         CallingFrame, Executor, Global, GlobalType, Memory, MemoryType, Mutability, NeverType,
-        RefType, Statistics, Store, Table, TableType, ValType, WasmVal, WasmValue,
+        RefType, Statistics, Store, Table, TableType, ValType, WasmVal, WasmValue, VmBuilder,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -325,6 +369,41 @@ mod tests {
         assert!(result.is_ok());
         let import = result.unwrap();
         assert_eq!(import.name(), "extern");
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_result_states)]
+    fn test_import_builder_with_data() {
+        // define host data
+        struct Circle {
+            radius: i32,
+        }
+        let mut circle = Circle { radius: 10 };
+
+        let result = ImportObjectBuilder::default().build_with_data("extern", &mut circle, None);
+        assert!(result.is_ok());
+        let import = result.unwrap();
+        assert_eq!(import.name(), "extern");
+
+        // create a Vm context
+        let result = VmBuilder::new().build();
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        // register an import module into vm
+        let result = vm.register_import_module(import);
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        // get active module instance
+        let result = vm.named_module("extern");
+        assert!(result.is_ok());
+        let instance = result.unwrap();
+
+        let result = instance.host_data::<Circle>();
+        assert!(result.is_some());
+        let host_data = result.unwrap();
+        assert_eq!(host_data.radius, 10);
     }
 
     #[test]
