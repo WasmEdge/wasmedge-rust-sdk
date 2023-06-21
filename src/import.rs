@@ -1,6 +1,8 @@
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::AsyncHostFn;
-use crate::{io::WasmValTypeList, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult, Finalizer};
+use crate::{
+    io::WasmValTypeList, Finalizer, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult,
+};
 use wasmedge_sys::{self as sys, AsImport};
 
 /// Creates a normal or wasi [import object](crate::ImportObject).
@@ -278,9 +280,9 @@ impl ImportObjectBuilder {
     /// # Argument
     ///
     /// * `name` - The name of the [ImportObject] to create.
-    /// 
+    ///
     /// * `host_data` - The host data to be stored in the module instance.
-    /// 
+    ///
     /// * `finalizer` - the function to drop the host data.
     ///
     /// # Error
@@ -355,7 +357,7 @@ mod tests {
         params,
         types::Val,
         CallingFrame, Executor, Global, GlobalType, Memory, MemoryType, Mutability, NeverType,
-        RefType, Statistics, Store, Table, TableType, ValType, WasmVal, WasmValue, VmBuilder,
+        RefType, Statistics, Store, Table, TableType, ValType, VmBuilder, WasmVal, WasmValue,
     };
     use std::{
         sync::{Arc, Mutex},
