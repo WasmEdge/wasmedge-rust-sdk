@@ -375,7 +375,7 @@ mod tests {
         thread,
     };
     #[cfg(all(feature = "async", target_os = "linux"))]
-    use wasmedge_macro::sys_async_host_function_new;
+    use wasmedge_macro::sys_async_host_function;
     use wasmedge_macro::sys_host_function;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 
@@ -711,7 +711,7 @@ mod tests {
     }
 
     #[cfg(all(feature = "async", target_os = "linux"))]
-    #[sys_async_host_function_new]
+    #[sys_async_host_function]
     async fn async_hello<T>(
         _frame: CallingFrame,
         _inputs: Vec<WasmValue>,

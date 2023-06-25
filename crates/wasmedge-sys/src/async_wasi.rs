@@ -11,7 +11,7 @@ use wasi::snapshots::{
     },
     preview_1 as p, WasiCtx,
 };
-use wasmedge_macro::{sys_async_host_function_new, sys_host_function};
+use wasmedge_macro::{sys_async_host_function, sys_host_function};
 use wasmedge_types::{error::HostFuncError, ValType};
 
 fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
@@ -1162,7 +1162,7 @@ pub fn sock_listen(
 pub type BoxedResultFuture =
     Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_accept(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1184,7 +1184,7 @@ pub async fn sock_accept(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_connect(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1207,7 +1207,7 @@ pub async fn sock_connect(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_recv(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1243,7 +1243,7 @@ pub async fn sock_recv(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_recv_from(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1283,7 +1283,7 @@ pub async fn sock_recv_from(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_send(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1317,7 +1317,7 @@ pub async fn sock_send(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_send_to(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1529,7 +1529,7 @@ pub fn sock_getaddrinfo(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn poll_oneoff(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1561,7 +1561,7 @@ pub async fn poll_oneoff(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_lookup_ip(
     frame: CallingFrame,
     args: Vec<WasmValue>,
