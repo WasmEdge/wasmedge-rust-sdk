@@ -150,7 +150,7 @@ pub fn fd_prestat_get<M: Memory>(
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
-            let path_str = dir.real_path.to_str().ok_or(Errno::__WASI_ERRNO_NOTSUP)?;
+            let path_str = dir.guest_path.to_str().ok_or(Errno::__WASI_ERRNO_NOTSUP)?;
             let pr_name_len = path_str.as_bytes().len() as u32;
 
             prestat.tag = __wasi_preopentype_t::__WASI_PREOPENTYPE_DIR;
@@ -173,7 +173,7 @@ pub fn fd_prestat_dir_name<M: Memory>(
     let fd = ctx.get_mut_vfd(fd)?;
     match fd {
         VFD::Inode(INode::PreOpenDir(dir)) => {
-            let path_str = dir.real_path.to_str().ok_or(Errno::__WASI_ERRNO_NOTSUP)?;
+            let path_str = dir.guest_path.to_str().ok_or(Errno::__WASI_ERRNO_NOTSUP)?;
             let path_bytes = path_str.as_bytes();
             let path_len = path_bytes.len();
 

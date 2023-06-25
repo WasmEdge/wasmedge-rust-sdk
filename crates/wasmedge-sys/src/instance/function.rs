@@ -285,11 +285,11 @@ impl Function {
     /// ```rust
     /// use wasmedge_sys::{FuncType, Function, WasmValue, CallingFrame};
     /// use wasmedge_types::{error::HostFuncError, ValType, WasmEdgeResult, NeverType};
-    /// use wasmedge_macro::sys_async_host_function_new;
+    /// use wasmedge_macro::sys_async_host_function;
     /// use std::future::Future;
     /// use std::os::raw::c_void;
     ///
-    /// #[sys_async_host_function_new]
+    /// #[sys_async_host_function]
     /// async fn real_add<T>(
     ///     _frame: CallingFrame,
     ///     input: Vec<WasmValue>,

@@ -277,7 +277,7 @@ pub struct ModuleDescriptor {
     name: CString,
     desc: CString,
     create: Option<ModuleInstanceCreateFn>,
-    pub inner: ffi::WasmEdge_ModuleDescriptor,
+    inner: ffi::WasmEdge_ModuleDescriptor,
 }
 impl ModuleDescriptor {
     /// Creates a new module descriptor.
@@ -307,6 +307,12 @@ impl ModuleDescriptor {
         md.inner.Create = md.create;
 
         Ok(md)
+    }
+
+    /// Returns the raw pointer to the inner `WasmEdge_ModuleDescriptor`.
+    #[cfg(feature = "ffi")]
+    pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_ModuleDescriptor {
+        &self.inner
     }
 }
 
@@ -354,7 +360,7 @@ pub struct PluginDescriptor {
     module_descriptors: Vec<ffi::WasmEdge_ModuleDescriptor>,
     program_options_name_desc: Vec<(CString, CString)>,
     program_options: Vec<ffi::WasmEdge_ProgramOption>,
-    pub inner: ffi::WasmEdge_PluginDescriptor,
+    inner: ffi::WasmEdge_PluginDescriptor,
 }
 impl PluginDescriptor {
     pub fn create(

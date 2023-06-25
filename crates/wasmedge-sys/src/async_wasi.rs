@@ -11,7 +11,7 @@ use wasi::snapshots::{
     },
     preview_1 as p, WasiCtx,
 };
-use wasmedge_macro::{sys_async_host_function_new, sys_host_function};
+use wasmedge_macro::{sys_async_host_function, sys_host_function};
 use wasmedge_types::{error::HostFuncError, ValType};
 
 fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
@@ -1162,7 +1162,7 @@ pub fn sock_listen(
 pub type BoxedResultFuture =
     Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_accept(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1184,7 +1184,7 @@ pub async fn sock_accept(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_connect(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1207,7 +1207,7 @@ pub async fn sock_connect(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_recv(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1243,7 +1243,7 @@ pub async fn sock_recv(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_recv_from(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1283,7 +1283,7 @@ pub async fn sock_recv_from(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_send(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1317,7 +1317,7 @@ pub async fn sock_send(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_send_to(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1492,7 +1492,44 @@ pub fn sock_setsockopt(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_host_function]
+pub fn sock_getaddrinfo(
+    frame: CallingFrame,
+    args: Vec<WasmValue>,
+    data: Option<&'static mut WasiCtx>,
+) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+    let data = data.unwrap();
+
+    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+
+    if let Some([p1, p2, p3, p4, p5, p6, p7, p8]) = args.get(0..8) {
+        let node = p1.to_i32() as usize;
+        let node_len = p2.to_i32() as u32;
+        let server = p3.to_i32() as usize;
+        let server_len = p4.to_i32() as u32;
+        let hint = p5.to_i32() as usize;
+        let res = p6.to_i32() as usize;
+        let max_len = p7.to_i32() as u32;
+        let res_len = p8.to_i32() as usize;
+
+        Ok(to_wasm_return(p::async_socket::addrinfo::sock_getaddrinfo(
+            data,
+            &mut mem,
+            WasmPtr::from(node),
+            node_len,
+            WasmPtr::from(server),
+            server_len,
+            WasmPtr::from(hint),
+            WasmPtr::from(res),
+            max_len,
+            WasmPtr::from(res_len),
+        )))
+    } else {
+        Err(HostFuncError::Runtime(0x83))
+    }
+}
+
+#[sys_async_host_function]
 pub async fn poll_oneoff(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1524,7 +1561,7 @@ pub async fn poll_oneoff(
     }
 }
 
-#[sys_async_host_function_new]
+#[sys_async_host_function]
 pub async fn sock_lookup_ip(
     frame: CallingFrame,
     args: Vec<WasmValue>,
@@ -1877,7 +1914,7 @@ pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
             path_rename
         ),
         sync_fn!(
-            "path_rename",
+            "path_symlink",
             (
                 vec![
                     ValType::I32,
@@ -1888,7 +1925,7 @@ pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            path_rename
+            path_symlink
         ),
         sync_fn!(
             "path_unlink_file",
@@ -2059,6 +2096,14 @@ pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
             poll_oneoff
         ),
         async_fn!(
+            "epoll_oneoff",
+            (
+                vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+                vec![ValType::I32],
+            ),
+            poll_oneoff
+        ),
+        async_fn!(
             "sock_lookup_ip",
             (
                 vec![
@@ -2072,6 +2117,23 @@ pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 vec![ValType::I32],
             ),
             sock_lookup_ip
+        ),
+        sync_fn!(
+            "sock_getaddrinfo",
+            (
+                vec![
+                    ValType::I32,
+                    ValType::I32,
+                    ValType::I32,
+                    ValType::I32,
+                    ValType::I32,
+                    ValType::I32,
+                    ValType::I32,
+                    ValType::I32,
+                ],
+                vec![ValType::I32],
+            ),
+            sock_getaddrinfo
         ),
     ]
 }

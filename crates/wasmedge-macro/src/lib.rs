@@ -229,14 +229,14 @@ fn sys_expand_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::Token
 }
 
 #[proc_macro_attribute]
-pub fn sys_async_host_function_new(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn sys_async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
         if item_fn.sig.asyncness.is_none() {
             panic!("The function must be async");
         }
 
-        match sys_expand_async_host_func_new(&item_fn) {
+        match sys_expand_async_host_func(&item_fn) {
             Ok(token_stream) => token_stream.into(),
             Err(err) => err.to_compile_error().into(),
         }
@@ -245,19 +245,17 @@ pub fn sys_async_host_function_new(_attr: TokenStream, item: TokenStream) -> Tok
     }
 }
 
-fn sys_expand_async_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
+fn sys_expand_async_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     // extract T from Option<&mut T>
     let ret = match &item_fn.sig.inputs.len() {
-        3 => sys_expand_async_host_func_with_three_args_new(item_fn),
+        3 => sys_expand_async_host_func_with_three_args(item_fn),
         _ => panic!("Invalid numbers of host function arguments"),
     };
 
     Ok(ret)
 }
 
-fn sys_expand_async_host_func_with_three_args_new(
-    item_fn: &syn::ItemFn,
-) -> proc_macro2::TokenStream {
+fn sys_expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
     let fn_name_ident = &item_fn.sig.ident;
     let fn_visibility = &item_fn.vis;
 
