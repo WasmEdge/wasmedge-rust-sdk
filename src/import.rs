@@ -288,7 +288,7 @@ impl ImportObjectBuilder {
     /// # Error
     ///
     /// If fail to create the [ImportObject], then an error is returned.
-    pub fn build_with_data<T>(
+    pub fn build_with_data<T: Send + Sync + Clone + 'static>(
         self,
         name: impl AsRef<str>,
         host_data: &mut T,
@@ -377,12 +377,15 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_import_builder_with_data() {
         // define host data
+        #[derive(Clone)]
         struct Circle {
             radius: i32,
         }
-        let mut circle = Circle { radius: 10 };
 
-        let result = ImportObjectBuilder::default().build_with_data("extern", &mut circle, None);
+        let result = {
+            let mut circle = Circle { radius: 10 };
+            ImportObjectBuilder::default().build_with_data("extern", &mut circle, None)
+        };
         assert!(result.is_ok());
         let import = result.unwrap();
         assert_eq!(import.name(), "extern");
