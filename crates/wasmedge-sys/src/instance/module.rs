@@ -267,7 +267,7 @@ impl Instance {
     }
 
     /// Returns the host data held by the module instance.
-    pub fn host_data<T>(&self) -> Option<&mut T> {
+    pub fn host_data<T>(&mut self) -> Option<&mut T> {
         let ctx = unsafe { ffi::WasmEdge_ModuleInstanceGetHostData(self.inner.0) };
 
         match ctx.is_null() {
@@ -1912,7 +1912,7 @@ mod tests {
 
         let result = store.module(module_name);
         assert!(result.is_ok());
-        let instance = result.unwrap();
+        let mut instance = result.unwrap();
 
         // get the exported memory
         let result = instance.get_memory("mem");
@@ -2097,7 +2097,7 @@ mod tests {
 
         let result = store.module(module_name);
         assert!(result.is_ok());
-        let instance = result.unwrap();
+        let mut instance = result.unwrap();
 
         let result = instance.host_data::<Circle>();
         assert!(result.is_some());
