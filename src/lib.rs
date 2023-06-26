@@ -56,8 +56,8 @@
 //!      #[cfg(not(feature = "async"))]
 //!      {
 //!          // create an import module
-//!          let import = ImportObjectBuilder::new()
-//!              .with_func::<(), (), NeverType>("say_hello", say_hello, None)?
+//!          let import = ImportObjectBuilder::<NeverType>::new()
+//!              .with_func::<(), ()>("say_hello", say_hello, None)?
 //!              .build("env")?;
 //!      
 //!          let wasm_bytes = wat2wasm(
@@ -83,7 +83,7 @@
 //!      
 //!          // create an executor
 //!          VmBuilder::new()
-//!              .build()?
+//!              .build::<NeverType>()?
 //!              .register_import_module(import)?
 //!              .register_module(Some("extern"), module)?
 //!              .run_func(Some("extern"), "run", params!())?;

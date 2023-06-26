@@ -30,10 +30,10 @@ impl Store {
     /// # Error
     ///
     /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_module(
+    pub fn register_import_module<T: Send + Sync + Clone>(
         &mut self,
         executor: &mut Executor,
-        import: &ImportObject,
+        import: &ImportObject<T>,
     ) -> WasmEdgeResult<()> {
         executor
             .inner
@@ -188,15 +188,12 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
-            .expect("failed to add const global")
             .with_memory("mem", memory)
-            .expect("failed to add memory")
             .with_table("table", table)
-            .expect("failed to add table")
             .build("extern-module");
         assert!(result.is_ok());
         let import = result.unwrap();
@@ -369,15 +366,12 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
-            .expect("failed to add const global")
             .with_memory("mem", memory)
-            .expect("failed to add memory")
             .with_table("table", table)
-            .expect("failed to add table")
             .build("extern-module");
         assert!(result.is_ok());
         let import = result.unwrap();
