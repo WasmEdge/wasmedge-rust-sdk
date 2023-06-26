@@ -66,10 +66,10 @@ impl Executor {
     /// # Error
     ///
     /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_object(
+    pub fn register_import_object<T: Send + Sync + Clone>(
         &mut self,
         store: &mut Store,
-        import: &ImportObject,
+        import: &ImportObject<T>,
     ) -> WasmEdgeResult<()> {
         match import {
             ImportObject::Import(import) => unsafe {
@@ -446,7 +446,7 @@ mod tests {
         let host_name = "extern";
 
         // create an ImportObj module
-        let result = ImportModule::create(host_name);
+        let result = ImportModule::<NeverType>::create(host_name);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -597,7 +597,7 @@ mod tests {
         let async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
+        let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
         let result = executor.register_import_object(&mut store, &wasi_import);
         assert!(result.is_ok());
 
@@ -649,14 +649,13 @@ mod tests {
         let async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
+        let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
         let result = executor.register_import_object(&mut store, &wasi_import);
         assert!(result.is_ok());
 
-        // todo
         let ty = FuncType::create([], [])?;
         let async_hello_func = Function::create_async::<NeverType>(&ty, async_hello, None, 0)?;
-        let mut import = ImportModule::create("extern")?;
+        let mut import = ImportModule::<NeverType>::create("extern")?;
         import.add_func("async_hello", async_hello_func);
 
         let extern_import = ImportObject::Import(import);

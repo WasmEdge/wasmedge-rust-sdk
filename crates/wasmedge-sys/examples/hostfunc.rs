@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host_func = Function::create::<NeverType>(&func_ty, real_add, None, 0)?;
 
     // create an ImportObject module
-    let mut import = ImportModule::create("extern_module")?;
+    let mut import = ImportModule::<NeverType>::create("extern_module")?;
     import.add_func("add", host_func);
 
     // create a config
