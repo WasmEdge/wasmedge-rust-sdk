@@ -398,10 +398,10 @@ mod tests {
         // register an import module into vm
         let result = vm.register_import_module(import);
         assert!(result.is_ok());
-        let vm = result.unwrap();
+        let mut vm = result.unwrap();
 
         // get active module instance
-        let result = vm.named_module("extern");
+        let result = vm.named_module_mut("extern");
         assert!(result.is_ok());
         let instance = result.unwrap();
 
