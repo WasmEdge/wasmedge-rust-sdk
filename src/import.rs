@@ -78,7 +78,7 @@ use wasmedge_sys::{self as sys, AsImport};
 /// ```
 /// [[Click for more examples]](https://github.com/WasmEdge/WasmEdge/tree/master/bindings/rust/wasmedge/examples)
 ///
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ImportObjectBuilder<T: Send + Sync + Clone> {
     funcs: Vec<(String, sys::Function)>,
     globals: Vec<(String, sys::Global)>,
