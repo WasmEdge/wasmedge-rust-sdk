@@ -428,7 +428,7 @@ impl ImportModule {
     /// # Error
     ///
     /// If fail to create the import module instance, then an error is returned.
-    pub fn create_with_data<T>(
+    pub fn create_with_data<T: Send + Sync + Clone + 'static>(
         name: impl AsRef<str>,
         host_data: &mut T,
         finalizer: Option<Finalizer>,
@@ -2067,13 +2067,16 @@ mod tests {
         let module_name = "extern_module";
 
         // define host data
+        #[derive(Clone, Debug)]
         struct Circle {
             radius: i32,
         }
-        let mut circle = Circle { radius: 10 };
 
-        // create an import module
-        let result = ImportModule::create_with_data::<Circle>(module_name, &mut circle, None);
+        let result = {
+            let mut circle = Circle { radius: 10 };
+            // create an import module
+            ImportModule::create_with_data::<Circle>(module_name, &mut circle, None)
+        };
         assert!(result.is_ok());
         let import = result.unwrap();
 
