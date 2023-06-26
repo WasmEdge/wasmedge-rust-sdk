@@ -267,7 +267,7 @@ impl Instance {
     }
 
     /// Returns the host data held by the module instance.
-    pub fn host_data<T>(&mut self) -> Option<&mut T> {
+    pub fn host_data<T: Send + Sync + Clone>(&mut self) -> Option<&mut T> {
         let ctx = unsafe { ffi::WasmEdge_ModuleInstanceGetHostData(self.inner.0) };
 
         match ctx.is_null() {
