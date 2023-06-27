@@ -1,6 +1,8 @@
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::AsyncHostFn;
-use crate::{io::WasmValTypeList, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult};
+use crate::{
+    io::WasmValTypeList, Finalizer, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult,
+};
 use wasmedge_sys::{self as sys, AsImport};
 
 /// Creates a normal or wasi [import object](crate::ImportObject).
@@ -60,15 +62,15 @@ use wasmedge_sys::{self as sys, AsImport};
 ///
 ///     // create an import object
 ///     let module_name = "extern";
-///     let _import = ImportObjectBuilder::new()
+///     let _import = ImportObjectBuilder::<NeverType>::new()
 ///         // add a function
-///         .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)?
+///         .with_func::<(i32, i32), i32>("add", real_add, None)?
 ///         // add a global
-///         .with_global("global", global_const)?
+///         .with_global("global", global_const)
 ///         // add a memory
-///         .with_memory("memory", memory)?
+///         .with_memory("memory", memory)
 ///         // add a table
-///         .with_table("table", table)?
+///         .with_table("table", table)
 ///         .build(module_name)?;
 ///
 ///     Ok(())
@@ -77,13 +79,15 @@ use wasmedge_sys::{self as sys, AsImport};
 /// [[Click for more examples]](https://github.com/WasmEdge/WasmEdge/tree/master/bindings/rust/wasmedge/examples)
 ///
 #[derive(Debug, Default)]
-pub struct ImportObjectBuilder {
+pub struct ImportObjectBuilder<T: Send + Sync + Clone> {
     funcs: Vec<(String, sys::Function)>,
     globals: Vec<(String, sys::Global)>,
     memories: Vec<(String, sys::Memory)>,
     tables: Vec<(String, sys::Table)>,
+    host_data: Option<Box<T>>,
+    finalizer: Option<Finalizer>,
 }
-impl ImportObjectBuilder {
+impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
     /// Creates a new [ImportObjectBuilder].
     pub fn new() -> Self {
         Self {
@@ -91,6 +95,8 @@ impl ImportObjectBuilder {
             globals: Vec::new(),
             memories: Vec::new(),
             tables: Vec::new(),
+            host_data: None,
+            finalizer: None,
         }
     }
 
@@ -109,7 +115,7 @@ impl ImportObjectBuilder {
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func<Args, Rets, T>(
+    pub fn with_func<Args, Rets>(
         mut self,
         name: impl AsRef<str>,
         real_func: HostFn<T>,
@@ -144,7 +150,7 @@ impl ImportObjectBuilder {
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func_by_type<T>(
+    pub fn with_func_by_type(
         mut self,
         name: impl AsRef<str>,
         ty: FuncType,
@@ -170,7 +176,7 @@ impl ImportObjectBuilder {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn with_func_async<Args, Rets, T>(
+    pub fn with_func_async<Args, Rets>(
         mut self,
         name: impl AsRef<str>,
         real_func: AsyncHostFn<T>,
@@ -196,12 +202,9 @@ impl ImportObjectBuilder {
     ///
     /// * `global` - The wasm [global instance](crate::Global) to add.
     ///
-    /// # Error
-    ///
-    /// If fail to create or add the [global](crate::Global), then an error is returned.
-    pub fn with_global(mut self, name: impl AsRef<str>, global: Global) -> WasmEdgeResult<Self> {
+    pub fn with_global(mut self, name: impl AsRef<str>, global: Global) -> Self {
         self.globals.push((name.as_ref().to_owned(), global.inner));
-        Ok(self)
+        self
     }
 
     /// Adds a [memory](crate::Memory) to the [ImportObject] to create.
@@ -212,13 +215,9 @@ impl ImportObjectBuilder {
     ///
     /// * `memory` - The wasm [memory instance](crate::Memory) to add.
     ///
-    /// # Error
-    ///
-    /// If fail to create or add the [memory](crate::Memory), then an error is returned.
-    pub fn with_memory(mut self, name: impl AsRef<str>, memory: Memory) -> WasmEdgeResult<Self> {
-        // let inner_memory = sys::Memory::create(&ty.into())?;
+    pub fn with_memory(mut self, name: impl AsRef<str>, memory: Memory) -> Self {
         self.memories.push((name.as_ref().to_owned(), memory.inner));
-        Ok(self)
+        self
     }
 
     /// Adds a [table](crate::Table) to the [ImportObject] to create.
@@ -229,13 +228,23 @@ impl ImportObjectBuilder {
     ///
     /// * `table` - The wasm [table instance](crate::Table) to add.
     ///
-    /// # Error
-    ///
-    /// If fail to create or add the [table](crate::Table), then an error is returned.
-    pub fn with_table(mut self, name: impl AsRef<str>, table: Table) -> WasmEdgeResult<Self> {
-        // let inner_table = sys::Table::create(&ty.into())?;
+    pub fn with_table(mut self, name: impl AsRef<str>, table: Table) -> Self {
         self.tables.push((name.as_ref().to_owned(), table.inner));
-        Ok(self)
+        self
+    }
+
+    /// Adds host data to the [ImportObject] to create.
+    ///
+    /// # Arguments
+    ///
+    /// * `host_data` - The host data to be stored in the module instance.
+    ///
+    /// * `finalizer` - The function to drop the host data.
+    ///
+    pub fn with_host_data(mut self, host_data: Box<T>, finalizer: Option<Finalizer>) -> Self {
+        self.host_data = Some(host_data);
+        self.finalizer = finalizer;
+        self
     }
 
     /// Creates a new [ImportObject].
@@ -247,8 +256,13 @@ impl ImportObjectBuilder {
     /// # Error
     ///
     /// If fail to create the [ImportObject], then an error is returned.
-    pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<ImportObject> {
-        let mut inner = sys::ImportModule::create(name.as_ref())?;
+    pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<ImportObject<T>> {
+        let mut inner = match self.host_data {
+            Some(host_data) => {
+                sys::ImportModule::create_with_data(name.as_ref(), host_data, self.finalizer)?
+            }
+            None => sys::ImportModule::create(name.as_ref())?,
+        };
 
         // add func
         for (name, func) in self.funcs.into_iter() {
@@ -278,8 +292,8 @@ impl ImportObjectBuilder {
 ///
 /// An [ImportObject] instance is created with [ImportObjectBuilder](crate::ImportObjectBuilder).
 #[derive(Debug, Clone)]
-pub struct ImportObject(pub(crate) sys::ImportObject);
-impl ImportObject {
+pub struct ImportObject<T: Send + Sync + Clone>(pub(crate) sys::ImportObject<T>);
+impl<T: Send + Sync + Clone> ImportObject<T> {
     /// Returns the name of the import object.
     pub fn name(&self) -> &str {
         match &self.0 {
@@ -291,7 +305,7 @@ impl ImportObject {
         }
     }
 
-    pub(crate) fn inner_ref(&self) -> &sys::ImportObject {
+    pub(crate) fn inner_ref(&self) -> &sys::ImportObject<T> {
         &self.0
     }
 
@@ -311,7 +325,7 @@ mod tests {
         params,
         types::Val,
         CallingFrame, Executor, Global, GlobalType, Memory, MemoryType, Mutability, NeverType,
-        RefType, Statistics, Store, Table, TableType, ValType, WasmVal, WasmValue,
+        RefType, Statistics, Store, Table, TableType, ValType, VmBuilder, WasmVal, WasmValue,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -321,10 +335,50 @@ mod tests {
     #[test]
     #[allow(clippy::assertions_on_result_states)]
     fn test_import_builder() {
-        let result = ImportObjectBuilder::default().build("extern");
+        let result = ImportObjectBuilder::<NeverType>::new().build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();
         assert_eq!(import.name(), "extern");
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_result_states)]
+    fn test_import_builder_with_data() {
+        // define host data
+        #[derive(Clone)]
+        struct Circle {
+            radius: i32,
+        }
+
+        let circle = Box::new(Circle { radius: 10 });
+
+        let result = ImportObjectBuilder::<Circle>::new()
+            .with_host_data(circle, None)
+            .build("extern");
+        assert!(result.is_ok());
+
+        let import = result.unwrap();
+        assert_eq!(import.name(), "extern");
+
+        // create a Vm context
+        let result = VmBuilder::new().build();
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        // register an import module into vm
+        let result = vm.register_import_module(import);
+        assert!(result.is_ok());
+        let mut vm = result.unwrap();
+
+        // get active module instance
+        let result = vm.named_module_mut("extern");
+        assert!(result.is_ok());
+        let instance = result.unwrap();
+
+        let result = instance.host_data::<Circle>();
+        assert!(result.is_some());
+        let host_data = result.unwrap();
+        assert_eq!(host_data.radius, 10);
     }
 
     #[test]
@@ -357,8 +411,8 @@ mod tests {
         }
 
         // create an import object
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host func")
             .build("extern");
         assert!(result.is_ok());
@@ -418,9 +472,8 @@ mod tests {
         let memory = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::new()
+        let result = ImportObjectBuilder::<NeverType>::new()
             .with_memory("memory", memory)
-            .expect("failed to add memory")
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();
@@ -499,11 +552,9 @@ mod tests {
         let global_var = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::new()
+        let result = ImportObjectBuilder::<NeverType>::new()
             .with_global("const-global", global_const)
-            .expect("failed to add const-global")
             .with_global("var-global", global_var)
-            .expect("failed to add var-global")
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();
@@ -606,11 +657,10 @@ mod tests {
         let table = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host func")
             .with_table("table", table)
-            .expect("failed to add table")
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();
@@ -734,15 +784,12 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
-            .expect("failed to add const global")
             .with_memory("memory", memory)
-            .expect("failed to add memory")
             .with_table("table", table)
-            .expect("failed to add table")
             .build("extern-module-send");
         assert!(result.is_ok());
         let import = result.unwrap();
@@ -855,15 +902,12 @@ mod tests {
         let table = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
-            .expect("failed to add const global")
             .with_memory("memory", memory)
-            .expect("failed to add memory")
             .with_table("table", table)
-            .expect("failed to add table")
             .build("extern-module-sync");
         assert!(result.is_ok());
         let import = result.unwrap();

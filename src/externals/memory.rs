@@ -169,7 +169,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{CommonConfigOptions, ConfigBuilder},
-        Executor, ImportObjectBuilder, Statistics, Store,
+        Executor, ImportObjectBuilder, NeverType, Statistics, Store,
     };
 
     #[test]
@@ -200,9 +200,8 @@ mod tests {
         let memory = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::new()
+        let result = ImportObjectBuilder::<NeverType>::new()
             .with_memory("memory", memory)
-            .expect("failed to add memory")
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();

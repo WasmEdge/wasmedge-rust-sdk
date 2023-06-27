@@ -86,7 +86,7 @@ mod tests {
     use crate::{
         config::{CommonConfigOptions, ConfigBuilder},
         error::{GlobalError, WasmEdgeError},
-        Executor, ImportObjectBuilder, Mutability, Statistics, Store, ValType,
+        Executor, ImportObjectBuilder, Mutability, NeverType, Statistics, Store, ValType,
     };
 
     #[test]
@@ -120,11 +120,9 @@ mod tests {
         let global_var = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::new()
+        let result = ImportObjectBuilder::<NeverType>::new()
             .with_global("const-global", global_const)
-            .expect("failed to add const-global")
             .with_global("var-global", global_var)
-            .expect("failed to add var-global")
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();

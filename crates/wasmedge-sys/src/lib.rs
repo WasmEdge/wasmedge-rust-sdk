@@ -99,7 +99,7 @@ pub use instance::{
     function::{FuncRef, FuncType, Function, HostFn},
     global::{Global, GlobalType},
     memory::{MemType, Memory},
-    module::{AsImport, AsInstance, ImportModule, ImportObject, Instance},
+    module::{AsImport, AsInstance, Finalizer, ImportModule, ImportObject, Instance},
     table::{Table, TableType},
 };
 #[doc(inline)]

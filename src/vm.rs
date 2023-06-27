@@ -103,8 +103,10 @@ impl VmBuilder {
     ///
     /// If fail to create, then an error is returned.
     #[cfg(not(feature = "async"))]
-    pub fn build(mut self) -> WasmEdgeResult<Vm> {
+    pub fn build<T: Send + Sync + Clone>(mut self) -> WasmEdgeResult<Vm<T>> {
         // executor
+
+        use crate::NeverType;
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
         // store
@@ -132,7 +134,7 @@ impl VmBuilder {
                 if let Ok(wasi_module) = sys::WasiModule::create(None, None, None) {
                     vm.executor.inner.register_import_object(
                         &mut vm.store.inner,
-                        &sys::ImportObject::Wasi(wasi_module.clone()),
+                        &sys::ImportObject::<NeverType>::Wasi(wasi_module.clone()),
                     )?;
 
                     vm.builtin_host_instances.insert(
@@ -168,8 +170,10 @@ impl VmBuilder {
     ///
     /// If fail to create, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn build(mut self) -> WasmEdgeResult<Vm> {
+    pub fn build<T: Send + Sync + Clone>(mut self) -> WasmEdgeResult<Vm<T>> {
         // executor
+
+        use crate::NeverType;
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
         // store
@@ -197,7 +201,7 @@ impl VmBuilder {
                 if let Ok(wasi_module) = sys::AsyncWasiModule::create(None, None, None) {
                     vm.executor.inner.register_import_object(
                         &mut vm.store.inner,
-                        &sys::ImportObject::AsyncWasi(wasi_module.clone()),
+                        &sys::ImportObject::<NeverType>::AsyncWasi(wasi_module.clone()),
                     )?;
 
                     vm.builtin_host_instances.insert(
@@ -245,14 +249,14 @@ impl VmBuilder {
 /// // If the version of rust used is less than v1.63, please uncomment the follow attribute.
 /// // #![feature(explicit_generic_args_with_impl_trait)]
 /// #[cfg(not(feature = "async"))]
-/// use wasmedge_sdk::{params, VmBuilder, WasmVal, wat2wasm, ValType};
+/// use wasmedge_sdk::{params, VmBuilder, WasmVal, wat2wasm, ValType, NeverType};
 ///
 /// #[cfg_attr(test, test)]
 /// fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     #[cfg(not(feature = "async"))]
 ///     {
 ///         // create a Vm context
-///         let vm = VmBuilder::new().build()?;
+///         let vm = VmBuilder::new().build::<NeverType>()?;
 ///
 ///         // register a wasm module from the given in-memory wasm bytes
 ///         let wasm_bytes = wat2wasm(
@@ -300,18 +304,18 @@ impl VmBuilder {
 /// }
 /// ```
 #[derive(Debug, Clone)]
-pub struct Vm {
+pub struct Vm<T: Send + Sync + Clone> {
     pub(crate) config: Option<Config>,
     stat: Option<Statistics>,
     executor: Executor,
     store: Store,
     named_instances: HashMap<String, Instance>,
     active_instance: Option<Instance>,
-    imports: Vec<ImportObject>,
+    imports: Vec<ImportObject<T>>,
     builtin_host_instances: HashMap<HostRegistration, HostRegistrationInstance>,
     plugin_host_instances: Vec<Instance>,
 }
-impl Vm {
+impl<T: Send + Sync + Clone> Vm<T> {
     /// Registers a [wasm module](crate::Module) into this vm as a named or active module [instance](crate::Instance).
     ///
     /// # Arguments
@@ -402,7 +406,7 @@ impl Vm {
     /// # Error
     ///
     /// If fail to register, then an error is returned.
-    pub fn register_import_module(mut self, import: ImportObject) -> WasmEdgeResult<Self> {
+    pub fn register_import_module(mut self, import: ImportObject<T>) -> WasmEdgeResult<Self> {
         match &import.0 {
             sys::ImportObject::Import(_) => {
                 self.store
@@ -868,7 +872,7 @@ mod tests {
     #[test]
     fn test_vm_run_func_from_file() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let mut vm = result.unwrap();
 
@@ -888,7 +892,7 @@ mod tests {
     #[test]
     fn test_vm_run_func_from_bytes() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let mut vm = result.unwrap();
 
@@ -941,7 +945,7 @@ mod tests {
     #[test]
     fn test_vm_run_func_from_module() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let mut vm = result.unwrap();
 
@@ -996,7 +1000,7 @@ mod tests {
     #[test]
     fn test_vm_run_func_in_named_module_instance() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -1052,7 +1056,7 @@ mod tests {
     #[test]
     fn test_vm_run_func_in_active_module_instance() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -1113,7 +1117,7 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_vm_create() {
         {
-            let result = VmBuilder::new().build();
+            let result = VmBuilder::new().build::<NeverType>();
             assert!(result.is_ok());
         }
 
@@ -1124,7 +1128,7 @@ mod tests {
             let config = result.unwrap();
 
             // create a Vm context
-            let result = VmBuilder::new().with_config(config).build();
+            let result = VmBuilder::new().with_config(config).build::<NeverType>();
             assert!(result.is_ok());
             let _vm = result.unwrap();
         }
@@ -1140,7 +1144,7 @@ mod tests {
         let config = result.unwrap();
 
         // create a vm with the config settings
-        let result = VmBuilder::new().with_config(config).build();
+        let result = VmBuilder::new().with_config(config).build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -1167,7 +1171,7 @@ mod tests {
         let config = result.unwrap();
 
         // create a Vm context
-        let result = VmBuilder::new().with_config(config).build();
+        let result = VmBuilder::new().with_config(config).build::<NeverType>();
         assert!(result.is_ok());
         let _vm = result.unwrap();
 
@@ -1180,7 +1184,7 @@ mod tests {
     fn test_vm_register_module_from_file() {
         {
             // create a Vm context
-            let result = VmBuilder::new().build();
+            let result = VmBuilder::new().build::<NeverType>();
             assert!(result.is_ok());
             let vm = result.unwrap();
 
@@ -1198,7 +1202,7 @@ mod tests {
 
         {
             // create a Vm context
-            let result = VmBuilder::new().build();
+            let result = VmBuilder::new().build::<NeverType>();
             assert!(result.is_ok());
             let vm = result.unwrap();
 
@@ -1219,7 +1223,7 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_vm_register_module_from_bytes() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -1293,21 +1297,18 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
-            .expect("failed to add const global")
             .with_memory("mem", memory)
-            .expect("failed to add memory")
             .with_table("table", table)
-            .expect("failed to add table")
             .build("extern-module");
         assert!(result.is_ok());
         let import = result.unwrap();
 
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -1336,7 +1337,7 @@ mod tests {
     #[test]
     fn test_vm_register_named_module() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -1413,7 +1414,7 @@ mod tests {
     #[test]
     fn test_vm_register_active_module() {
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build::<NeverType>();
         assert!(result.is_ok());
         let vm = result.unwrap();
 

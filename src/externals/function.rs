@@ -413,8 +413,8 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_func_basic() {
         // create an ImportModule
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_func::<(i32, i32), i32>("add", real_add, None)
             .expect("failed to add host func")
             .build("extern");
         assert!(result.is_ok());
