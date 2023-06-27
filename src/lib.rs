@@ -57,7 +57,7 @@
 //!      {
 //!          // create an import module
 //!          let import = ImportObjectBuilder::<NeverType>::new()
-//!              .with_func::<(), ()>("say_hello", say_hello, None)?
+//!              .with_func::<(), ()>("say_hello", say_hello)?
 //!              .build("env")?;
 //!      
 //!          let wasm_bytes = wat2wasm(
@@ -165,7 +165,7 @@ pub type CallingFrame = wasmedge_sys::CallingFrame;
 
 pub type HostFn<T> = wasmedge_sys::HostFn<T>;
 
-pub type Finalizer = wasmedge_sys::Finalizer;
+pub type Finalizer = wasmedge_sys::plugin::Finalizer;
 
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async {

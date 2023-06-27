@@ -1,7 +1,12 @@
 //! Defines plugin related structs.
 
-use crate::{instance::Instance, WasmEdgeResult};
-use wasmedge_sys as sys;
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::r#async::AsyncHostFn;
+use crate::{
+    instance::Instance, io::WasmValTypeList, Finalizer, FuncType, Global, HostFn, Memory, Table,
+    WasmEdgeResult,
+};
+use wasmedge_sys::{self as sys, AsImport};
 pub mod ffi {
     pub use wasmedge_sys::ffi::{
         WasmEdge_ModuleDescriptor, WasmEdge_ModuleInstanceContext, WasmEdge_PluginDescriptor,
@@ -209,5 +214,201 @@ impl PluginVersion {
         Self {
             inner: sys::plugin::PluginVersion::create(major, minor, patch, build),
         }
+    }
+}
+
+/// Creates a [plugin module](crate::plugin::PluginModule).
+///
+/// # Example
+///
+/// [Create a simple math plugin](https://github.com/second-state/wasmedge-rustsdk-examples/tree/main/simple-plugin)
+///
+#[derive(Debug, Default)]
+pub struct PluginModuleBuilder<T: Send + Sync + Clone> {
+    funcs: Vec<(String, sys::Function)>,
+    globals: Vec<(String, sys::Global)>,
+    memories: Vec<(String, sys::Memory)>,
+    tables: Vec<(String, sys::Table)>,
+    host_data: Option<Box<T>>,
+    finalizer: Option<Finalizer>,
+}
+impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
+    /// Creates a new [PluginModuleBuilder].
+    pub fn new() -> Self {
+        Self {
+            funcs: Vec::new(),
+            globals: Vec::new(),
+            memories: Vec::new(),
+            tables: Vec::new(),
+            host_data: None,
+            finalizer: None,
+        }
+    }
+
+    /// Adds a [host function](crate::Func) to the [PluginModule] to create.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [host function](crate::Func) to add.
+    ///
+    /// * `real_func` - The native function.
+    ///
+    /// # error
+    ///
+    /// If fail to create or add the [host function](crate::Func), then an error is returned.
+    pub fn with_func<Args, Rets>(
+        mut self,
+        name: impl AsRef<str>,
+        real_func: HostFn<T>,
+    ) -> WasmEdgeResult<Self>
+    where
+        Args: WasmValTypeList,
+        Rets: WasmValTypeList,
+    {
+        let args = Args::wasm_types();
+        let returns = Rets::wasm_types();
+        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner_func = sys::Function::create::<T>(&ty.into(), real_func, None, 0)?;
+        self.funcs.push((name.as_ref().to_owned(), inner_func));
+        Ok(self)
+    }
+
+    /// Adds an [async host function](crate::Func) to the [PluginModule] to create.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [host function](crate::Func) to add.
+    ///
+    /// * `real_func` - The native function.
+    ///
+    /// # error
+    ///
+    /// If fail to create or add the [host function](crate::Func), then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    pub fn with_func_async<Args, Rets>(
+        mut self,
+        name: impl AsRef<str>,
+        real_func: AsyncHostFn<T>,
+    ) -> WasmEdgeResult<Self>
+    where
+        Args: WasmValTypeList,
+        Rets: WasmValTypeList,
+    {
+        let args = Args::wasm_types();
+        let returns = Rets::wasm_types();
+        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner_func = sys::Function::create_async(&ty.into(), real_func, None, 0)?;
+        self.funcs.push((name.as_ref().to_owned(), inner_func));
+        Ok(self)
+    }
+
+    /// Adds a [global](crate::Global) to the [PluginModule] to create.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [global](crate::Global) to add.
+    ///
+    /// * `global` - The wasm [global instance](crate::Global) to add.
+    ///
+    pub fn with_global(mut self, name: impl AsRef<str>, global: Global) -> Self {
+        self.globals.push((name.as_ref().to_owned(), global.inner));
+        self
+    }
+
+    /// Adds a [memory](crate::Memory) to the [PluginModule] to create.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [memory](crate::Memory) to add.
+    ///
+    /// * `memory` - The wasm [memory instance](crate::Memory) to add.
+    ///
+    pub fn with_memory(mut self, name: impl AsRef<str>, memory: Memory) -> Self {
+        self.memories.push((name.as_ref().to_owned(), memory.inner));
+        self
+    }
+
+    /// Adds a [table](crate::Table) to the [PluginModule] to create.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [table](crate::Table) to add.
+    ///
+    /// * `table` - The wasm [table instance](crate::Table) to add.
+    ///
+    pub fn with_table(mut self, name: impl AsRef<str>, table: Table) -> Self {
+        self.tables.push((name.as_ref().to_owned(), table.inner));
+        self
+    }
+
+    /// Adds host data to the [PluginModule] to create.
+    ///
+    /// # Arguments
+    ///
+    /// * `host_data` - The host data to be stored in the module instance.
+    ///
+    /// * `finalizer` - The function to drop the host data. Notice that this argument is available only if `host_data` is set some value.
+    ///
+    pub fn with_host_data(mut self, host_data: Box<T>, finalizer: Option<Finalizer>) -> Self {
+        self.host_data = Some(host_data);
+        self.finalizer = finalizer;
+        self
+    }
+
+    /// Creates a new [PluginModule].
+    ///
+    /// # Argument
+    ///
+    /// * `name` - The name of the [PluginModule] to create.
+    ///
+    /// # Error
+    ///
+    /// If fail to create the [PluginModule], then an error is returned.
+    pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<PluginModule<T>> {
+        let mut inner = sys::plugin::PluginModule::create(name.as_ref(), self.host_data, self.finalizer)?;
+
+        // add func
+        for (name, func) in self.funcs.into_iter() {
+            inner.add_func(name, func);
+        }
+
+        // add global
+        for (name, global) in self.globals.into_iter() {
+            inner.add_global(name, global);
+        }
+
+        // add memory
+        for (name, memory) in self.memories.into_iter() {
+            inner.add_memory(name, memory);
+        }
+
+        // add table
+        for (name, table) in self.tables.into_iter() {
+            inner.add_table(name, table);
+        }
+
+        Ok(PluginModule(inner))
+    }
+}
+
+/// Defines an import object that contains the required import data used when instantiating a [module](crate::Module).
+///
+/// An [PluginModule] instance is created with [PluginModuleBuilder](crate::plugin::PluginModuleBuilder).
+#[derive(Debug, Clone)]
+pub struct PluginModule<T: Send + Sync + Clone>(pub(crate) sys::plugin::PluginModule<T>);
+impl<T: Send + Sync + Clone> PluginModule<T> {
+    /// Returns the name of the plugin module instance.
+    pub fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    /// Returns the raw pointer to the inner `WasmEdge_ModuleInstanceContext`.
+    #[cfg(feature = "ffi")]
+    pub fn as_raw_ptr(&self) -> *const sys::ffi::WasmEdge_ModuleInstanceContext {
+        self.0.as_raw_ptr()
     }
 }
