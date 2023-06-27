@@ -369,7 +369,8 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// If fail to create the [PluginModule], then an error is returned.
     pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<PluginModule<T>> {
-        let mut inner = sys::plugin::PluginModule::create(name.as_ref(), self.host_data, self.finalizer)?;
+        let mut inner =
+            sys::plugin::PluginModule::create(name.as_ref(), self.host_data, self.finalizer)?;
 
         // add func
         for (name, func) in self.funcs.into_iter() {
