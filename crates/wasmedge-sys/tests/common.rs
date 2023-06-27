@@ -4,7 +4,7 @@ use wasmedge_types::{error::HostFuncError, NeverType, ValType};
 
 pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     // create an import module
-    let result = ImportModule::create(name);
+    let result = ImportModule::<NeverType>::create(name, None);
     assert!(result.is_ok());
     let mut import = result.unwrap();
 

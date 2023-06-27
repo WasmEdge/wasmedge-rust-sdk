@@ -3,8 +3,7 @@ use wasmedge_macro::sys_host_function;
 #[cfg(feature = "aot")]
 use wasmedge_sys::{
     AsImport, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
-    ImportObject, Loader, Store, Validator, WasmValue,
-};
+    ImportObject, Loader, Store, Validator, WasmValue};
 #[cfg(feature = "aot")]
 use wasmedge_types::{
     error::HostFuncError, CompilerOptimizationLevel, CompilerOutputFormat, NeverType,
@@ -88,7 +87,7 @@ fn test_aot() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "aot")]
 fn create_spec_test_module() -> ImportModule<NeverType> {
     // create an ImportObj module
-    let result = ImportModule::create("spectest");
+    let result = ImportModule::<NeverType>::create("spectest", None);
     assert!(result.is_ok());
     let mut import = result.unwrap();
 
