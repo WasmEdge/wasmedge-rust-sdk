@@ -514,20 +514,12 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
             true => Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::CreateImportModule,
             ))),
-            false => match host_data.is_some() {
-                true => Ok(Self {
-                    inner: std::sync::Arc::new(InnerInstance(ctx)),
-                    registered: false,
-                    name: name.as_ref().to_string(),
-                    _host_data: host_data,
-                }),
-                false => Ok(Self {
-                    inner: std::sync::Arc::new(InnerInstance(ctx)),
-                    registered: false,
-                    name: name.as_ref().to_string(),
-                    _host_data: None,
-                }),
-            },
+            false => Ok(Self {
+                inner: std::sync::Arc::new(InnerInstance(ctx)),
+                registered: false,
+                name: name.as_ref().to_string(),
+                _host_data: host_data,
+            }),
         }
     }
 
