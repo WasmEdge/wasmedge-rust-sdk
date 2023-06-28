@@ -12,6 +12,7 @@ use std::pin::Pin;
 use std::{convert::TryInto, sync::Arc};
 use wasmedge_types::{NeverType, ValType};
 
+/// Defines the signature of an asynchronous host function.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type AsyncHostFn<T> =
     fn(
@@ -20,6 +21,7 @@ pub type AsyncHostFn<T> =
         Option<&'static mut T>,
     ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
 
+/// Defines the signature of a host function.
 pub type HostFn<T> = fn(
     CallingFrame,
     Vec<WasmValue>,

@@ -115,6 +115,7 @@ pub use types::WasmValue;
 pub use validator::Validator;
 use wasmedge_types::{error, WasmEdgeResult};
 
+/// Type of wasi context that is used to configure the wasi environment.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
 
