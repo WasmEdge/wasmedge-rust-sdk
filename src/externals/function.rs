@@ -414,7 +414,7 @@ mod tests {
     fn test_func_basic() {
         // create an ImportModule
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func::<(i32, i32), i32>("add", real_add, None)
+            .with_func::<(i32, i32), i32>("add", real_add)
             .expect("failed to add host func")
             .build("extern");
         assert!(result.is_ok());

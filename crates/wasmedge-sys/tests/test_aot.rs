@@ -88,7 +88,7 @@ fn test_aot() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "aot")]
 fn create_spec_test_module() -> ImportModule<NeverType> {
     // create an ImportObj module
-    let result = ImportModule::create("spectest");
+    let result = ImportModule::<NeverType>::create("spectest", None);
     assert!(result.is_ok());
     let mut import = result.unwrap();
 

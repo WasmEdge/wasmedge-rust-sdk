@@ -446,7 +446,7 @@ mod tests {
         let host_name = "extern";
 
         // create an ImportObj module
-        let result = ImportModule::<NeverType>::create(host_name);
+        let result = ImportModule::<NeverType>::create(host_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -655,7 +655,7 @@ mod tests {
 
         let ty = FuncType::create([], [])?;
         let async_hello_func = Function::create_async::<NeverType>(&ty, async_hello, None, 0)?;
-        let mut import = ImportModule::<NeverType>::create("extern")?;
+        let mut import = ImportModule::<NeverType>::create("extern", None)?;
         import.add_func("async_hello", async_hello_func);
 
         let extern_import = ImportObject::Import(import);
