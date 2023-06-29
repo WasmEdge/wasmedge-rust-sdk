@@ -1,4 +1,4 @@
-name: binding-rust
+name: Continuous integration
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -6,15 +6,6 @@ concurrency:
 
 on:
   push:
-    branches:
-      - main
-      - "feat/*"
-      - "refactor/*"
-      - "test/*"
-      - "fix/*"
-      - "doc/*"
-      - "ci/*"
-      - "release/*"
     paths:
       - ".github/workflows/bindings-rust.yml"
       - "src/**"

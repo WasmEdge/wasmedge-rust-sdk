@@ -8,91 +8,53 @@
 
 //! # Overview
 //!
-//! The [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) crate defines a group of high-level Rust APIs, which are used to build up business applications.
+//! WasmEdge Rust SDK provides idiomatic [Rust](https://www.rust-lang.org/) language bindings for [WasmEdge](https://wasmedge.org/)
 //!
-//! * Notice that [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) requires **Rust v1.66 or above** in the **stable** channel.
+//! **Notice:** This project is still under active development and not guaranteed to have a stable API.
 //!
-//! ## Build
+//! - [Documentation](https://wasmedge.org/docs/)
+//! - [WasmEdge website](https://wasmedge.org/)
+//! - [WasmEdge GitHub Page](https://github.com/WasmEdge/WasmEdge)
+//! - [WasmEdge Rust SDK GitHub Page](https://github.com/WasmEdge/wasmedge-rust-sdk)
+//! - [WasmEdge Rust SDK Examples](https://github.com/second-state/wasmedge-rustsdk-examples)
 //!
-//! To use or build the `wasmedge-sdk` crate, the `WasmEdge` library is required. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the `WasmEdge` library.
+//! ## Get Started
 //!
-//! * The following table provides the versioning information about each crate of WasmEdge Rust bindings.
+//! Since this crate depends on the WasmEdge C API, it needs to be installed in your system first. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the WasmEdge library. The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 //!
-//!   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro|
-//!   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: |
-//!   | 0.8.1         | 0.12.1        | 0.13.1        | 0.4.1         | 0.3.0         |
-//!   | 0.8.0         | 0.12.0        | 0.13.0        | 0.4.1         | 0.3.0         |
-//!   | 0.7.1         | 0.11.2        | 0.12.2        | 0.3.1         | 0.3.0         |
-//!   | 0.7.0         | 0.11.2        | 0.12          | 0.3.1         | 0.3.0         |
-//!   | 0.6.0         | 0.11.2        | 0.11          | 0.3.0         | 0.2.0         |
-//!   | 0.5.0         | 0.11.1        | 0.10          | 0.3.0         | 0.1.0         |
-//!   | 0.4.0         | 0.11.0        | 0.9           | 0.2.1         | -             |
-//!   | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             |
-//!   | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             |
-//!  
-//! ## Example
+//! | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
+//! | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+//! | 0.9.0         | 0.13.0        | 0.14.0        | 0.4.2         | 0.4.0         | 0.0.1     |
+//! | 0.8.1         | 0.12.1        | 0.13.1        | 0.4.1         | 0.3.0         | -         |
+//! | 0.8.0         | 0.12.0        | 0.13.0        | 0.4.1         | 0.3.0         | -         |
+//! | 0.7.1         | 0.11.2        | 0.12.2        | 0.3.1         | 0.3.0         | -         |
+//! | 0.7.0         | 0.11.2        | 0.12          | 0.3.1         | 0.3.0         | -         |
+//! | 0.6.0         | 0.11.2        | 0.11          | 0.3.0         | 0.2.0         | -         |
+//! | 0.5.0         | 0.11.1        | 0.10          | 0.3.0         | 0.1.0         | -         |
+//! | 0.4.0         | 0.11.0        | 0.9           | 0.2.1         | -             | -         |
+//! | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             | -         |
+//! | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             | -         |
 //!
-//! The example below is using `wasmedge-sdk` to run a WebAssembly module written with its WAT format (textual format). If you would like more examples, please refer to [Examples of WasmEdge RustSDK](https://github.com/second-state/wasmedge-rustsdk-examples).
+//! WasmEdge Rust SDK can automatically search the following paths for the WasmEdge library:
 //!
-//!  ```rust
-//!  #[cfg(not(feature = "async"))]
-//!  use wasmedge_sdk::{
-//!      error::HostFuncError, host_function, params, wat2wasm, Caller, ImportObjectBuilder, Module,
-//!      VmBuilder, WasmValue, NeverType
-//!  };
-//!  
-//!  // We define a function to act as our "env" "say_hello" function imported in the
-//!  // Wasm program above.
-//!  #[cfg(not(feature = "async"))]
-//!  #[host_function]
-//!  pub fn say_hello<T>(_caller: Caller, _args: Vec<WasmValue>, _data: Option<&mut T>) -> Result<Vec<WasmValue>, HostFuncError> {
-//!      println!("Hello, world!");
-//!  
-//!      Ok(vec![])
-//!  }
-//!  
-//!  #[cfg_attr(test, test)]
-//!  fn main() -> anyhow::Result<()> {
-//!      #[cfg(not(feature = "async"))]
-//!      {
-//!          // create an import module
-//!          let import = ImportObjectBuilder::<NeverType>::new()
-//!              .with_func::<(), ()>("say_hello", say_hello)?
-//!              .build("env")?;
-//!      
-//!          let wasm_bytes = wat2wasm(
-//!              br#"
-//!          (module
-//!            ;; First we define a type with no parameters and no results.
-//!            (type $no_args_no_rets_t (func (param) (result)))
-//!          
-//!            ;; Then we declare that we want to import a function named "env" "say_hello" with
-//!            ;; that type signature.
-//!            (import "env" "say_hello" (func $say_hello (type $no_args_no_rets_t)))
-//!          
-//!            ;; Finally we create an entrypoint that calls our imported function.
-//!            (func $run (type $no_args_no_rets_t)
-//!              (call $say_hello))
-//!            ;; And mark it as an exported function named "run".
-//!            (export "run" (func $run)))
-//!          "#,
-//!          )?;
-//!      
-//!          // loads a wasm module from the given in-memory bytes
-//!          let module = Module::from_bytes(None, wasm_bytes)?;
-//!      
-//!          // create an executor
-//!          VmBuilder::new()
-//!              .build::<NeverType>()?
-//!              .register_import_module(import)?
-//!              .register_module(Some("extern"), module)?
-//!              .run_func(Some("extern"), "run", params!())?;
-//!      }
-//!  
-//!      Ok(())
-//!  }
-//!  
-//!  ```
+//! - `$HOME/.wasmedge` (Linux/macOS)
+//! - `/usr/local` (Linux/macOS)
+//!
+//! If you have installed the WasmEdge library in a different path, you can set the `WASMEDGE_INCLUDE_DIR` and `WASMEDGE_LIB_DIR` environment variables to the path of the WasmEdge library.
+//!
+//! **Notice:** The minimum supported Rust version is 1.68.
+//!
+//! ## Examples
+//!
+//! The [Examples of WasmEdge RustSDK](https://github.com/second-state/wasmedge-rustsdk-examples) repo contains a number of examples that demonstrate how to use the WasmEdge Rust SDK.
+//!
+//! ## Contributing
+//!
+//! Please read the [contribution guidelines](https://github.com/WasmEdge/wasmedge-rust-sdk/blob/main/CONTRIBUTING.md) on how to contribute code.
+//!
+//! ## License
+//!
+//! This project is licensed under the terms of the [Apache 2.0 license](https://github.com/tensorflow/rust/blob/HEAD/LICENSE).
 //!
 
 #[doc(hidden)]
@@ -159,22 +121,28 @@ pub use wasmedge_macro::{async_host_function, host_function};
 /// WebAssembly value type.
 pub type WasmValue = wasmedge_sys::types::WasmValue;
 
+/// This is a workaround solution to the [`never`](https://doc.rust-lang.org/std/primitive.never.html) type in Rust. It will be replaced by `!` once it is stable.
 pub type NeverType = wasmedge_types::NeverType;
 
+#[doc(hidden)]
 pub type CallingFrame = wasmedge_sys::CallingFrame;
 
+/// Defines the signature of a host function.
 pub type HostFn<T> = wasmedge_sys::HostFn<T>;
 
+/// Defines the signature of a finalizer funtion that is used to free the host data.
 pub type Finalizer = wasmedge_sys::plugin::Finalizer;
 
+/// Defines the types used in the `async` scenarios.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async {
+    /// The state of an asynchronous task.
     pub type AsyncState = wasmedge_sys::r#async::AsyncState;
+    /// Defines the signature of an asynchronous host function.
     pub type AsyncHostFn<T> = wasmedge_sys::AsyncHostFn<T>;
+    /// Type of wasi context that is used to configure the wasi environment.
+    pub type WasiCtx = wasmedge_sys::WasiCtx;
 }
-
-#[cfg(all(feature = "async", target_os = "linux"))]
-pub type WasiCtx = wasmedge_sys::WasiCtx;
 
 /// The object that is used to perform a [host function](crate::Func) is required to implement this trait.
 pub trait Engine {

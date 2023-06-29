@@ -40,6 +40,7 @@ jobs:
           export CXX=clang++
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
+          wasmedge --version
 
   build_ubuntu_2004:
     name: Ubuntu
@@ -74,10 +75,11 @@ jobs:
           export CXX=clang++
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
+          wasmedge --version
 
   build_fedora:
-    name: Fedora latest
-    runs-on: Fedora-latest
+    name: Fedora
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         rust: [1.70.0, 1.69, 1.68]
@@ -109,6 +111,7 @@ jobs:
           export CXX=clang++
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
+          wasmedge --version
 
   build_macos:
     name: MacOS
@@ -139,3 +142,4 @@ jobs:
           export CXX=clang++
           export DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
+          wasmedge --version

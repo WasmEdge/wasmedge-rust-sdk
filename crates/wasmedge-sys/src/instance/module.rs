@@ -907,6 +907,7 @@ impl AsImport for WasiModule {
     }
 }
 
+/// A [AsyncWasiModule] is a module instance for the WASI specification and used in the `async` scenario.
 #[cfg(all(feature = "async", target_os = "linux"))]
 #[derive(Debug, Clone)]
 pub struct AsyncWasiModule {

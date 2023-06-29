@@ -185,6 +185,7 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
 
 // ================== macros for wasmedge-sys ==================
 
+#[doc(hidden)]
 #[proc_macro_attribute]
 pub fn sys_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
@@ -228,6 +229,7 @@ fn sys_expand_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::Token
     Ok(ret)
 }
 
+#[doc(hidden)]
 #[proc_macro_attribute]
 pub fn sys_async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
