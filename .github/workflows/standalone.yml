@@ -78,8 +78,8 @@ jobs:
           wasmedge --version
 
   build_fedora:
-    name: Fedora latest
-    runs-on: Fedora-latest
+    name: Fedora
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         rust: [1.70.0, 1.69, 1.68]
