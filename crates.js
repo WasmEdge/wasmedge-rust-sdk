@@ -1,0 +1,1 @@
+window.ALL_CRATES = ["async_wasi","wasmedge_macro","wasmedge_sdk","wasmedge_sys","wasmedge_types"];

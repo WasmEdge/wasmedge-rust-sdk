@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"type":[["AsyncHostFn","Defines the signature of an asynchronous host function."],["AsyncState","The state of an asynchronous task."],["WasiCtx","Type of wasi context that is used to configure the wasi environment."]]};
