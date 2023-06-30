@@ -75,39 +75,6 @@ jobs:
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
 
-  build_fedora:
-    name: Fedora
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust: [1.70.0, 1.69, 1.68]
-    container:
-      image: fedora:latest
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set up build environment
-        run: |
-          dnf update -y
-          dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
-          git config --global --add safe.directory $(pwd)
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Run in the standalone mode
-        run: |
-          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
-          export CC=clang
-          export CXX=clang++
-          export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
-          cargo test -p wasmedge-sdk --all --examples --features standalone
-
   build_macos:
     name: MacOS
     runs-on: ${{ matrix.os }}
