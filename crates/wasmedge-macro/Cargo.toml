@@ -1,6 +1,6 @@
 [package]
 description = "The procedural macros for WasmEdge Rust bindings."
-documentation = "https://wasmedge.github.io/wasmedge_rust_sdk/wasmedge_macro/"
+documentation = "https://docs.rs/wasmedge-macro/"
 edition = "2021"
 license = "Apache-2.0"
 name = "wasmedge-macro"
