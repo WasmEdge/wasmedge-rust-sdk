@@ -41,7 +41,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          cargo publish
+          cargo publish -p async-wasi
 
       - name: Build API document
         working-directory: wasmedge-rust-sdk
