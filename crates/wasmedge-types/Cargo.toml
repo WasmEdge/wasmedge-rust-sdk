@@ -1,7 +1,7 @@
 [package]
 categories = ["data-structures"]
 description = "The common data structures for WasmEdge Rust bindings."
-documentation = "https://wasmedge.github.io/wasmedge_rust_sdk/wasmedge_types/"
+documentation = "https://docs.rs/wasmedge-types/"
 edition = "2021"
 license = "Apache-2.0"
 name = "wasmedge-types"
