@@ -25,7 +25,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
             let r = std::mem::size_of::<T>();
             let ptr = self
                 .data_pointer(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const u8;
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
             Ok(ptr.cast::<T>().as_ref().unwrap())
         }
     }
@@ -35,8 +35,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
             let r = std::mem::size_of::<T>() * len;
             let ptr = self
                 .data_pointer(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const u8
-                as *const T;
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const T;
             Ok(std::slice::from_raw_parts(ptr, len))
         }
     }
@@ -52,7 +51,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
             for i in iovec {
                 let ptr = self
                     .data_pointer(i.buf, i.buf_len)
-                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const u8;
+                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
                 let s = std::io::IoSlice::new(std::slice::from_raw_parts(ptr, i.buf_len as usize));
                 result.push(s);
             }
@@ -65,7 +64,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
             let r = std::mem::size_of::<T>();
             let ptr = self
                 .data_pointer_mut(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut u8;
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
             Ok(ptr.cast::<T>().as_mut().unwrap())
         }
     }
@@ -75,7 +74,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
             let r = std::mem::size_of::<T>() * len;
             let ptr = self
                 .data_pointer_mut(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut u8 as *mut T;
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut T;
             Ok(std::slice::from_raw_parts_mut(ptr, len))
         }
     }
@@ -91,7 +90,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
             for i in iovec {
                 let ptr = self
                     .data_pointer_mut(i.buf, i.buf_len)
-                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut u8;
+                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
                 let s = std::io::IoSliceMut::new(std::slice::from_raw_parts_mut(
                     ptr,
                     i.buf_len as usize,
