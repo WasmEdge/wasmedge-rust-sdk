@@ -4,20 +4,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-on:
-  push:
-    paths:
-      - ".github/workflows/bindings-rust.yml"
-      - "src/**"
-      - "crates/**"
-
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/bindings-rust.yml"
-      - "src/**"
-      - "crates/**"
+on: [push, pull_request]
 
 jobs:
   build_ubuntu:
@@ -99,7 +86,7 @@ jobs:
         rust: [1.70.0, 1.69, 1.68]
     container:
       image: fedora:latest
-      
+
     steps:
       - uses: actions/checkout@v3
         with:
