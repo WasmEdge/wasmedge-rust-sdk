@@ -22,11 +22,11 @@ jobs:
 
       - name: Set up build environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
-          sudo apt-get install -y llvm-14-dev liblld-14-dev clang-14
-          sudo apt-get install -y gcc g++
-          sudo apt-get install -y libssl-dev pkg-config gh
+          sudo apt update
+          sudo apt install -y software-properties-common libboost-all-dev ninja-build
+          sudo apt install -y llvm-14-dev liblld-14-dev clang-14
+          sudo apt install -y gcc g++
+          sudo apt install -y libssl-dev pkg-config gh
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -40,7 +40,6 @@ jobs:
           export CXX=clang++
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
-          wasmedge --version
 
   build_ubuntu_2004:
     name: Ubuntu
@@ -57,11 +56,11 @@ jobs:
 
       - name: Set up build environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
-          sudo apt-get install -y llvm-12-dev liblld-12-dev clang-12
-          sudo apt-get install -y gcc g++
-          sudo apt-get install -y libssl-dev pkg-config gh
+          sudo apt update
+          sudo apt install -y software-properties-common libboost-all-dev ninja-build
+          sudo apt install -y llvm-12-dev liblld-12-dev clang-12
+          sudo apt install -y gcc g++
+          sudo apt install -y libssl-dev pkg-config gh
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -75,43 +74,6 @@ jobs:
           export CXX=clang++
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
-          wasmedge --version
-
-  build_fedora:
-    name: Fedora
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust: [1.70.0, 1.69, 1.68]
-    container:
-      image: fedora:latest
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set up build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common libboost-all-dev ninja-build
-          sudo apt-get install -y llvm-12-dev liblld-12-dev clang-12
-          sudo apt-get install -y gcc g++
-          sudo apt-get install -y libssl-dev pkg-config gh
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Run in the standalone mode
-        run: |
-          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
-          export CC=clang
-          export CXX=clang++
-          export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
-          cargo test -p wasmedge-sdk --all --examples --features standalone
-          wasmedge --version
 
   build_macos:
     name: MacOS
@@ -142,4 +104,3 @@ jobs:
           export CXX=clang++
           export DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone
-          wasmedge --version
