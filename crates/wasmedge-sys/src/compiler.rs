@@ -124,7 +124,7 @@ impl Compiler {
                 out_path.as_ptr(),
             ))?;
 
-            libc::free(ptr as *mut libc::c_void);
+            libc::free(ptr);
         }
 
         Ok(())

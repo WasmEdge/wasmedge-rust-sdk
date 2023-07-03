@@ -142,7 +142,7 @@ impl Loader {
                 bytes.as_ref().len() as u32,
             ))?;
 
-            libc::free(ptr as *mut libc::c_void);
+            libc::free(ptr);
         }
 
         match mod_ctx.is_null() {
