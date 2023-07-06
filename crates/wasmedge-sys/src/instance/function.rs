@@ -594,49 +594,6 @@ impl Function {
     ///
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     ///
-    /// # Example
-    ///
-    /// The example defines an async host function `real_add`.
-    ///
-    /// ```rust
-    /// use wasmedge_sys::{FuncType, Function, WasmValue, CallingFrame};
-    /// use wasmedge_types::{error::HostFuncError, ValType, WasmEdgeResult};
-    /// use std::future::Future;
-    /// use std::os::raw::c_void;
-    ///
-    /// fn real_add(
-    ///     _frame: CallingFrame,
-    ///     input: Vec<WasmValue>,
-    /// ) -> Box<(dyn Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send + 'static)> {
-    ///     Box::new(async move {
-    ///         if input.len() != 3 {
-    ///             return Err(HostFuncError::User(1));
-    ///         }
-    ///
-    ///         let a = if input[1].ty() == ValType::I32 {
-    ///             input[1].to_i32()
-    ///         } else {
-    ///             1
-    ///         };
-    ///
-    ///         let b = if input[2].ty() == ValType::I32 {
-    ///             input[2].to_i32()
-    ///         } else {
-    ///             2
-    ///         };
-    ///         tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-    ///
-    ///         let c = a + b;
-    ///         Ok(vec![WasmValue::from_i32(c)])
-    ///     })
-    /// }
-    ///
-    /// // create a FuncType
-    /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
-    ///
-    /// // create a Function instance
-    /// let func = Function::create_async(&func_ty, Box::new(real_add), 0).expect("fail to create a Function instance");
-    /// ```
     #[cfg(all(feature = "async", target_os = "linux"))]
     pub fn create_from_async_closure(
         ty: &FuncType,
