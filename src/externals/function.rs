@@ -1,7 +1,10 @@
 //! Defines Func, SignatureBuilder, and Signature structs.
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::{AsyncHostFn, AsyncState};
-use crate::{io::WasmValTypeList, Executor, FuncType, HostFn, ValType, WasmEdgeResult, WasmValue};
+use crate::{
+    error::HostFuncError, io::WasmValTypeList, CallingFrame, Executor, FuncType, HostFn, ValType,
+    WasmEdgeResult, WasmValue,
+};
 use wasmedge_sys as sys;
 
 /// Defines a host function instance.
@@ -122,6 +125,40 @@ impl Func {
         })
     }
 
+    /// Creates a host function by wrapping a native function.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `real_func` - The native function to be wrapped.
+    ///
+    /// # Error
+    ///
+    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    pub fn wrap_sync_closure<Args, Rets>(
+        real_func: impl Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError>
+            + Send
+            + Sync
+            + 'static,
+    ) -> WasmEdgeResult<Self>
+    where
+        Args: WasmValTypeList,
+        Rets: WasmValTypeList,
+    {
+        let boxed_func = Box::new(real_func);
+        let args = Args::wasm_types();
+        let returns = Rets::wasm_types();
+        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner = sys::Function::create_from_sync_closure(&ty.clone().into(), boxed_func, 0)?;
+        Ok(Self {
+            inner,
+            name: None,
+            mod_name: None,
+            ty,
+        })
+    }
+
     /// Creates an asynchronous host function by wrapping a native function.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
@@ -146,6 +183,47 @@ impl Func {
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
         let inner = sys::Function::create_async(&ty.clone().into(), real_func, ctx_data, 0)?;
+        Ok(Self {
+            inner,
+            name: None,
+            mod_name: None,
+            ty,
+        })
+    }
+
+    /// Creates an asynchronous host function by wrapping a native function.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `real_func` - The native function to be wrapped.
+    ///
+    /// # Error
+    ///
+    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    #[cfg(feature = "async")]
+    pub fn wrap_async_closure<Args, Rets>(
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+            ) -> Box<
+                dyn std::future::Future<
+                        Output = Result<Vec<WasmValue>, crate::error::HostFuncError>,
+                    > + Send,
+            > + Send
+            + Sync
+            + 'static,
+    ) -> WasmEdgeResult<Self>
+    where
+        Args: WasmValTypeList,
+        Rets: WasmValTypeList,
+    {
+        let boxed_func = Box::new(real_func);
+        let args = Args::wasm_types();
+        let returns = Rets::wasm_types();
+        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner = sys::Function::create_from_async_closure(&ty.clone().into(), boxed_func, 0)?;
         Ok(Self {
             inner,
             name: None,
@@ -353,8 +431,8 @@ mod tests {
     use crate::{
         config::{CommonConfigOptions, ConfigBuilder},
         error::HostFuncError,
-        params, CallingFrame, Executor, ImportObjectBuilder, NeverType, Statistics, Store, WasmVal,
-        WasmValue,
+        params, CallingFrame, Executor, ImportObjectBuilder, NeverType, Statistics, Store,
+        VmBuilder, WasmVal, WasmValue,
     };
 
     #[test]
@@ -507,5 +585,113 @@ mod tests {
         let c = a + b;
 
         Ok(vec![WasmValue::from_i32(c)])
+    }
+
+    #[test]
+    fn test_func_wrap_closure() -> Result<(), Box<dyn std::error::Error>> {
+        // define a closure
+        let real_add =
+            |_: CallingFrame, input: Vec<WasmValue>| -> Result<Vec<WasmValue>, HostFuncError> {
+                println!("Rust: Entering Rust function real_add");
+
+                if input.len() != 2 {
+                    return Err(HostFuncError::User(1));
+                }
+
+                let a = if input[0].ty() == ValType::I32 {
+                    input[0].to_i32()
+                } else {
+                    return Err(HostFuncError::User(2));
+                };
+
+                let b = if input[1].ty() == ValType::I32 {
+                    input[1].to_i32()
+                } else {
+                    return Err(HostFuncError::User(3));
+                };
+
+                let c = a + b;
+                println!("Rust: calcuating in real_add c: {c:?}");
+
+                println!("Rust: Leaving Rust function real_add");
+                Ok(vec![WasmValue::from_i32(c)])
+            };
+
+        // create an ImportModule instance
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_sync_closure::<(i32, i32), i32>("add", real_add)?
+            .build("extern");
+        assert!(result.is_ok());
+        let import = result.unwrap();
+
+        // create a Vm context
+        let result = VmBuilder::new().build::<NeverType>();
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        // register an import module into vm
+        let result = vm.register_import_module(import);
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        let returns = vm.run_func(Some("extern"), "add", params![2, 3])?;
+        assert_eq!(returns[0].to_i32(), 5);
+
+        Ok(())
+    }
+
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[tokio::test]
+    async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
+        // define an async closure
+        let c = |_frame: CallingFrame,
+                 _args: Vec<WasmValue>|
+         -> Box<
+            (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
+        > {
+            Box::new(async move {
+                for _ in 0..10 {
+                    println!("[async hello] say hello");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+
+                println!("[async hello] Done!");
+
+                Ok(vec![])
+            })
+        };
+
+        // create an ImportModule instance
+        let result = ImportObjectBuilder::<NeverType>::new()
+            .with_async_closure::<(), ()>("async_hello", c)?
+            .build("extern");
+        assert!(result.is_ok());
+        let import = result.unwrap();
+
+        // create a Vm context
+        let result = VmBuilder::new().build::<NeverType>();
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        // register an import module into vm
+        let result = vm.register_import_module(import);
+        assert!(result.is_ok());
+        let vm = result.unwrap();
+
+        async fn tick() {
+            let mut i = 0;
+            loop {
+                println!("[tick] i={i}");
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                i += 1;
+            }
+        }
+        tokio::spawn(tick());
+
+        let async_state = AsyncState::new();
+        vm.run_func_async(&async_state, Some("extern"), "async_hello", params!())
+            .await?;
+
+        Ok(())
     }
 }
