@@ -1,7 +1,10 @@
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::AsyncHostFn;
-use crate::{io::WasmValTypeList, FuncType, Global, HostFn, Memory, Table, WasmEdgeResult};
-use wasmedge_sys::{self as sys, AsImport};
+use crate::{
+    error::HostFuncError, io::WasmValTypeList, CallingFrame, FuncType, Global, HostFn, Memory,
+    Table, WasmEdgeResult,
+};
+use wasmedge_sys::{self as sys, AsImport, WasmValue};
 
 /// Creates a normal or wasi [import object](crate::ImportObject).
 ///
@@ -134,6 +137,40 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
     ///
     /// * `name` - The exported name of the [host function](crate::Func) to add.
     ///
+    /// * `real_func` - The native function.
+    ///
+    /// # error
+    ///
+    /// If fail to create or add the [host function](crate::Func), then an error is returned.
+    pub fn with_sync_closure<Args, Rets>(
+        mut self,
+        name: impl AsRef<str>,
+        real_func: impl Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError>
+            + Send
+            + Sync
+            + 'static,
+    ) -> WasmEdgeResult<Self>
+    where
+        Args: WasmValTypeList,
+        Rets: WasmValTypeList,
+    {
+        let boxed_func = Box::new(real_func);
+        let args = Args::wasm_types();
+        let returns = Rets::wasm_types();
+        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner_func = sys::Function::create_from_sync_closure(&ty.into(), boxed_func, 0)?;
+        self.funcs.push((name.as_ref().to_owned(), inner_func));
+        Ok(self)
+    }
+
+    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [host function](crate::Func) to add.
+    ///
     /// * `ty` - The function type.
     ///
     /// * `real_func` - The native function.
@@ -179,6 +216,45 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
         let inner_func = sys::Function::create_async(&ty.into(), real_func, None, 0)?;
+        self.funcs.push((name.as_ref().to_owned(), inner_func));
+        Ok(self)
+    }
+
+    /// Adds an [async host function](crate::Func) to the [ImportObject] to create.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The exported name of the [host function](crate::Func) to add.
+    ///
+    /// * `real_func` - The native function.
+    ///
+    /// # error
+    ///
+    /// If fail to create or add the [host function](crate::Func), then an error is returned.
+    #[cfg(feature = "async")]
+    pub fn with_async_closure<Args, Rets>(
+        mut self,
+        name: impl AsRef<str>,
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+            ) -> Box<
+                dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send,
+            > + Send
+            + Sync
+            + 'static,
+    ) -> WasmEdgeResult<Self>
+    where
+        Args: WasmValTypeList,
+        Rets: WasmValTypeList,
+    {
+        let boxed_func = Box::new(real_func);
+        let args = Args::wasm_types();
+        let returns = Rets::wasm_types();
+        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner_func = sys::Function::create_from_async_closure(&ty.into(), boxed_func, 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
