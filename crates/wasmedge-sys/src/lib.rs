@@ -41,6 +41,12 @@
 
 #![deny(rust_2018_idioms, unreachable_pub)]
 
+#[macro_use]
+extern crate lazy_static;
+
+use parking_lot::{Mutex, RwLock};
+use std::{collections::HashMap, sync::Arc};
+
 #[allow(warnings)]
 /// Foreign function interfaces generated from WasmEdge C-API.
 pub mod ffi {
@@ -118,6 +124,27 @@ use wasmedge_types::{error, WasmEdgeResult};
 /// Type of wasi context that is used to configure the wasi environment.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
+
+/// Type alias for a boxed native function. This type is used in thread-safe cases.
+pub type BoxedAsyncFn = Box<
+    dyn Fn(
+            CallingFrame,
+            Vec<WasmValue>,
+        ) -> Box<
+            dyn std::future::Future<Output = Result<Vec<WasmValue>, error::HostFuncError>> + Send,
+        > + Send
+        + Sync,
+>;
+
+lazy_static! {
+    pub static ref ASYNC_HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedAsyncFn>>>> =
+        RwLock::new(HashMap::new());
+}
+
+// Stores the mapping from the address of each host function pointer to the key of the `HOST_FUNCS`.
+lazy_static! {
+    pub static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> = Mutex::new(HashMap::new());
+}
 
 /// The object that is used to perform a [host function](crate::Function) is required to implement this trait.
 pub trait Engine {

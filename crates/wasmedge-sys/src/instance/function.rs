@@ -1,12 +1,19 @@
 //! Defines WasmEdge Function and FuncType structs.
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::{AsyncState, FiberFuture};
 use crate::{
     error::{FuncError, HostFuncError, WasmEdgeError},
     ffi, CallingFrame, Engine, WasmEdgeResult, WasmValue,
 };
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::{
+    r#async::{AsyncState, FiberFuture},
+    BoxedAsyncFn, ASYNC_HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
+};
 use core::ffi::c_void;
+#[cfg(all(feature = "async", target_os = "linux"))]
+use parking_lot::Mutex;
+#[cfg(all(feature = "async", target_os = "linux"))]
+use rand::Rng;
 #[cfg(all(feature = "async", target_os = "linux"))]
 use std::pin::Pin;
 use std::{convert::TryInto, sync::Arc};
@@ -155,6 +162,79 @@ extern "C" fn wrap_async_fn<T: 'static>(
                 ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
             },
         },
+    }
+}
+
+#[cfg(all(feature = "async", target_os = "linux"))]
+// Wrapper function for thread-safe scenarios.
+extern "C" fn wrap_async_fn_from_closure(
+    key_ptr: *mut c_void,
+    _data: *mut std::os::raw::c_void,
+    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
+    params: *const ffi::WasmEdge_Value,
+    param_len: u32,
+    returns: *mut ffi::WasmEdge_Value,
+    return_len: u32,
+) -> ffi::WasmEdge_Result {
+    // arguments
+    let input = {
+        let raw_input = unsafe {
+            std::slice::from_raw_parts(
+                params,
+                param_len
+                    .try_into()
+                    .expect("len of params should not greater than usize"),
+            )
+        };
+        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
+    };
+
+    // returns
+    let return_len = return_len
+        .try_into()
+        .expect("len of returns should not greater than usize");
+    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
+
+    // get and call host function
+    let key = key_ptr as *const usize as usize;
+    let map_host_func = ASYNC_HOST_FUNCS.read();
+    match map_host_func.get(&key) {
+        None => unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, 5) },
+        Some(host_func) => {
+            // get the host function
+            let real_fn = Arc::clone(host_func);
+            let real_fn_locked = real_fn.lock();
+            drop(map_host_func);
+
+            let frame = CallingFrame::create(call_frame_ctx);
+            let async_cx = crate::r#async::AsyncCx::new();
+            let mut future = std::pin::Pin::from(real_fn_locked(frame, input));
+            // call the host function
+            let result = match unsafe { async_cx.block_on(future.as_mut()) } {
+                Ok(Ok(ret)) => Ok(ret),
+                Ok(Err(err)) => Err(err),
+                Err(_err) => Err(HostFuncError::User(0x87)),
+            };
+
+            // parse result
+            match result {
+                Ok(returns) => {
+                    assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}", return_len, returns.len());
+                    for (idx, wasm_value) in returns.into_iter().enumerate() {
+                        raw_returns[idx] = wasm_value.as_raw();
+                    }
+                    ffi::WasmEdge_Result { Code: 0 }
+                }
+                Err(err) => match err {
+                    HostFuncError::User(code) => unsafe {
+                        ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
+                    },
+                    HostFuncError::Runtime(code) => unsafe {
+                        ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
+                    },
+                },
+            }
+        }
     }
 }
 
@@ -347,6 +427,104 @@ impl Function {
                 cost,
             )
         };
+
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
+            false => Ok(Self {
+                inner: Arc::new(InnerFunc(ctx)),
+                registered: false,
+            }),
+        }
+    }
+
+    /// Creates an async [host function](crate::Function) with the given function type.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` - The types of the arguments and returns of the target function.
+    ///
+    /// * `real_fn` - The pointer to the target function.
+    ///
+    /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
+    ///
+    /// # Error
+    ///
+    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    ///
+    /// # Example
+    ///
+    /// The example defines an async host function `real_add`.
+    ///
+    /// ```rust
+    /// use wasmedge_sys::{FuncType, Function, WasmValue, CallingFrame};
+    /// use wasmedge_types::{error::HostFuncError, ValType, WasmEdgeResult};
+    /// use std::future::Future;
+    /// use std::os::raw::c_void;
+    ///
+    /// fn real_add(
+    ///     _frame: CallingFrame,
+    ///     input: Vec<WasmValue>,
+    /// ) -> Box<(dyn Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send + 'static)> {
+    ///     Box::new(async move {
+    ///         if input.len() != 3 {
+    ///             return Err(HostFuncError::User(1));
+    ///         }
+    ///
+    ///         let a = if input[1].ty() == ValType::I32 {
+    ///             input[1].to_i32()
+    ///         } else {
+    ///             1
+    ///         };
+    ///
+    ///         let b = if input[2].ty() == ValType::I32 {
+    ///             input[2].to_i32()
+    ///         } else {
+    ///             2
+    ///         };
+    ///         tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+    ///
+    ///         let c = a + b;
+    ///         Ok(vec![WasmValue::from_i32(c)])
+    ///     })
+    /// }
+    ///
+    /// // create a FuncType
+    /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
+    ///
+    /// // create a Function instance
+    /// let func = Function::create_async(&func_ty, Box::new(real_add), 0).expect("fail to create a Function instance");
+    /// ```
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    pub fn create_async_from_closure(
+        ty: &FuncType,
+        real_fn: BoxedAsyncFn,
+        cost: u64,
+    ) -> WasmEdgeResult<Self> {
+        let mut map_host_func = ASYNC_HOST_FUNCS.write();
+
+        // generate key for the coming host function
+        let mut rng = rand::thread_rng();
+        let mut key: usize = rng.gen();
+        while map_host_func.contains_key(&key) {
+            key = rng.gen();
+        }
+        map_host_func.insert(key, Arc::new(Mutex::new(real_fn)));
+        drop(map_host_func);
+
+        let ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(wrap_async_fn_from_closure),
+                key as *const usize as *mut c_void,
+                std::ptr::null_mut(),
+                cost,
+            )
+        };
+
+        // create a footprint for the host function
+        let footprint = ctx as usize;
+        let mut footprint_to_id = HOST_FUNC_FOOTPRINTS.lock();
+        footprint_to_id.insert(footprint, key);
 
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
@@ -768,6 +946,12 @@ mod tests {
     use wasmedge_macro::sys_host_function;
     use wasmedge_types::ValType;
 
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    use crate::{
+        AsImport, AsyncWasiModule, ImportModule, ImportObject, Store, ASYNC_HOST_FUNCS,
+        HOST_FUNC_FOOTPRINTS,
+    };
+
     #[test]
     fn test_func_type() {
         // test FuncType with args and returns
@@ -1162,5 +1346,90 @@ mod tests {
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns[0].to_i32(), 3);
+    }
+
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[tokio::test]
+    async fn test_func_async_closure() -> Result<(), Box<dyn std::error::Error>> {
+        {
+            // define an async closure
+            let c = |_frame: CallingFrame,
+                     _args: Vec<WasmValue>|
+             -> Box<
+                (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
+            > {
+                Box::new(async move {
+                    for _ in 0..10 {
+                        println!("[async hello] say hello");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
+
+                    println!("[async hello] Done!");
+
+                    Ok(vec![])
+                })
+            };
+
+            // create a FuncType
+            let result = FuncType::create(vec![], vec![]);
+            assert!(result.is_ok());
+            let func_ty = result.unwrap();
+
+            // create an async host function
+            let result = Function::create_async_from_closure(&func_ty, Box::new(c), 0);
+            assert!(result.is_ok());
+            let async_hello_func = result.unwrap();
+
+            // create an Executor
+            let result = Executor::create(None, None);
+            assert!(result.is_ok());
+            let mut executor = result.unwrap();
+            assert!(!executor.inner.0.is_null());
+
+            // create a Store
+            let result = Store::create();
+            assert!(result.is_ok());
+            let mut store = result.unwrap();
+
+            // create an AsyncWasiModule
+            let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
+            assert!(result.is_ok());
+            let async_wasi_module = result.unwrap();
+
+            // register async_wasi module into the store
+            let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
+            let result = executor.register_import_object(&mut store, &wasi_import);
+            assert!(result.is_ok());
+
+            // create an ImportModule
+            let mut import = ImportModule::<NeverType>::create("extern", None)?;
+            import.add_func("async_hello", async_hello_func);
+
+            let extern_import = ImportObject::Import(import);
+            executor.register_import_object(&mut store, &extern_import)?;
+
+            let extern_instance = store.module("extern")?;
+            let async_hello = extern_instance.get_func("async_hello")?;
+
+            async fn tick() {
+                let mut i = 0;
+                loop {
+                    println!("[tick] i={i}");
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    i += 1;
+                }
+            }
+            tokio::spawn(tick());
+
+            let async_state = AsyncState::new();
+            let _ = executor
+                .call_func_async(&async_state, &async_hello, [])
+                .await?;
+        }
+
+        assert_eq!(ASYNC_HOST_FUNCS.read().len(), 0);
+        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
+
+        Ok(())
     }
 }
