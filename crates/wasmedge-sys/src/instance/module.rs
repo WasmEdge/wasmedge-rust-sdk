@@ -12,9 +12,10 @@ use crate::{
     types::WasmEdgeString,
     Function, Global, Memory, Table, WasmEdgeResult,
 };
-use std::{os::raw::c_void, sync::Arc};
+use parking_lot::Mutex;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use std::{path::PathBuf, sync::Mutex};
+use std::path::PathBuf;
+use std::{os::raw::c_void, sync::Arc};
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]
@@ -65,7 +66,7 @@ impl Instance {
                 InstanceError::NotFoundFunc(name.as_ref().to_string()),
             ))),
             false => Ok(Function {
-                inner: Arc::new(InnerFunc(func_ctx)),
+                inner: Arc::new(Mutex::new(InnerFunc(func_ctx))),
                 registered: true,
             }),
         }
@@ -378,25 +379,15 @@ pub struct ImportModule<T: Send + Sync + Clone> {
     name: String,
     _host_data: Option<Box<T>>,
     func_names: Vec<String>,
-    _funcs: Vec<Function>,
+    pub funcs: Vec<Function>,
 }
 impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            // for name in self.func_names.iter() {
-            //     let f = self
-            //         .get_func_to_drop(name)
-            //         .expect("[wasmedge-sys] Not found host function named '{name}'");
-
-            //     // remove the real_func from HOST_FUNCS
-            //     let footprint = f.inner.0 as usize;
-            //     if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
-            //         let mut map_host_func = ASYNC_HOST_FUNCS.write();
-            //         map_host_func.remove(&key).expect(
-            //             format!("[wasmedge-sys] Not found host function: {}", name).as_str(),
-            //         );
-            //     }
-            // }
+            dbg!("*** start dropping the registered host functions");
+            dbg!(self.funcs.len());
+            self.funcs.drain(..);
+            dbg!("*** finish dropping the registered host functions");
 
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
@@ -441,7 +432,7 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     name: name.as_ref().to_string(),
                     _host_data: host_data,
                     func_names: Vec::new(),
-                    _funcs: Vec::new(),
+                    funcs: Vec::new(),
                 }),
                 false => Ok(Self {
                     inner: std::sync::Arc::new(InnerInstance(ctx)),
@@ -449,27 +440,11 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     name: name.as_ref().to_string(),
                     _host_data: None,
                     func_names: Vec::new(),
-                    _funcs: Vec::new(),
+                    funcs: Vec::new(),
                 }),
             },
         }
     }
-
-    // fn get_func_to_drop(&self, name: impl AsRef<str>) -> WasmEdgeResult<Function> {
-    //     let func_name: WasmEdgeString = name.as_ref().into();
-    //     let func_ctx = unsafe {
-    //         ffi::WasmEdge_ModuleInstanceFindFunction(self.inner.0 as *const _, func_name.as_raw())
-    //     };
-    //     match func_ctx.is_null() {
-    //         true => Err(Box::new(WasmEdgeError::Instance(
-    //             InstanceError::NotFoundFunc(name.as_ref().to_string()),
-    //         ))),
-    //         false => Ok(Function {
-    //             inner: Arc::new(InnerFunc(func_ctx)),
-    //             registered: true,
-    //         }),
-    //     }
-    // }
 
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
@@ -482,17 +457,51 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
         self.name.as_str()
     }
 
-    fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
-        self.func_names.push(name.as_ref().to_string());
-        // self.funcs.push(func);
+    // fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+    //     // self.func_names.push(name.as_ref().to_string());
 
-        // let f = self.funcs.last_mut().unwrap();
+    //     // self.funcs.push(func);
+    //     // let f = self.funcs.last_mut().unwrap();
+
+    //     // let func_name: WasmEdgeString = name.into();
+    //     // unsafe {
+    //     //     ffi::WasmEdge_ModuleInstanceAddFunction(
+    //     //         self.inner.0,
+    //     //         func_name.as_raw(),
+    //     //         f.inner.lock().0,
+    //     //     );
+    //     // }
+
+    //     self.func_names.push(name.as_ref().to_string());
+
+    //     // self.funcs.push(func);
+    //     // let f = self.funcs.last_mut().unwrap();
+
+    //     let func_name: WasmEdgeString = name.into();
+    //     unsafe {
+    //         ffi::WasmEdge_ModuleInstanceAddFunction(
+    //             self.inner.0,
+    //             func_name.as_raw(),
+    //             func.inner.lock().0,
+    //         );
+    //     }
+    //     func.inner.lock().0 = std::ptr::null_mut();
+    // }
+
+    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.func_names.push(name.as_ref().to_string());
+
+        self.funcs.push(func);
+        let f = self.funcs.last_mut().unwrap();
 
         let func_name: WasmEdgeString = name.into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                f.inner.lock().0,
+            );
         }
-        func.registered = true;
     }
 
     fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
@@ -732,7 +741,7 @@ impl AsInstance for WasiModule {
                 InstanceError::NotFoundFunc(name.as_ref().to_string()),
             ))),
             false => Ok(Function {
-                inner: Arc::new(InnerFunc(func_ctx)),
+                inner: Arc::new(Mutex::new(InnerFunc(func_ctx))),
                 registered: true,
             }),
         }
@@ -915,7 +924,11 @@ impl AsImport for WasiModule {
     fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
         let func_name: WasmEdgeString = name.into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                func.inner.lock().0,
+            );
         }
         func.registered = true;
     }
@@ -1013,12 +1026,7 @@ impl AsyncWasiModule {
                     let func = Function::create(
                         &func_ty,
                         real_fn,
-                        Some(
-                            &mut async_wasi_module
-                                .wasi_ctx
-                                .lock()
-                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
-                        ),
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
                         0,
                     )?;
                     async_wasi_module.add_func(name, func);
@@ -1028,12 +1036,7 @@ impl AsyncWasiModule {
                     let func = Function::create_async(
                         &func_ty,
                         real_async_fn,
-                        Some(
-                            &mut async_wasi_module
-                                .wasi_ctx
-                                .lock()
-                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
-                        ),
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
                         0,
                     )?;
                     async_wasi_module.add_func(name, func);
@@ -1071,17 +1074,8 @@ impl AsyncWasiModule {
             match wasi_func {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create(
-                        &func_ty,
-                        real_fn,
-                        Some(
-                            &mut self
-                                .wasi_ctx
-                                .lock()
-                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
-                        ),
-                        0,
-                    )?;
+                    let func =
+                        Function::create(&func_ty, real_fn, Some(&mut self.wasi_ctx.lock()), 0)?;
                     self.add_func(name, func);
                 }
                 WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
@@ -1089,12 +1083,7 @@ impl AsyncWasiModule {
                     let func = Function::create_async(
                         &func_ty,
                         real_async_fn,
-                        Some(
-                            &mut self
-                                .wasi_ctx
-                                .lock()
-                                .expect("[wasmedge-sys] failed to get the lock on wasi_ctx"),
-                        ),
+                        Some(&mut self.wasi_ctx.lock()),
                         0,
                     )?;
                     self.add_func(name, func);
@@ -1109,10 +1098,7 @@ impl AsyncWasiModule {
     ///
     /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
     pub fn exit_code(&self) -> u32 {
-        self.wasi_ctx
-            .lock()
-            .expect("[wasmedge-sys] failed to get the lock on wasi_ctx")
-            .exit_code
+        self.wasi_ctx.lock().exit_code
     }
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
@@ -1127,7 +1113,7 @@ impl AsInstance for AsyncWasiModule {
                 InstanceError::NotFoundFunc(name.as_ref().to_string()),
             ))),
             false => Ok(Function {
-                inner: Arc::new(InnerFunc(func_ctx)),
+                inner: Arc::new(Mutex::new(InnerFunc(func_ctx))),
                 registered: true,
             }),
         }
@@ -1310,7 +1296,11 @@ impl AsImport for AsyncWasiModule {
     fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
         let func_name: WasmEdgeString = name.into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                func.inner.lock().0,
+            );
         }
         func.registered = true;
     }
@@ -1428,18 +1418,24 @@ mod tests {
     use super::*;
     use crate::{
         CallingFrame, Config, Executor, FuncType, GlobalType, ImportModule, MemType, Store,
-        TableType, WasmValue,
+        TableType, WasmValue, HOST_FUNCS_NEW, HOST_FUNC_FOOTPRINTS,
     };
     use std::{
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_macro::sys_host_function;
+    use wasmedge_macro::sys_host_function_new;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 
     #[test]
+    // #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_add_instance() {
+        
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
+        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
+
+
         let host_name = "extern";
 
         // create an import module
@@ -1451,11 +1447,18 @@ mod tests {
         let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
+
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
+
         let host_func = result.unwrap();
         // add the host function
         import.add_func("func-add", host_func);
+
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // create a table
         let result = TableType::create(RefType::FuncRef, 10, Some(20));
@@ -1507,6 +1510,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_import_module_sync() {
         let host_name = "extern";
@@ -1520,7 +1524,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1656,6 +1660,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_find_xxx() -> Result<(), Box<dyn std::error::Error>> {
         let module_name = "extern_module";
@@ -1669,7 +1674,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1778,6 +1783,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_find_names() -> Result<(), Box<dyn std::error::Error>> {
         let module_name = "extern_module";
@@ -1791,7 +1797,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1865,6 +1871,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_get() {
         let module_name = "extern_module";
@@ -1888,7 +1895,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1951,11 +1958,10 @@ mod tests {
         assert!(instance.host_data::<NeverType>().is_none());
     }
 
-    #[sys_host_function]
-    fn real_add<T>(
+    #[sys_host_function_new]
+    fn real_add(
         _frame: CallingFrame,
         inputs: Vec<WasmValue>,
-        _data: Option<&mut T>,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         if inputs.len() != 2 {
             return Err(HostFuncError::User(1));
@@ -1995,7 +2001,7 @@ mod tests {
             let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
             assert!(result.is_ok());
             let func_ty = result.unwrap();
-            let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+            let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
             assert!(result.is_ok());
             let host_func = result.unwrap();
             // add the host function

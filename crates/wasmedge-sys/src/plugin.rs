@@ -537,7 +537,11 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
     fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
         let func_name: WasmEdgeString = name.into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                func.inner.lock().0,
+            );
         }
         func.registered = true;
     }

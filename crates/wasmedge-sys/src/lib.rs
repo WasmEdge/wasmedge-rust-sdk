@@ -125,6 +125,21 @@ use wasmedge_types::{error, WasmEdgeResult};
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
 
+pub type NewBoxedFn = Box<
+    dyn Fn(
+            CallingFrame,
+            Vec<WasmValue>,
+            *mut std::os::raw::c_void,
+        ) -> Result<Vec<WasmValue>, error::HostFuncError>
+        + Send
+        + Sync,
+>;
+
+lazy_static! {
+    pub static ref HOST_FUNCS_NEW: RwLock<HashMap<usize, Arc<Mutex<NewBoxedFn>>>> =
+        RwLock::new(HashMap::new());
+}
+
 /// Type alias for a boxed native function. This type is used in thread-safe cases.
 pub type BoxedFn = Box<
     dyn Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, error::HostFuncError>
