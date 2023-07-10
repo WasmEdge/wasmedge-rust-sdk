@@ -1,4 +1,4 @@
-use wasmedge_macro::sys_host_function;
+use wasmedge_macro::sys_host_function_new;
 use wasmedge_sys::{CallingFrame, Executor, FuncType, Function, WasmValue};
 use wasmedge_types::{error::HostFuncError, ValType};
 
@@ -10,11 +10,11 @@ struct Data<T, S> {
     _s: Vec<S>,
 }
 
-#[sys_host_function]
-fn real_add<T: std::fmt::Debug>(
+#[sys_host_function_new]
+fn real_add(
     _frame: CallingFrame,
     input: Vec<WasmValue>,
-    data: Option<&mut T>,
+    data: &mut Data<i32, &str>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     println!("Rust: Entering Rust function real_add");
 
@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(result.is_ok());
     let func_ty = result.unwrap();
     // create a host function
-    let result = Function::create(&func_ty, real_add, Some(&mut data), 0);
+    let result = Function::create_sync_func(&func_ty, Box::new(real_add), Some(&mut data), 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
 

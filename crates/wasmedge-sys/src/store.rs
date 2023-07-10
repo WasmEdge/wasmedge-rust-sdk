@@ -161,7 +161,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -247,7 +247,8 @@ mod tests {
             let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
             assert!(result.is_ok());
             let func_ty = result.unwrap();
-            let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+            let result =
+                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
             assert!(result.is_ok());
             let host_func = result.unwrap();
             import.add_func("add", host_func);

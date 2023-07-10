@@ -378,8 +378,7 @@ pub struct ImportModule<T: Send + Sync + Clone> {
     pub(crate) registered: bool,
     name: String,
     _host_data: Option<Box<T>>,
-    func_names: Vec<String>,
-    pub funcs: Vec<Function>,
+    funcs: Vec<Function>,
 }
 impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
@@ -431,7 +430,6 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     registered: false,
                     name: name.as_ref().to_string(),
                     _host_data: host_data,
-                    func_names: Vec::new(),
                     funcs: Vec::new(),
                 }),
                 false => Ok(Self {
@@ -439,7 +437,6 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     registered: false,
                     name: name.as_ref().to_string(),
                     _host_data: None,
-                    func_names: Vec::new(),
                     funcs: Vec::new(),
                 }),
             },
@@ -489,7 +486,7 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
     // }
 
     fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
-        self.func_names.push(name.as_ref().to_string());
+        // self.func_names.push(name.as_ref().to_string());
 
         self.funcs.push(func);
         let f = self.funcs.last_mut().unwrap();
@@ -970,6 +967,8 @@ pub struct AsyncWasiModule {
     pub(crate) registered: bool,
     name: String,
     wasi_ctx: Arc<Mutex<WasiCtx>>,
+    wasi_funcs: Vec<Function>,
+    funcs: Vec<Function>,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
 impl Drop for AsyncWasiModule {
@@ -1016,6 +1015,8 @@ impl AsyncWasiModule {
             registered: false,
             name: name.to_string(),
             wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
+            wasi_funcs: Vec::new(),
+            funcs: Vec::new(),
         };
 
         // add sync/async host functions to the module
@@ -1023,28 +1024,44 @@ impl AsyncWasiModule {
             match wasi_func {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create(
+                    let func = Function::create_wasi_func(
                         &func_ty,
                         real_fn,
                         Some(&mut async_wasi_module.wasi_ctx.lock()),
                         0,
                     )?;
-                    async_wasi_module.add_func(name, func);
+                    async_wasi_module.add_wasi_func(name, func);
                 }
                 WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create_async(
+                    let func = Function::create_async_wasi_func(
                         &func_ty,
                         real_async_fn,
                         Some(&mut async_wasi_module.wasi_ctx.lock()),
                         0,
                     )?;
-                    async_wasi_module.add_func(name, func);
+                    async_wasi_module.add_wasi_func(name, func);
                 }
             }
         }
 
         Ok(async_wasi_module)
+    }
+
+    fn add_wasi_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.wasi_funcs.push(func);
+        let f = self.wasi_funcs.last_mut().unwrap();
+
+        let func_name: WasmEdgeString = name.into();
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                f.inner.lock().0,
+            );
+        }
+
+        f.inner.lock().0 = std::ptr::null_mut();
     }
 
     pub fn init_wasi(
@@ -1074,19 +1091,23 @@ impl AsyncWasiModule {
             match wasi_func {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func =
-                        Function::create(&func_ty, real_fn, Some(&mut self.wasi_ctx.lock()), 0)?;
-                    self.add_func(name, func);
+                    let func = Function::create_wasi_func(
+                        &func_ty,
+                        real_fn,
+                        Some(&mut self.wasi_ctx.lock()),
+                        0,
+                    )?;
+                    self.add_wasi_func(name, func);
                 }
                 WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create_async(
+                    let func = Function::create_async_wasi_func(
                         &func_ty,
                         real_async_fn,
                         Some(&mut self.wasi_ctx.lock()),
                         0,
                     )?;
-                    self.add_func(name, func);
+                    self.add_wasi_func(name, func);
                 }
             }
         }
@@ -1293,16 +1314,18 @@ impl AsImport for AsyncWasiModule {
         self.name.as_str()
     }
 
-    fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
+    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.funcs.push(func);
+        let f = self.funcs.last_mut().unwrap();
+
         let func_name: WasmEdgeString = name.into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddFunction(
                 self.inner.0,
                 func_name.as_raw(),
-                func.inner.lock().0,
+                f.inner.lock().0,
             );
         }
-        func.registered = true;
     }
 
     fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
@@ -1431,10 +1454,8 @@ mod tests {
     // #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_add_instance() {
-        
         assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
 
         let host_name = "extern";
 
@@ -1447,7 +1468,7 @@ mod tests {
         let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
 
         assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
@@ -1524,7 +1545,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1674,7 +1695,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1797,7 +1818,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -1895,7 +1916,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -2001,7 +2022,8 @@ mod tests {
             let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
             assert!(result.is_ok());
             let func_ty = result.unwrap();
-            let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+            let result =
+                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
             assert!(result.is_ok());
             let host_func = result.unwrap();
             // add the host function

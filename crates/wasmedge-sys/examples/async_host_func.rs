@@ -3,8 +3,6 @@
 //! To run this example, use the following command:
 //!
 //! ```bash
-//! cd <wasmedge-root-dir>/bindings/rust/
-//!
 //! cargo run -p wasmedge-sys --features async --example async_host_func
 //! ```
 
@@ -21,9 +19,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let func_ty = FuncType::create(vec![], vec![])?;
 
         // create a host function
-        let async_host_func = Function::create_async::<NeverType>(
+        let async_host_func = Function::create_async_new(
             &func_ty,
-            |_frame, _input, _data| {
+            Box::new(|_frame, _input| {
                 Box::new(async {
                     println!("Hello, world!");
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -39,8 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Hello, world after sleep!");
                     Ok(vec![])
                 })
-            },
-            None,
+            }),
             0,
         )?;
 

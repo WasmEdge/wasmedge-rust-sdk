@@ -96,7 +96,8 @@ fn create_spec_test_module() -> ImportModule<NeverType> {
     let result = FuncType::create([], []);
     assert!(result.is_ok());
     let func_ty = result.unwrap();
-    let result = Function::create_new::<NeverType>(&func_ty, Box::new(spec_test_print), None, 0);
+    let result =
+        Function::create_sync_func::<NeverType>(&func_ty, Box::new(spec_test_print), None, 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
     // add host function "print"

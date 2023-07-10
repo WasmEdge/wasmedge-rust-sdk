@@ -368,7 +368,8 @@ mod tests {
     use crate::{instance::module::AsyncWasiModule, Loader, Validator};
     use crate::{
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
-        MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
+        MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNCS_NEW,
+        HOST_FUNC_FOOTPRINTS,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -376,7 +377,7 @@ mod tests {
     };
     #[cfg(all(feature = "async", target_os = "linux"))]
     use wasmedge_macro::sys_async_host_function;
-    use wasmedge_macro::sys_host_function;
+    use wasmedge_macro::sys_host_function_new;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 
     #[test]
@@ -432,31 +433,6 @@ mod tests {
     #[test]
     #[allow(clippy::assertions_on_result_states)]
     fn test_executor_register_import() {
-        fn real_add(
-            _frame: CallingFrame,
-            inputs: Vec<WasmValue>,
-        ) -> Result<Vec<WasmValue>, HostFuncError> {
-            if inputs.len() != 2 {
-                return Err(HostFuncError::User(1));
-            }
-
-            let a = if inputs[0].ty() == ValType::I32 {
-                inputs[0].to_i32()
-            } else {
-                return Err(HostFuncError::User(2));
-            };
-
-            let b = if inputs[1].ty() == ValType::I32 {
-                inputs[1].to_i32()
-            } else {
-                return Err(HostFuncError::User(3));
-            };
-
-            let c = a + b;
-
-            Ok(vec![WasmValue::from_i32(c)])
-        }
-
         // create an Executor
         let result = Executor::create(None, None);
         assert!(result.is_ok());
@@ -481,7 +457,7 @@ mod tests {
         let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_from_sync_closure(&func_ty, Box::new(real_add), 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         // add the function into the import_obj module
@@ -646,10 +622,14 @@ mod tests {
         }
         tokio::spawn(tick());
 
+        dbg!("call async host func");
+
         let async_state = AsyncState::new();
         let _ = executor
             .call_func_async(&async_state, &fn_start, [])
             .await?;
+
+        dbg!("call async host func done");
 
         Ok(())
     }
@@ -729,11 +709,10 @@ mod tests {
         Ok(())
     }
 
-    #[sys_host_function]
-    fn real_add<T>(
+    #[sys_host_function_new]
+    fn real_add(
         _frame: CallingFrame,
         inputs: Vec<WasmValue>,
-        _: Option<&mut T>,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         if inputs.len() != 2 {
             return Err(HostFuncError::User(1));

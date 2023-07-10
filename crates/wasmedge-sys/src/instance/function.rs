@@ -461,93 +461,6 @@ impl Function {
     ///
     /// * `real_fn` - The pointer to the target function.
     ///
-    /// * `ctx_data` - The additional data object to set to this host function context.
-    ///
-    /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    ///
-    /// # Example
-    ///
-    /// The example defines a host function `real_add`, and creates a [Function] binding to it by calling
-    /// the `create_binding` method.
-    ///
-    /// ```rust
-    /// use wasmedge_macro::sys_host_function;
-    /// use wasmedge_sys::{FuncType, Function, WasmValue, CallingFrame};
-    /// use wasmedge_types::{error::HostFuncError, ValType, WasmEdgeResult, NeverType};
-    ///
-    /// #[sys_host_function]
-    /// fn real_add<T>(_frame: CallingFrame, inputs: Vec<WasmValue>, _: Option<&mut T>) -> Result<Vec<WasmValue>, HostFuncError> {
-    ///     if inputs.len() != 2 {
-    ///         return Err(HostFuncError::User(1));
-    ///     }
-    ///
-    ///     let a = if inputs[0].ty() == ValType::I32 {
-    ///         inputs[0].to_i32()
-    ///     } else {
-    ///         return Err(HostFuncError::User(2));
-    ///     };
-    ///
-    ///     let b = if inputs[1].ty() == ValType::I32 {
-    ///         inputs[1].to_i32()
-    ///     } else {
-    ///         return Err(HostFuncError::User(3));
-    ///     };
-    ///
-    ///     let c = a + b;
-    ///
-    ///     Ok(vec![WasmValue::from_i32(c)])
-    /// }
-    ///
-    /// // create a FuncType
-    /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
-    ///
-    /// // create a Function instance
-    /// let func = Function::create::<NeverType>(&func_ty, real_add, None, 0).expect("fail to create a Function instance");
-    /// ```
-    pub fn create<T>(
-        ty: &FuncType,
-        real_fn: HostFn<T>,
-        ctx_data: Option<&mut T>,
-        cost: u64,
-    ) -> WasmEdgeResult<Self> {
-        let data = match ctx_data {
-            Some(d) => d as *mut T as *mut std::os::raw::c_void,
-            None => std::ptr::null_mut(),
-        };
-
-        let ctx = unsafe {
-            ffi::WasmEdge_FunctionInstanceCreateBinding(
-                ty.inner.0,
-                Some(wrap_sync_fn::<T>),
-                real_fn as *mut _,
-                data,
-                cost,
-            )
-        };
-
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
-            false => Ok(Self {
-                inner: Arc::new(Mutex::new(InnerFunc(ctx))),
-                registered: false,
-            }),
-        }
-    }
-
-    /// Creates a [host function](crate::Function) with the given function type.
-    ///
-    /// N.B. that this function is used for thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The types of the arguments and returns of the target function.
-    ///
-    /// * `real_fn` - The pointer to the target function.
-    ///
     /// * `data` - The additional data object to set to this host function context.
     ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
@@ -593,9 +506,9 @@ impl Function {
     /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
     ///
     /// // create a Function instance
-    /// let func = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0).expect("fail to create a Function instance");
+    /// let func = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0).expect("fail to create a Function instance");
     /// ```
-    pub fn create_new<T>(
+    pub fn create_sync_func<T>(
         ty: &FuncType,
         real_fn: NewBoxedFn,
         data: Option<&mut T>,
@@ -606,7 +519,7 @@ impl Function {
             None => std::ptr::null_mut(),
         };
 
-        unsafe { Self::create_with_data_new(ty, real_fn, data, cost) }
+        unsafe { Self::create_with_data(ty, real_fn, data, cost) }
     }
 
     /// Creates a [host function](crate::Function) with the given function type.
@@ -627,7 +540,7 @@ impl Function {
     ///
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     ///
-    unsafe fn create_with_data_new(
+    unsafe fn create_with_data(
         ty: &FuncType,
         real_fn: NewBoxedFn,
         data: *mut c_void,
@@ -647,87 +560,6 @@ impl Function {
         let ctx = ffi::WasmEdge_FunctionInstanceCreateBinding(
             ty.inner.0,
             Some(wrap_fn_new),
-            key as *const usize as *mut c_void,
-            data,
-            cost,
-        );
-
-        // create a footprint for the host function
-        let footprint = ctx as usize;
-        let mut footprint_to_id = HOST_FUNC_FOOTPRINTS.lock();
-        footprint_to_id.insert(footprint, key);
-
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
-            false => Ok(Self {
-                inner: Arc::new(Mutex::new(InnerFunc(ctx))),
-                registered: false,
-            }),
-        }
-    }
-
-    /// Creates a [host function](crate::Function) with the given function type.
-    ///
-    /// N.B. that this function is used for thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The types of the arguments and returns of the target function.
-    ///
-    /// * `real_fn` - The pointer to the target function.
-    ///
-    /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    ///
-    pub fn create_from_sync_closure(
-        ty: &FuncType,
-        real_fn: BoxedFn,
-        cost: u64,
-    ) -> WasmEdgeResult<Self> {
-        unsafe { Self::create_with_data(ty, real_fn, std::ptr::null_mut(), cost) }
-    }
-
-    /// Creates a [host function](crate::Function) with the given function type.
-    ///
-    /// N.B. that this function is used for thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The types of the arguments and returns of the target function.
-    ///
-    /// * `real_fn` - The pointer to the target function.
-    ///
-    /// * `data` - The pointer to the data.
-    ///
-    /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    ///
-    pub unsafe fn create_with_data(
-        ty: &FuncType,
-        real_fn: BoxedFn,
-        data: *mut c_void,
-        cost: u64,
-    ) -> WasmEdgeResult<Self> {
-        let mut map_host_func = HOST_FUNCS.write();
-
-        // generate key for the coming host function
-        let mut rng = rand::thread_rng();
-        let mut key: usize = rng.gen();
-        while map_host_func.contains_key(&key) {
-            key = rng.gen();
-        }
-        map_host_func.insert(key, Arc::new(Mutex::new(real_fn)));
-        drop(map_host_func);
-
-        let ctx = ffi::WasmEdge_FunctionInstanceCreateBinding(
-            ty.inner.0,
-            Some(wrap_fn),
             key as *const usize as *mut c_void,
             data,
             cost,
@@ -807,10 +639,10 @@ impl Function {
     /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
     ///
     /// // create a Function instance
-    /// let func = Function::create_async::<NeverType>(&func_ty, real_add, None, 0).expect("fail to create a Function instance");
+    /// let func = Function::create_async_func::<NeverType>(&func_ty, real_add, None, 0).expect("fail to create a Function instance");
     /// ```
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn create_async<T>(
+    pub fn create_async_func<T>(
         ty: &FuncType,
         real_fn: AsyncHostFn<T>,
         ctx_data: Option<&mut T>,
@@ -992,6 +824,67 @@ impl Function {
         }
     }
 
+    pub(crate) fn create_wasi_func<T>(
+        ty: &FuncType,
+        real_fn: HostFn<T>,
+        ctx_data: Option<&mut T>,
+        cost: u64,
+    ) -> WasmEdgeResult<Self> {
+        let data = match ctx_data {
+            Some(d) => d as *mut T as *mut std::os::raw::c_void,
+            None => std::ptr::null_mut(),
+        };
+
+        let ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(wrap_sync_fn::<T>),
+                real_fn as *mut _,
+                data,
+                cost,
+            )
+        };
+
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
+            false => Ok(Self {
+                inner: Arc::new(Mutex::new(InnerFunc(ctx))),
+                registered: false,
+            }),
+        }
+    }
+
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    pub(crate) fn create_async_wasi_func<T>(
+        ty: &FuncType,
+        real_fn: AsyncHostFn<T>,
+        ctx_data: Option<&mut T>,
+        cost: u64,
+    ) -> WasmEdgeResult<Self> {
+        let data = match ctx_data {
+            Some(d) => d as *mut T as *mut std::os::raw::c_void,
+            None => std::ptr::null_mut(),
+        };
+
+        let ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(wrap_async_fn::<T>),
+                real_fn as *mut _,
+                data,
+                cost,
+            )
+        };
+
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
+            false => Ok(Self {
+                inner: Arc::new(Mutex::new(InnerFunc(ctx))),
+                registered: false,
+            }),
+        }
+    }
+
     /// Returns the underlying wasm type of this [Function].
     ///
     /// # Errors
@@ -1009,75 +902,6 @@ impl Function {
         }
     }
 
-    /// Runs this host function and returns the result.
-    ///
-    /// # Arguments
-    ///
-    /// * `engine` - The object implementing the [Engine](crate::Engine) trait.
-    ///
-    /// * `args` - The arguments passed to the host function.
-    ///
-    /// # Error
-    ///
-    /// If fail to run the host function, then an error is returned.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use wasmedge_macro::sys_host_function;
-    /// use wasmedge_sys::{FuncType, Function, WasmValue, Executor, CallingFrame};
-    /// use wasmedge_types::{error::HostFuncError, ValType, NeverType};
-    ///
-    /// #[sys_host_function]
-    /// fn real_add<T>(_frame: CallingFrame, input: Vec<WasmValue>, _: Option<&mut T>) -> Result<Vec<WasmValue>, HostFuncError> {
-    ///     println!("Rust: Entering Rust function real_add");
-    ///
-    ///     if input.len() != 2 {
-    ///         return Err(HostFuncError::User(1));
-    ///     }
-    ///
-    ///     let a = if input[0].ty() == ValType::I32 {
-    ///         input[0].to_i32()
-    ///     } else {
-    ///         return Err(HostFuncError::User(2));
-    ///     };
-    ///
-    ///     let b = if input[1].ty() == ValType::I32 {
-    ///         input[1].to_i32()
-    ///     } else {
-    ///         return Err(HostFuncError::User(3));
-    ///     };
-    ///
-    ///     let c = a + b;
-    ///     println!("Rust: calcuating in real_add c: {:?}", c);
-    ///
-    ///     println!("Rust: Leaving Rust function real_add");
-    ///     Ok(vec![WasmValue::from_i32(c)])
-    /// }
-    ///
-    /// // create a FuncType
-    /// let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-    /// assert!(result.is_ok());
-    /// let func_ty = result.unwrap();
-    /// // create a host function
-    /// let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
-    /// assert!(result.is_ok());
-    /// let host_func = result.unwrap();
-    ///
-    /// // create an Executor instance
-    /// let result = Executor::create(None, None);
-    /// assert!(result.is_ok());
-    /// let mut executor = result.unwrap();
-    ///
-    /// // run this function
-    /// let result = host_func.call(
-    ///     &mut executor,
-    ///     vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
-    /// );
-    /// assert!(result.is_ok());
-    /// let returns = result.unwrap();
-    /// assert_eq!(returns[0].to_i32(), 3);
-    /// ```
     pub fn call<E: Engine>(
         &self,
         engine: &mut E,
@@ -1525,7 +1349,7 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_new(&func_ty, Box::new(real_add), Some(&mut data), 0);
+        let result = Function::create_sync_func(&func_ty, Box::new(real_add), Some(&mut data), 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -1560,21 +1384,19 @@ mod tests {
     #[test]
     #[allow(clippy::assertions_on_result_states)]
     fn test_func_create_host_func_in_host_func() {
-        #[sys_host_function]
-        fn func<T>(
+        #[sys_host_function_new]
+        fn func(
             _frame: CallingFrame,
             _input: Vec<WasmValue>,
-            _: Option<&mut T>,
         ) -> Result<Vec<WasmValue>, HostFuncError> {
             println!("Entering host function: func");
 
             // spawn a new thread to create a new host function
             let handler = std::thread::spawn(|| {
-                #[sys_host_function]
-                fn real_add<T>(
+                #[sys_host_function_new]
+                fn real_add(
                     _frame: CallingFrame,
                     input: Vec<WasmValue>,
-                    _: Option<&mut T>,
                 ) -> Result<Vec<WasmValue>, HostFuncError> {
                     println!("Rust: Entering Rust function real_add");
 
@@ -1605,7 +1427,8 @@ mod tests {
                 assert!(result.is_ok());
                 let func_ty = result.unwrap();
                 // create a host function
-                let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+                let result =
+                    Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
                 assert!(result.is_ok());
                 let host_func = result.unwrap();
 
@@ -1632,7 +1455,7 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create::<NeverType>(&func_ty, func, None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(func), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -1651,7 +1474,7 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -1682,7 +1505,7 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_new::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = Arc::new(Mutex::new(result.unwrap()));
 
@@ -1745,32 +1568,34 @@ mod tests {
     fn test_func_closure() -> Result<(), Box<dyn std::error::Error>> {
         {
             // create a host function
-            let real_add =
-                |_: CallingFrame, input: Vec<WasmValue>| -> Result<Vec<WasmValue>, HostFuncError> {
-                    println!("Rust: Entering Rust function real_add");
+            let real_add = |_: CallingFrame,
+                            input: Vec<WasmValue>,
+                            _: *mut std::os::raw::c_void|
+             -> Result<Vec<WasmValue>, HostFuncError> {
+                println!("Rust: Entering Rust function real_add");
 
-                    if input.len() != 2 {
-                        return Err(HostFuncError::User(1));
-                    }
+                if input.len() != 2 {
+                    return Err(HostFuncError::User(1));
+                }
 
-                    let a = if input[0].ty() == ValType::I32 {
-                        input[0].to_i32()
-                    } else {
-                        return Err(HostFuncError::User(2));
-                    };
-
-                    let b = if input[1].ty() == ValType::I32 {
-                        input[1].to_i32()
-                    } else {
-                        return Err(HostFuncError::User(3));
-                    };
-
-                    let c = a + b;
-                    println!("Rust: calcuating in real_add c: {c:?}");
-
-                    println!("Rust: Leaving Rust function real_add");
-                    Ok(vec![WasmValue::from_i32(c)])
+                let a = if input[0].ty() == ValType::I32 {
+                    input[0].to_i32()
+                } else {
+                    return Err(HostFuncError::User(2));
                 };
+
+                let b = if input[1].ty() == ValType::I32 {
+                    input[1].to_i32()
+                } else {
+                    return Err(HostFuncError::User(3));
+                };
+
+                let c = a + b;
+                println!("Rust: calcuating in real_add c: {c:?}");
+
+                println!("Rust: Leaving Rust function real_add");
+                Ok(vec![WasmValue::from_i32(c)])
+            };
 
             // create a FuncType
             let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
@@ -1778,7 +1603,8 @@ mod tests {
             let func_ty = result.unwrap();
 
             // create a host function from the closure defined above
-            let result = Function::create_from_sync_closure(&func_ty, Box::new(real_add), 0);
+            let result =
+                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
             assert!(result.is_ok());
             let host_func = result.unwrap();
 
@@ -1902,32 +1728,34 @@ mod tests {
     #[test]
     fn test_func_closure_drop() -> Result<(), Box<dyn std::error::Error>> {
         // create a host function
-        let real_add =
-            |_: CallingFrame, input: Vec<WasmValue>| -> Result<Vec<WasmValue>, HostFuncError> {
-                println!("Rust: Entering Rust function real_add");
+        let real_add = |_: CallingFrame,
+                        input: Vec<WasmValue>,
+                        _: *mut std::os::raw::c_void|
+         -> Result<Vec<WasmValue>, HostFuncError> {
+            println!("Rust: Entering Rust function real_add");
 
-                if input.len() != 2 {
-                    return Err(HostFuncError::User(1));
-                }
+            if input.len() != 2 {
+                return Err(HostFuncError::User(1));
+            }
 
-                let a = if input[0].ty() == ValType::I32 {
-                    input[0].to_i32()
-                } else {
-                    return Err(HostFuncError::User(2));
-                };
-
-                let b = if input[1].ty() == ValType::I32 {
-                    input[1].to_i32()
-                } else {
-                    return Err(HostFuncError::User(3));
-                };
-
-                let c = a + b;
-                println!("Rust: calcuating in real_add c: {c:?}");
-
-                println!("Rust: Leaving Rust function real_add");
-                Ok(vec![WasmValue::from_i32(c)])
+            let a = if input[0].ty() == ValType::I32 {
+                input[0].to_i32()
+            } else {
+                return Err(HostFuncError::User(2));
             };
+
+            let b = if input[1].ty() == ValType::I32 {
+                input[1].to_i32()
+            } else {
+                return Err(HostFuncError::User(3));
+            };
+
+            let c = a + b;
+            println!("Rust: calcuating in real_add c: {c:?}");
+
+            println!("Rust: Leaving Rust function real_add");
+            Ok(vec![WasmValue::from_i32(c)])
+        };
 
         // create a FuncType
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
@@ -1935,14 +1763,14 @@ mod tests {
         let func_ty = result.unwrap();
 
         // create a host function
-        let result = Function::create_from_sync_closure(&func_ty, Box::new(real_add), 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
         assert_eq!(Arc::strong_count(&host_func.inner), 1);
         assert!(!host_func.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // clone the host function before adding it to the import object
@@ -1951,7 +1779,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&host_func_cloned.inner), 2);
         assert!(!host_func_cloned.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // create an ImportModule
@@ -1962,12 +1790,12 @@ mod tests {
         assert_eq!(Arc::strong_count(&host_func_cloned.inner), 2);
         assert!(!host_func_cloned.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         drop(host_func_cloned);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         let import = ImportObject::Import(import_module);
@@ -1989,7 +1817,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&add.inner), 1);
         assert!(add.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // clone the host function
@@ -1999,7 +1827,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&add_cloned.inner), 2);
         assert!(add_cloned.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // drop the cloned host function
@@ -2007,12 +1835,12 @@ mod tests {
         assert_eq!(Arc::strong_count(&add.inner), 1);
         assert!(add.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         drop(add);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // get the registered host function again
@@ -2021,13 +1849,13 @@ mod tests {
         assert_eq!(Arc::strong_count(&add_again.inner), 1);
         assert!(add_again.registered);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // ! notice that `add_again` should be dropped before or not be used after dropping `import`
         drop(add_again);
 
-        assert_eq!(HOST_FUNCS.read().len(), 1);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // drop the import object
@@ -2037,7 +1865,7 @@ mod tests {
 
         assert!(store.module("extern").is_err());
 
-        assert_eq!(HOST_FUNCS.read().len(), 0);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         dbg!("*** all done");

@@ -283,7 +283,7 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_macro::sys_host_function;
+    use wasmedge_macro::sys_host_function_new;
     use wasmedge_types::{error::HostFuncError, NeverType, RefType, ValType};
 
     #[test]
@@ -346,7 +346,7 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -487,11 +487,10 @@ mod tests {
         assert_eq!(table_cloned.capacity(), 10);
     }
 
-    #[sys_host_function]
-    fn real_add<T>(
+    #[sys_host_function_new]
+    fn real_add(
         _frame: CallingFrame,
         input: Vec<WasmValue>,
-        _: Option<&mut T>,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         println!("Rust: Entering Rust function real_add");
 
