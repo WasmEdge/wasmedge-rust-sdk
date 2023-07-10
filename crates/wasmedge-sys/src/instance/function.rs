@@ -2,8 +2,8 @@
 
 use crate::{
     error::{FuncError, HostFuncError, WasmEdgeError},
-    ffi, BoxedFn, CallingFrame, Engine, NewBoxedFn, WasmEdgeResult, WasmValue, HOST_FUNCS,
-    HOST_FUNCS_NEW, HOST_FUNC_FOOTPRINTS,
+    ffi, CallingFrame, Engine, NewBoxedFn, WasmEdgeResult, WasmValue, HOST_FUNCS_NEW,
+    HOST_FUNC_FOOTPRINTS,
 };
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::{
@@ -161,142 +161,6 @@ extern "C" fn wrap_async_fn<T: 'static>(
                 ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
             },
         },
-    }
-}
-
-#[cfg(all(feature = "async", target_os = "linux"))]
-// Wrapper function for thread-safe scenarios.
-extern "C" fn wrap_async_fn_from_closure(
-    key_ptr: *mut c_void,
-    _data: *mut std::os::raw::c_void,
-    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
-    params: *const ffi::WasmEdge_Value,
-    param_len: u32,
-    returns: *mut ffi::WasmEdge_Value,
-    return_len: u32,
-) -> ffi::WasmEdge_Result {
-    // arguments
-    let input = {
-        let raw_input = unsafe {
-            std::slice::from_raw_parts(
-                params,
-                param_len
-                    .try_into()
-                    .expect("len of params should not greater than usize"),
-            )
-        };
-        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
-    };
-
-    // returns
-    let return_len = return_len
-        .try_into()
-        .expect("len of returns should not greater than usize");
-    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
-
-    // get and call host function
-    let key = key_ptr as *const usize as usize;
-    let map_host_func = ASYNC_HOST_FUNCS.read();
-    match map_host_func.get(&key) {
-        None => unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, 5) },
-        Some(host_func) => {
-            // get host function
-            let real_fn = Arc::clone(host_func);
-            let real_fn_locked = real_fn.lock();
-            drop(map_host_func);
-
-            let frame = CallingFrame::create(call_frame_ctx);
-            let async_cx = crate::r#async::AsyncCx::new();
-            let mut future = std::pin::Pin::from(real_fn_locked(frame, input));
-            // call host function
-            let result = match unsafe { async_cx.block_on(future.as_mut()) } {
-                Ok(Ok(ret)) => Ok(ret),
-                Ok(Err(err)) => Err(err),
-                Err(_err) => Err(HostFuncError::User(0x87)),
-            };
-
-            // parse result
-            match result {
-                Ok(returns) => {
-                    assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}", return_len, returns.len());
-                    for (idx, wasm_value) in returns.into_iter().enumerate() {
-                        raw_returns[idx] = wasm_value.as_raw();
-                    }
-                    ffi::WasmEdge_Result { Code: 0 }
-                }
-                Err(err) => match err {
-                    HostFuncError::User(code) => unsafe {
-                        ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
-                    },
-                    HostFuncError::Runtime(code) => unsafe {
-                        ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
-                    },
-                },
-            }
-        }
-    }
-}
-
-// Wrapper function for thread-safe scenarios.
-extern "C" fn wrap_fn(
-    key_ptr: *mut c_void,
-    _data: *mut std::os::raw::c_void,
-    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
-    params: *const ffi::WasmEdge_Value,
-    param_len: u32,
-    returns: *mut ffi::WasmEdge_Value,
-    return_len: u32,
-) -> ffi::WasmEdge_Result {
-    // arguments
-    let input = {
-        let raw_input = unsafe {
-            std::slice::from_raw_parts(
-                params,
-                param_len
-                    .try_into()
-                    .expect("len of params should not greater than usize"),
-            )
-        };
-        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
-    };
-
-    // returns
-    let return_len = return_len
-        .try_into()
-        .expect("len of returns should not greater than usize");
-    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
-    let map_host_func = HOST_FUNCS.read();
-
-    // get and call host function
-    let key = key_ptr as *const usize as usize;
-    match map_host_func.get(&key) {
-        None => unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, 5) },
-        Some(host_func) => {
-            // get host function
-            let real_fn = Arc::clone(host_func);
-            let real_fn_locked = real_fn.lock();
-            drop(map_host_func);
-
-            // call host function
-            let frame = CallingFrame::create(call_frame_ctx);
-            match real_fn_locked(frame, input) {
-                Ok(returns) => {
-                    assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}", return_len, returns.len());
-                    for (idx, wasm_value) in returns.into_iter().enumerate() {
-                        raw_returns[idx] = wasm_value.as_raw();
-                    }
-                    ffi::WasmEdge_Result { Code: 0 }
-                }
-                Err(err) => match err {
-                    HostFuncError::User(code) => unsafe {
-                        ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
-                    },
-                    HostFuncError::Runtime(code) => unsafe {
-                        ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
-                    },
-                },
-            }
-        }
     }
 }
 
@@ -812,13 +676,13 @@ impl Drop for Function {
             if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
                 dbg!("drop key");
                 dbg!(&key);
-                let mut map_host_func = HOST_FUNCS.write();
-                if map_host_func.contains_key(&key) {
-                    dbg!("found from HOST_FUNCS");
-                    map_host_func.remove(&key).expect(
-                        "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS container",
-                    );
-                }
+                // let mut map_host_func = HOST_FUNCS.write();
+                // if map_host_func.contains_key(&key) {
+                //     dbg!("found from HOST_FUNCS");
+                //     map_host_func.remove(&key).expect(
+                //         "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS container",
+                //     );
+                // }
 
                 let mut map_host_func = HOST_FUNCS_NEW.write();
                 if map_host_func.contains_key(&key) {
@@ -1074,14 +938,14 @@ unsafe impl Sync for InnerFuncRef {}
 mod tests {
     use super::*;
     use crate::{
-        types::WasmValue, AsImport, Executor, ImportModule, ImportObject, Store, HOST_FUNCS,
+        types::WasmValue, AsImport, Executor, ImportModule, ImportObject, Store,
         HOST_FUNC_FOOTPRINTS,
     };
     use std::{
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_macro::{sys_host_function, sys_host_function_new};
+    use wasmedge_macro::sys_host_function_new;
     use wasmedge_types::ValType;
 
     #[cfg(all(feature = "async", target_os = "linux"))]
@@ -1486,7 +1350,7 @@ mod tests {
             assert_eq!(returns[0].to_i32(), 3);
         }
 
-        assert_eq!(HOST_FUNCS.read().len(), 0);
+        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         Ok(())

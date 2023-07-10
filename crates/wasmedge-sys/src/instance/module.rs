@@ -1410,10 +1410,9 @@ mod tests {
         CallingFrame, Config, Executor, FuncType, GlobalType, ImportModule, MemType, Store,
         TableType, WasmValue, HOST_FUNCS_NEW, HOST_FUNC_FOOTPRINTS,
     };
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
+    use std::thread;
+    #[cfg(not(feature = "async"))]
+    use sync::{Arc, Mutex};
     use wasmedge_macro::sys_host_function_new;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 

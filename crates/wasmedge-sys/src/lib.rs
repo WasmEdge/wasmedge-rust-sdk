@@ -140,17 +140,17 @@ lazy_static! {
         RwLock::new(HashMap::new());
 }
 
-/// Type alias for a boxed native function. This type is used in thread-safe cases.
-pub type BoxedFn = Box<
-    dyn Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, error::HostFuncError>
-        + Send
-        + Sync,
->;
+// /// Type alias for a boxed native function. This type is used in thread-safe cases.
+// pub type BoxedFn = Box<
+//     dyn Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, error::HostFuncError>
+//         + Send
+//         + Sync,
+// >;
 
-lazy_static! {
-    pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
-        RwLock::new(HashMap::new());
-}
+// lazy_static! {
+//     pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
+//         RwLock::new(HashMap::new());
+// }
 
 /// Type alias for a boxed native function. This type is used in thread-safe cases.
 pub type BoxedAsyncFn = Box<
