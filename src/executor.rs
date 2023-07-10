@@ -133,8 +133,6 @@ mod tests {
     };
     #[cfg(all(feature = "async", target_os = "linux"))]
     use crate::{error::HostFuncError, CallingFrame};
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use wasmedge_types::NeverType;
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]
