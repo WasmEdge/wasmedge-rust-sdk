@@ -67,7 +67,7 @@ impl Func {
     /// # Error
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn wrap<Args, Rets, T>(
+    pub fn wrap_func<Args, Rets, T>(
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
@@ -95,7 +95,7 @@ impl Func {
         })
     }
 
-    /// Creates an asynchronous host function by wrapping a native function.
+    /// Creates an asynchronous host function by wrapping a native async function.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
     ///
@@ -107,39 +107,7 @@ impl Func {
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn wrap_async<Args, Rets, T>(
-        real_func: AsyncHostFn<T>,
-        ctx_data: Option<&mut T>,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_async_func(&ty.clone().into(), real_func, ctx_data, 0)?;
-        Ok(Self {
-            inner,
-            name: None,
-            mod_name: None,
-            ty,
-        })
-    }
-
-    /// Creates an asynchronous host function by wrapping a native function.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `real_func` - The native function to be wrapped.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn wrap_async_new<Args, Rets>(
+    pub fn wrap_async_func<Args, Rets>(
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
@@ -159,48 +127,7 @@ impl Func {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_async_new(&ty.clone().into(), boxed_func, 0)?;
-        Ok(Self {
-            inner,
-            name: None,
-            mod_name: None,
-            ty,
-        })
-    }
-
-    /// Creates an asynchronous host function by wrapping a native function.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `real_func` - The native function to be wrapped.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn wrap_async_closure<Args, Rets>(
-        real_func: impl Fn(
-                CallingFrame,
-                Vec<WasmValue>,
-            ) -> Box<
-                dyn std::future::Future<
-                        Output = Result<Vec<WasmValue>, crate::error::HostFuncError>,
-                    > + Send,
-            > + Send
-            + Sync
-            + 'static,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let boxed_func = Box::new(real_func);
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_from_async_closure(&ty.clone().into(), boxed_func, 0)?;
+        let inner = sys::Function::create_async_func(&ty.clone().into(), boxed_func, 0)?;
         Ok(Self {
             inner,
             name: None,
@@ -524,7 +451,7 @@ mod tests {
     #[test]
     fn test_func_wrap() {
         // create a host function
-        let result = Func::wrap::<(i32, i32), i32, NeverType>(real_add, None);
+        let result = Func::wrap_func::<(i32, i32), i32, NeverType>(real_add, None);
         assert!(result.is_ok());
         let func = result.unwrap();
 
@@ -643,7 +570,7 @@ mod tests {
 
         // create an ImportModule instance
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_async_closure::<(), ()>("async_hello", c)?
+            .with_async_func::<(), ()>("async_hello", c)?
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();

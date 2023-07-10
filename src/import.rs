@@ -124,38 +124,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn with_func_async<Args, Rets>(
-        mut self,
-        name: impl AsRef<str>,
-        real_func: AsyncHostFn<T>,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_async_func(&ty.into(), real_func, None, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
-        Ok(self)
-    }
-
-    /// Adds an [async host function](crate::Func) to the [ImportObject] to create.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
-    ///
-    /// * `real_func` - The native function.
-    ///
-    /// # error
-    ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    #[cfg(feature = "async")]
-    pub fn with_async_closure<Args, Rets>(
+    pub fn with_async_func<Args, Rets>(
         mut self,
         name: impl AsRef<str>,
         real_func: impl Fn(
@@ -171,11 +140,10 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
         Args: WasmValTypeList,
         Rets: WasmValTypeList,
     {
-        let boxed_func = Box::new(real_func);
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_from_async_closure(&ty.into(), boxed_func, 0)?;
+        let inner_func = sys::Function::create_async_func(&ty.into(), Box::new(real_func), 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }

@@ -247,36 +247,6 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
         }
     }
 
-    /// Adds a [host function](crate::Func) to the [PluginModule] to create.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
-    ///
-    /// * `real_func` - The native function.
-    ///
-    /// # error
-    ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    // pub fn with_func<Args, Rets>(
-    //     mut self,
-    //     name: impl AsRef<str>,
-    //     real_func: HostFn<T>,
-    // ) -> WasmEdgeResult<Self>
-    // where
-    //     Args: WasmValTypeList,
-    //     Rets: WasmValTypeList,
-    // {
-    //     let args = Args::wasm_types();
-    //     let returns = Rets::wasm_types();
-    //     let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-    //     let inner_func = sys::Function::create::<T>(&ty.into(), real_func, None, 0)?;
-    //     self.funcs.push((name.as_ref().to_owned(), inner_func));
-    //     Ok(self)
-    // }
-
     /// Adds a [host function](crate::Func) to the [ImportObject] to create.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
@@ -332,10 +302,17 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn with_func_async<Args, Rets>(
+    pub fn with_async_func<Args, Rets>(
         mut self,
         name: impl AsRef<str>,
-        real_func: AsyncHostFn<T>,
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+            ) -> Box<
+                dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send,
+            > + Send
+            + Sync
+            + 'static,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -344,7 +321,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_async_func(&ty.into(), real_func, None, 0)?;
+        let inner_func = sys::Function::create_async_func(&ty.into(), Box::new(real_func), 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }

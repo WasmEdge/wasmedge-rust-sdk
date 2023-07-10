@@ -265,10 +265,9 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_executor_run_async_func() -> Result<(), Box<dyn std::error::Error>> {
-        fn async_hello<T>(
+        fn async_hello(
             _frame: CallingFrame,
             _inputs: Vec<WasmValue>,
-            _data: Option<&mut T>,
         ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
         {
             Box::new(async move {
@@ -284,7 +283,7 @@ mod tests {
         }
 
         // create an async host function
-        let result = Func::wrap_async::<(), (), NeverType>(async_hello, None);
+        let result = Func::wrap_async_func::<(), ()>(async_hello);
         assert!(result.is_ok());
         let func = result.unwrap();
 
