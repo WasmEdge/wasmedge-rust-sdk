@@ -28,13 +28,15 @@ pub type AsyncHostFn<T> =
     ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
 
 /// Defines the signature of a host function.
+#[cfg(all(feature = "async", target_os = "linux"))]
 pub type HostFn<T> = fn(
     CallingFrame,
     Vec<WasmValue>,
     Option<&'static mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError>;
 
-extern "C" fn wrap_sync_fn<T: 'static>(
+#[cfg(all(feature = "async", target_os = "linux"))]
+extern "C" fn wrap_sync_wasi_fn<T: 'static>(
     key_ptr: *mut c_void,
     data: *mut std::os::raw::c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
@@ -95,7 +97,7 @@ extern "C" fn wrap_sync_fn<T: 'static>(
 }
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-extern "C" fn wrap_async_fn<T: 'static>(
+extern "C" fn wrap_async_wasi_fn<T: 'static>(
     key_ptr: *mut c_void,
     data: *mut std::os::raw::c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
@@ -175,7 +177,7 @@ pub type CustomFnWrapper = unsafe extern "C" fn(
 ) -> ffi::WasmEdge_Result;
 
 // Wrapper function for thread-safe scenarios.
-extern "C" fn wrap_fn_new(
+extern "C" fn wrap_fn(
     key_ptr: *mut c_void,
     data: *mut std::os::raw::c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
@@ -235,7 +237,7 @@ extern "C" fn wrap_fn_new(
 
 #[cfg(all(feature = "async", target_os = "linux"))]
 // Wrapper function for thread-safe scenarios.
-extern "C" fn wrap_async_fn_new(
+extern "C" fn wrap_async_fn(
     key_ptr: *mut c_void,
     _data: *mut std::os::raw::c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
@@ -423,7 +425,7 @@ impl Function {
 
         let ctx = ffi::WasmEdge_FunctionInstanceCreateBinding(
             ty.inner.0,
-            Some(wrap_fn_new),
+            Some(wrap_fn),
             key as *const usize as *mut c_void,
             data,
             cost,
@@ -477,7 +479,7 @@ impl Function {
         let ctx = unsafe {
             ffi::WasmEdge_FunctionInstanceCreateBinding(
                 ty.inner.0,
-                Some(wrap_async_fn_new),
+                Some(wrap_async_fn),
                 key as *const usize as *mut c_void,
                 std::ptr::null_mut(),
                 cost,
@@ -540,6 +542,7 @@ impl Function {
         }
     }
 
+    #[cfg(all(feature = "async", target_os = "linux"))]
     pub(crate) fn create_wasi_func<T>(
         ty: &FuncType,
         real_fn: HostFn<T>,
@@ -554,7 +557,7 @@ impl Function {
         let ctx = unsafe {
             ffi::WasmEdge_FunctionInstanceCreateBinding(
                 ty.inner.0,
-                Some(wrap_sync_fn::<T>),
+                Some(wrap_sync_wasi_fn::<T>),
                 real_fn as *mut _,
                 data,
                 cost,
@@ -585,7 +588,7 @@ impl Function {
         let ctx = unsafe {
             ffi::WasmEdge_FunctionInstanceCreateBinding(
                 ty.inner.0,
-                Some(wrap_async_fn::<T>),
+                Some(wrap_async_wasi_fn::<T>),
                 real_fn as *mut _,
                 data,
                 cost,
