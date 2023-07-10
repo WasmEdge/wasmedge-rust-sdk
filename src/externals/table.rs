@@ -151,7 +151,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func_new::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
             .with_table("table", table)
             .build("extern");

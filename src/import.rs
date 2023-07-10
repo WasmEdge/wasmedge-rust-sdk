@@ -42,102 +42,12 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
     ///
     /// * `real_func` - The native function.
     ///
-    /// # error
-    ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func<Args, Rets>(
-        mut self,
-        name: impl AsRef<str>,
-        real_func: HostFn<T>,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create::<T>(&ty.into(), real_func, None, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
-        Ok(self)
-    }
-
-    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
-    ///
-    /// * `real_func` - The native function.
-    ///
-    /// # error
-    ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_sync_closure<Args, Rets>(
-        mut self,
-        name: impl AsRef<str>,
-        real_func: impl Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError>
-            + Send
-            + Sync
-            + 'static,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let boxed_func = Box::new(real_func);
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_from_sync_closure(&ty.into(), boxed_func, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
-        Ok(self)
-    }
-
-    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
-    ///
-    /// * `ty` - The function type.
-    ///
-    /// * `real_func` - The native function.
-    ///
-    /// # error
-    ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func_by_type(
-        mut self,
-        name: impl AsRef<str>,
-        ty: FuncType,
-        real_func: HostFn<T>,
-    ) -> WasmEdgeResult<Self> {
-        let inner_func = sys::Function::create::<T>(&ty.into(), real_func, None, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
-        Ok(self)
-    }
-
-    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
-    ///
-    /// * `real_func` - The native function.
-    ///
     /// * `data` - The additional data object to set to this host function context.
     ///
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func_new<Args, Rets, D>(
+    pub fn with_func<Args, Rets, D>(
         mut self,
         name: impl AsRef<str>,
         real_func: impl Fn(
@@ -158,7 +68,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_new::<D>(&ty.into(), boxed_func, data, 0)?;
+        let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
@@ -180,7 +90,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func_by_type_new(
+    pub fn with_func_by_type<D>(
         mut self,
         name: impl AsRef<str>,
         ty: FuncType,
@@ -192,10 +102,10 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<&mut D>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
-        let inner_func = sys::Function::create_new::<T>(&ty.into(), boxed_func, data, 0)?;
+        let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
@@ -226,7 +136,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_async(&ty.into(), real_func, None, 0)?;
+        let inner_func = sys::Function::create_async_func(&ty.into(), real_func, None, 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
@@ -480,7 +390,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func_new::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
             .build("extern");
         assert!(result.is_ok());
@@ -726,7 +636,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func_new::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
             .with_table("table", table)
             .build("extern");
@@ -853,7 +763,7 @@ mod tests {
 
         // create an ImportModule instance
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func_new::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("memory", memory)
@@ -971,7 +881,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func_new::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("memory", memory)

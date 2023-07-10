@@ -11,55 +11,6 @@ use wasmedge_sys as sys;
 ///
 /// A WasmEdge [Func] is a wasm function instance, which is a "wrapper" of the original function (defined in either the host or the WebAssembly module) over the runtime [module instance](crate::Instance) of its originating [module](crate::Module).
 ///
-/// # Example
-///
-/// The following example shows how to create a host function, and invoke it with a given executor.
-///
-/// ```rust
-/// // If the version of rust used is less than v1.63,
-/// // #![feature(explicit_generic_args_with_impl_trait)]
-///
-/// use wasmedge_sdk::{Func, Executor, params, WasmVal, error::HostFuncError, WasmValue, ValType, Caller, host_function, NeverType};
-///
-/// // A native function to be wrapped as a host function
-/// #[host_function]
-/// fn real_add<T>(_: Caller, input: Vec<WasmValue>, _data: Option<&mut T>) -> Result<Vec<WasmValue>, HostFuncError> {
-///     if input.len() != 2 {
-///         return Err(HostFuncError::User(1));
-///     }
-///
-///     let a = if input[0].ty() == ValType::I32 {
-///         input[0].to_i32()
-///     } else {
-///         return Err(HostFuncError::User(2));
-///     };
-///
-///     let b = if input[1].ty() == ValType::I32 {
-///         input[1].to_i32()
-///     } else {
-///         return Err(HostFuncError::User(3));
-///     };
-///
-///     let c = a + b;
-///     Ok(vec![WasmValue::from_i32(c)])
-/// }
-///
-/// // create a host function
-/// let result = Func::wrap::<(i32, i32), i32, NeverType>(real_add, None);
-/// assert!(result.is_ok());
-/// let func = result.unwrap();
-///
-/// // create an executor
-/// let mut executor = Executor::new(None, None).unwrap();
-///
-/// // call the host function
-/// let result = func.run(&mut executor, params!(2, 3));
-/// assert!(result.is_ok());
-/// let returns = result.unwrap();
-/// assert_eq!(returns[0].to_i32(), 5);
-/// ```
-/// [[Click for more examples]](https://github.com/WasmEdge/WasmEdge/tree/master/bindings/rust/wasmedge-sdk/examples)
-///
 #[derive(Debug, Clone)]
 pub struct Func {
     pub(crate) inner: sys::Function,
@@ -85,63 +36,6 @@ impl Func {
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     pub fn new<T>(
         ty: FuncType,
-        real_func: HostFn<T>,
-        data: Option<&mut T>,
-    ) -> WasmEdgeResult<Self> {
-        let inner = sys::Function::create::<T>(&ty.clone().into(), real_func, data, 0)?;
-        Ok(Self {
-            inner,
-            name: None,
-            mod_name: None,
-            ty,
-        })
-    }
-
-    /// Creates a host function by wrapping a native function.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `real_func` - The native function to be wrapped.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn wrap<Args, Rets, T>(real_func: HostFn<T>, data: Option<&mut T>) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create::<T>(&ty.clone().into(), real_func, data, 0)?;
-        Ok(Self {
-            inner,
-            name: None,
-            mod_name: None,
-            ty,
-        })
-    }
-
-    /// Creates a host function of the given func type.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The function type.
-    ///
-    /// * `real_func` - The native function that will be wrapped as a host function.
-    ///
-    /// * `data` - The additional data object to set to this host function context.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn new_new<T>(
-        ty: FuncType,
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
@@ -153,7 +47,7 @@ impl Func {
         data: Option<&mut T>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
-        let inner = sys::Function::create_new::<T>(&ty.clone().into(), boxed_func, data, 0)?;
+        let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
         Ok(Self {
             inner,
             name: None,
@@ -173,7 +67,7 @@ impl Func {
     /// # Error
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn wrap_new<Args, Rets, T>(
+    pub fn wrap<Args, Rets, T>(
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
@@ -192,41 +86,7 @@ impl Func {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_new::<T>(&ty.clone().into(), boxed_func, data, 0)?;
-        Ok(Self {
-            inner,
-            name: None,
-            mod_name: None,
-            ty,
-        })
-    }
-
-    /// Creates a host function by wrapping a native function.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `real_func` - The native function to be wrapped.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn wrap_sync_closure<Args, Rets>(
-        real_func: impl Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError>
-            + Send
-            + Sync
-            + 'static,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-    {
-        let boxed_func = Box::new(real_func);
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_from_sync_closure(&ty.clone().into(), boxed_func, 0)?;
+        let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
         Ok(Self {
             inner,
             name: None,
@@ -258,7 +118,7 @@ impl Func {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_async(&ty.clone().into(), real_func, ctx_data, 0)?;
+        let inner = sys::Function::create_async_func(&ty.clone().into(), real_func, ctx_data, 0)?;
         Ok(Self {
             inner,
             name: None,
@@ -609,7 +469,7 @@ mod tests {
     fn test_func_basic() {
         // create an ImportModule
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_func_new::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
             .build("extern");
         assert!(result.is_ok());
@@ -664,7 +524,7 @@ mod tests {
     #[test]
     fn test_func_wrap() {
         // create a host function
-        let result = Func::wrap_new::<(i32, i32), i32, NeverType>(real_add, None);
+        let result = Func::wrap::<(i32, i32), i32, NeverType>(real_add, None);
         assert!(result.is_ok());
         let func = result.unwrap();
 
@@ -707,36 +567,39 @@ mod tests {
     #[test]
     fn test_func_wrap_closure() -> Result<(), Box<dyn std::error::Error>> {
         // define a closure
-        let real_add =
-            |_: CallingFrame, input: Vec<WasmValue>| -> Result<Vec<WasmValue>, HostFuncError> {
-                println!("Rust: Entering Rust function real_add");
+        let real_add = |_: CallingFrame,
+                        input: Vec<WasmValue>,
+                        _: *mut std::os::raw::c_void|
+         -> Result<Vec<WasmValue>, HostFuncError> {
+            println!("Rust: Entering Rust function real_add");
 
-                if input.len() != 2 {
-                    return Err(HostFuncError::User(1));
-                }
+            if input.len() != 2 {
+                return Err(HostFuncError::User(1));
+            }
 
-                let a = if input[0].ty() == ValType::I32 {
-                    input[0].to_i32()
-                } else {
-                    return Err(HostFuncError::User(2));
-                };
-
-                let b = if input[1].ty() == ValType::I32 {
-                    input[1].to_i32()
-                } else {
-                    return Err(HostFuncError::User(3));
-                };
-
-                let c = a + b;
-                println!("Rust: calcuating in real_add c: {c:?}");
-
-                println!("Rust: Leaving Rust function real_add");
-                Ok(vec![WasmValue::from_i32(c)])
+            let a = if input[0].ty() == ValType::I32 {
+                input[0].to_i32()
+            } else {
+                return Err(HostFuncError::User(2));
             };
+
+            let b = if input[1].ty() == ValType::I32 {
+                input[1].to_i32()
+            } else {
+                return Err(HostFuncError::User(3));
+            };
+
+            let c = a + b;
+            println!("Rust: calcuating in real_add c: {c:?}");
+
+            println!("Rust: Leaving Rust function real_add");
+            Ok(vec![WasmValue::from_i32(c)])
+        };
 
         // create an ImportModule instance
         let result = ImportObjectBuilder::<NeverType>::new()
-            .with_sync_closure::<(i32, i32), i32>("add", real_add)?
+            // .with_sync_closure::<(i32, i32), i32>("add", real_add)?
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)?
             .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();
