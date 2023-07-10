@@ -454,40 +454,7 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
         self.name.as_str()
     }
 
-    // fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
-    //     // self.func_names.push(name.as_ref().to_string());
-
-    //     // self.funcs.push(func);
-    //     // let f = self.funcs.last_mut().unwrap();
-
-    //     // let func_name: WasmEdgeString = name.into();
-    //     // unsafe {
-    //     //     ffi::WasmEdge_ModuleInstanceAddFunction(
-    //     //         self.inner.0,
-    //     //         func_name.as_raw(),
-    //     //         f.inner.lock().0,
-    //     //     );
-    //     // }
-
-    //     self.func_names.push(name.as_ref().to_string());
-
-    //     // self.funcs.push(func);
-    //     // let f = self.funcs.last_mut().unwrap();
-
-    //     let func_name: WasmEdgeString = name.into();
-    //     unsafe {
-    //         ffi::WasmEdge_ModuleInstanceAddFunction(
-    //             self.inner.0,
-    //             func_name.as_raw(),
-    //             func.inner.lock().0,
-    //         );
-    //     }
-    //     func.inner.lock().0 = std::ptr::null_mut();
-    // }
-
     fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
-        // self.func_names.push(name.as_ref().to_string());
-
         self.funcs.push(func);
         let f = self.funcs.last_mut().unwrap();
 

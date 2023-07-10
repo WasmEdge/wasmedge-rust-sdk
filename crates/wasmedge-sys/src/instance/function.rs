@@ -587,99 +587,6 @@ impl Function {
     ///
     /// * `real_fn` - The pointer to the target function.
     ///
-    /// * `ctx_data` - The additional data object to set to this host function context.
-    ///
-    /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    ///
-    /// # Example
-    ///
-    /// The example defines an async host function `real_add`.
-    ///
-    /// ```rust
-    /// use wasmedge_sys::{FuncType, Function, WasmValue, CallingFrame};
-    /// use wasmedge_types::{error::HostFuncError, ValType, WasmEdgeResult, NeverType};
-    /// use wasmedge_macro::sys_async_host_function;
-    /// use std::future::Future;
-    /// use std::os::raw::c_void;
-    ///
-    /// #[sys_async_host_function]
-    /// async fn real_add<T>(
-    ///     _frame: CallingFrame,
-    ///     input: Vec<WasmValue>,
-    ///    _data: Option<&mut T>,
-    /// ) -> Result<Vec<WasmValue>, HostFuncError> {
-    ///     
-    ///     if input.len() != 3 {
-    ///         return Err(HostFuncError::User(1));
-    ///     }
-    ///
-    ///     let a = if input[1].ty() == ValType::I32 {
-    ///         input[1].to_i32()
-    ///     } else {
-    ///         1
-    ///     };
-    ///
-    ///     let b = if input[2].ty() == ValType::I32 {
-    ///         input[2].to_i32()
-    ///     } else {
-    ///         2
-    ///     };
-    ///     tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-    ///
-    ///     let c = a + b;
-    ///     Ok(vec![WasmValue::from_i32(c)])
-    ///     
-    /// }
-    ///
-    /// // create a FuncType
-    /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
-    ///
-    /// // create a Function instance
-    /// let func = Function::create_async_func::<NeverType>(&func_ty, real_add, None, 0).expect("fail to create a Function instance");
-    /// ```
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn create_async_func<T>(
-        ty: &FuncType,
-        real_fn: AsyncHostFn<T>,
-        ctx_data: Option<&mut T>,
-        cost: u64,
-    ) -> WasmEdgeResult<Self> {
-        let data = match ctx_data {
-            Some(d) => d as *mut T as *mut std::os::raw::c_void,
-            None => std::ptr::null_mut(),
-        };
-
-        let ctx = unsafe {
-            ffi::WasmEdge_FunctionInstanceCreateBinding(
-                ty.inner.0,
-                Some(wrap_async_fn::<T>),
-                real_fn as *mut _,
-                data,
-                cost,
-            )
-        };
-
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
-            false => Ok(Self {
-                inner: Arc::new(Mutex::new(InnerFunc(ctx))),
-                registered: false,
-            }),
-        }
-    }
-
-    /// Creates an async [host function](crate::Function) with the given function type.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The types of the arguments and returns of the target function.
-    ///
-    /// * `real_fn` - The pointer to the target function.
-    ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
     /// # Error
@@ -687,7 +594,7 @@ impl Function {
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn create_async_new(
+    pub fn create_async_func(
         ty: &FuncType,
         real_fn: BoxedAsyncFn,
         cost: u64,
@@ -707,61 +614,6 @@ impl Function {
             ffi::WasmEdge_FunctionInstanceCreateBinding(
                 ty.inner.0,
                 Some(wrap_async_fn_new),
-                key as *const usize as *mut c_void,
-                std::ptr::null_mut(),
-                cost,
-            )
-        };
-
-        // create a footprint for the host function
-        let footprint = ctx as usize;
-        let mut footprint_to_id = HOST_FUNC_FOOTPRINTS.lock();
-        footprint_to_id.insert(footprint, key);
-
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Func(FuncError::Create))),
-            false => Ok(Self {
-                inner: Arc::new(Mutex::new(InnerFunc(ctx))),
-                registered: false,
-            }),
-        }
-    }
-
-    /// Creates an async [host function](crate::Function) with the given function type.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The types of the arguments and returns of the target function.
-    ///
-    /// * `real_fn` - The pointer to the target function.
-    ///
-    /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    ///
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn create_from_async_closure(
-        ty: &FuncType,
-        real_fn: BoxedAsyncFn,
-        cost: u64,
-    ) -> WasmEdgeResult<Self> {
-        let mut map_host_func = ASYNC_HOST_FUNCS.write();
-
-        // generate key for the coming host function
-        let mut rng = rand::thread_rng();
-        let mut key: usize = rng.gen();
-        while map_host_func.contains_key(&key) {
-            key = rng.gen();
-        }
-        map_host_func.insert(key, Arc::new(Mutex::new(real_fn)));
-        drop(map_host_func);
-
-        let ctx = unsafe {
-            ffi::WasmEdge_FunctionInstanceCreateBinding(
-                ty.inner.0,
-                Some(wrap_async_fn_from_closure),
                 key as *const usize as *mut c_void,
                 std::ptr::null_mut(),
                 cost,
@@ -1668,7 +1520,7 @@ mod tests {
             let func_ty = result.unwrap();
 
             // create an async host function
-            let result = Function::create_from_async_closure(&func_ty, Box::new(c), 0);
+            let result = Function::create_async_func(&func_ty, Box::new(c), 0);
             assert!(result.is_ok());
             let async_hello_func = result.unwrap();
 
