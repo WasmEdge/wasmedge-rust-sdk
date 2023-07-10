@@ -951,7 +951,7 @@ mod tests {
         thread,
     };
     use wasmedge_macro::sys_host_function_new;
-    use wasmedge_types::ValType;
+    use wasmedge_types::{NeverType, ValType};
 
     #[cfg(all(feature = "async", target_os = "linux"))]
     use crate::{AsyncWasiModule, ASYNC_HOST_FUNCS};
