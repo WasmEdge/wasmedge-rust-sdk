@@ -1,8 +1,6 @@
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncHostFn;
 use crate::{
-    error::HostFuncError, io::WasmValTypeList, CallingFrame, FuncType, Global, HostFn, Memory,
-    Table, WasmEdgeResult,
+    error::HostFuncError, io::WasmValTypeList, CallingFrame, FuncType, Global, Memory, Table,
+    WasmEdgeResult,
 };
 use wasmedge_sys::{self as sys, AsImport, WasmValue};
 

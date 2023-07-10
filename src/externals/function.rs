@@ -1,8 +1,8 @@
 //! Defines Func, SignatureBuilder, and Signature structs.
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::{AsyncHostFn, AsyncState};
+use crate::r#async::AsyncState;
 use crate::{
-    error::HostFuncError, io::WasmValTypeList, CallingFrame, Executor, FuncType, HostFn, ValType,
+    error::HostFuncError, io::WasmValTypeList, CallingFrame, Executor, FuncType, ValType,
     WasmEdgeResult, WasmValue,
 };
 use wasmedge_sys as sys;

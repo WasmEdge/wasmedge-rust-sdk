@@ -1,9 +1,7 @@
 //! Defines plugin related structs.
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncHostFn;
 use crate::{
-    instance::Instance, io::WasmValTypeList, Finalizer, FuncType, Global, HostFn, Memory, Table,
+    instance::Instance, io::WasmValTypeList, Finalizer, FuncType, Global, Memory, Table,
     WasmEdgeResult,
 };
 use wasmedge_sys::{self as sys, AsImport};
