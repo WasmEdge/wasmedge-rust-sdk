@@ -103,7 +103,7 @@ pub use instance::module::WasiModule;
 pub use instance::{function::AsyncHostFn, module::AsyncWasiModule};
 #[doc(inline)]
 pub use instance::{
-    function::{FuncRef, FuncType, Function, HostFn},
+    function::{FuncRef, FuncType, Function},
     global::{Global, GlobalType},
     memory::{MemType, Memory},
     module::{AsImport, AsInstance, ImportModule, ImportObject, Instance},
