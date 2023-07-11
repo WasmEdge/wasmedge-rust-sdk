@@ -2,12 +2,12 @@
 
 use super::ffi;
 use crate::{
-    error::{InstanceError, WasmEdgeError},
     instance::{module::InnerInstance, Function, Global, Memory, Table},
     types::WasmEdgeString,
     utils, AsImport, Instance, WasmEdgeResult,
 };
 use std::{ffi::CString, os::raw::c_void, sync::Arc};
+use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
 /// Defines the APIs for loading plugins and check the basic information of the loaded plugins.
 #[derive(Debug)]

@@ -1,6 +1,7 @@
 //! Defines WasmEdge Validator struct.
 
-use crate::{error::WasmEdgeError, ffi, utils::check, Config, Module, WasmEdgeResult};
+use crate::{ffi, utils::check, Config, Module, WasmEdgeResult};
+use wasmedge_types::error::WasmEdgeError;
 
 /// Struct of WasmEdge Validator.
 #[derive(Debug)]

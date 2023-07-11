@@ -2,12 +2,12 @@
 
 use crate::{
     ast_module::{InnerModule, Module},
-    error::WasmEdgeError,
     ffi, utils,
     utils::check,
     Config, WasmEdgeResult,
 };
 use std::{path::Path, sync::Arc};
+use wasmedge_types::error::WasmEdgeError;
 
 /// [Loader](crate::Loader) is used to load WASM modules from the given WASM files or buffers.
 #[derive(Debug)]
@@ -175,14 +175,12 @@ unsafe impl Sync for InnerLoader {}
 #[cfg(test)]
 mod tests {
     use super::Loader;
-    use crate::{
-        error::{CoreError, CoreLoadError, WasmEdgeError},
-        Config,
-    };
+    use crate::Config;
     use std::{
         sync::{Arc, Mutex},
         thread,
     };
+    use wasmedge_types::error::{CoreError, CoreLoadError, WasmEdgeError};
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]

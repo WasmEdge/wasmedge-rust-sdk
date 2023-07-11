@@ -1,9 +1,7 @@
 //! Defines WasmEdge Function and FuncType structs.
 
 use crate::{
-    error::{FuncError, HostFuncError, WasmEdgeError},
-    ffi, CallingFrame, Engine, NewBoxedFn, WasmEdgeResult, WasmValue, HOST_FUNCS_NEW,
-    HOST_FUNC_FOOTPRINTS,
+    ffi, BoxedFn, CallingFrame, Engine, WasmEdgeResult, WasmValue, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
 };
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::{
@@ -18,7 +16,10 @@ use std::pin::Pin;
 use std::{convert::TryInto, sync::Arc};
 #[cfg(all(feature = "async", target_os = "linux"))]
 use wasmedge_types::NeverType;
-use wasmedge_types::ValType;
+use wasmedge_types::{
+    error::{FuncError, HostFuncError, WasmEdgeError},
+    ValType,
+};
 
 /// Defines the signature of an asynchronous host function.
 #[cfg(all(feature = "async", target_os = "linux"))]
@@ -208,7 +209,7 @@ extern "C" fn wrap_fn(
         .try_into()
         .expect("len of returns should not greater than usize");
     let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
-    let map_host_func = HOST_FUNCS_NEW.read();
+    let map_host_func = HOST_FUNCS.read();
     match map_host_func.get(&key) {
         None => unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, 5) },
         Some(host_func) => {
@@ -378,7 +379,7 @@ impl Function {
     /// ```
     pub fn create_sync_func<T>(
         ty: &FuncType,
-        real_fn: NewBoxedFn,
+        real_fn: BoxedFn,
         data: Option<&mut T>,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
@@ -410,11 +411,11 @@ impl Function {
     ///
     unsafe fn create_with_data(
         ty: &FuncType,
-        real_fn: NewBoxedFn,
+        real_fn: BoxedFn,
         data: *mut c_void,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        let mut map_host_func = HOST_FUNCS_NEW.write();
+        let mut map_host_func = HOST_FUNCS.write();
 
         // generate key for the coming host function
         let mut rng = rand::thread_rng();
@@ -681,15 +682,8 @@ impl Drop for Function {
             if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
                 dbg!("drop key");
                 dbg!(&key);
-                // let mut map_host_func = HOST_FUNCS.write();
-                // if map_host_func.contains_key(&key) {
-                //     dbg!("found from HOST_FUNCS");
-                //     map_host_func.remove(&key).expect(
-                //         "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS container",
-                //     );
-                // }
 
-                let mut map_host_func = HOST_FUNCS_NEW.write();
+                let mut map_host_func = HOST_FUNCS.write();
                 if map_host_func.contains_key(&key) {
                     dbg!("found from HOST_FUNCS_NEW");
                     map_host_func.remove(&key).expect(
@@ -1062,7 +1056,7 @@ mod tests {
             Ok(vec![WasmValue::from_i32(c)])
         }
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
+        assert_eq!(HOST_FUNCS.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         // create a FuncType
@@ -1355,7 +1349,7 @@ mod tests {
             assert_eq!(returns[0].to_i32(), 3);
         }
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
+        assert_eq!(HOST_FUNCS.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         Ok(())
@@ -1491,7 +1485,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&host_func.inner), 1);
         assert!(!host_func.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // clone the host function before adding it to the import object
@@ -1500,7 +1494,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&host_func_cloned.inner), 2);
         assert!(!host_func_cloned.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // create an ImportModule
@@ -1511,12 +1505,12 @@ mod tests {
         assert_eq!(Arc::strong_count(&host_func_cloned.inner), 2);
         assert!(!host_func_cloned.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         drop(host_func_cloned);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         let import = ImportObject::Import(import_module);
@@ -1538,7 +1532,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&add.inner), 1);
         assert!(add.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // clone the host function
@@ -1548,7 +1542,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&add_cloned.inner), 2);
         assert!(add_cloned.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // drop the cloned host function
@@ -1556,12 +1550,12 @@ mod tests {
         assert_eq!(Arc::strong_count(&add.inner), 1);
         assert!(add.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         drop(add);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // get the registered host function again
@@ -1570,13 +1564,13 @@ mod tests {
         assert_eq!(Arc::strong_count(&add_again.inner), 1);
         assert!(add_again.registered);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // ! notice that `add_again` should be dropped before or not be used after dropping `import`
         drop(add_again);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // drop the import object
@@ -1586,7 +1580,7 @@ mod tests {
 
         assert!(store.module("extern").is_err());
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
+        assert_eq!(HOST_FUNCS.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         dbg!("*** all done");

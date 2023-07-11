@@ -3,12 +3,12 @@
 //! A WasmEdge `Global` defines a global variable, which stores a single value of the given `GlobalType`.
 //! `GlobalType` specifies whether a global variable is immutable or mutable.
 
-use crate::{
-    error::{GlobalError, WasmEdgeError},
-    ffi, WasmEdgeResult, WasmValue,
-};
+use crate::{ffi, WasmEdgeResult, WasmValue};
 use std::sync::Arc;
-use wasmedge_types::{Mutability, ValType};
+use wasmedge_types::{
+    error::{GlobalError, WasmEdgeError},
+    Mutability, ValType,
+};
 
 /// Defines a WebAssembly global variable, which stores a single value of the given [type](crate::GlobalType) and a flag indicating whether it is mutable or not.
 #[derive(Debug)]

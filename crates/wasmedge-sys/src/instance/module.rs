@@ -6,7 +6,6 @@ use crate::{
     WasiCtx,
 };
 use crate::{
-    error::{InstanceError, WasmEdgeError},
     ffi,
     instance::{function::InnerFunc, global::InnerGlobal, memory::InnerMemory, table::InnerTable},
     types::WasmEdgeString,
@@ -16,6 +15,7 @@ use parking_lot::Mutex;
 #[cfg(all(feature = "async", target_os = "linux"))]
 use std::path::PathBuf;
 use std::{os::raw::c_void, sync::Arc};
+use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]
@@ -1408,7 +1408,7 @@ mod tests {
     use super::*;
     use crate::{
         CallingFrame, Config, Executor, FuncType, GlobalType, ImportModule, MemType, Store,
-        TableType, WasmValue, HOST_FUNCS_NEW, HOST_FUNC_FOOTPRINTS,
+        TableType, WasmValue, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
     };
     #[cfg(not(feature = "async"))]
     use std::sync::{Arc, Mutex};
@@ -1420,7 +1420,7 @@ mod tests {
     // #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_instance_add_instance() {
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
+        assert_eq!(HOST_FUNCS.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         let host_name = "extern";
@@ -1437,14 +1437,14 @@ mod tests {
         let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         let host_func = result.unwrap();
         // add the host function
         import.add_func("func-add", host_func);
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 1);
+        assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // create a table

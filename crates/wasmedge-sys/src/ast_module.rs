@@ -1,12 +1,9 @@
 //! Defines WasmEdge AST Module, Export, and Import structs.
 
 use super::ffi;
-use crate::{
-    error::{ExportError, ImportError, WasmEdgeError},
-    types::WasmEdgeLimit,
-    WasmEdgeResult,
-};
+use crate::{types::WasmEdgeLimit, WasmEdgeResult};
 use std::{borrow::Cow, ffi::CStr, sync::Arc};
+use wasmedge_types::error::{ExportError, ImportError, WasmEdgeError};
 use wasmedge_types::{
     ExternalInstanceType, FuncType, GlobalType, MemoryType, Mutability, RefType, TableType, ValType,
 };

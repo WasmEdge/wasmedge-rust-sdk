@@ -1,7 +1,8 @@
 //! Defines WasmEdge Statistics struct.
 
-use crate::{error::WasmEdgeError, ffi, WasmEdgeResult};
+use crate::{ffi, WasmEdgeResult};
 use std::sync::Arc;
+use wasmedge_types::error::WasmEdgeError;
 
 #[derive(Debug, Clone)]
 /// Struct of WasmEdge Statistics.

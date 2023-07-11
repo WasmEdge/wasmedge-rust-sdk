@@ -1,13 +1,13 @@
 //! Defines WasmEdge Store struct.
 
 use crate::{
-    error::{StoreError, WasmEdgeError},
     ffi,
     instance::module::{InnerInstance, Instance},
     types::WasmEdgeString,
     WasmEdgeResult,
 };
 use std::sync::Arc;
+use wasmedge_types::error::{StoreError, WasmEdgeError};
 
 /// A [Store] represents all global state that can be manipulated by WebAssembly programs. It consists of the runtime representation of all instances of [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global).
 #[derive(Debug, Clone)]

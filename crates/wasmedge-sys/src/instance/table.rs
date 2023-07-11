@@ -6,13 +6,13 @@
 //! the end resticts the upper bound (inclusive).
 
 use crate::{
-    error::{TableError, WasmEdgeError},
     ffi,
     types::{WasmEdgeLimit, WasmValue},
     utils::check,
     WasmEdgeResult,
 };
 use std::sync::Arc;
+use wasmedge_types::error::{TableError, WasmEdgeError};
 use wasmedge_types::RefType;
 
 /// A WasmEdge [Table] defines a WebAssembly table instance described by its [type](crate::TableType). A table is an array-like structure and stores function references.

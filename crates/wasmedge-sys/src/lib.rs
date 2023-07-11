@@ -119,47 +119,35 @@ pub use store::Store;
 pub use types::WasmValue;
 #[doc(inline)]
 pub use validator::Validator;
-use wasmedge_types::{error, WasmEdgeResult};
+use wasmedge_types::{error::HostFuncError, WasmEdgeResult};
 
 /// Type of wasi context that is used to configure the wasi environment.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
 
-pub type NewBoxedFn = Box<
+pub type BoxedFn = Box<
     dyn Fn(
             CallingFrame,
             Vec<WasmValue>,
             *mut std::os::raw::c_void,
-        ) -> Result<Vec<WasmValue>, error::HostFuncError>
+        ) -> Result<Vec<WasmValue>, HostFuncError>
         + Send
         + Sync,
 >;
 
 lazy_static! {
-    pub static ref HOST_FUNCS_NEW: RwLock<HashMap<usize, Arc<Mutex<NewBoxedFn>>>> =
+    pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
         RwLock::new(HashMap::new());
 }
-
-// /// Type alias for a boxed native function. This type is used in thread-safe cases.
-// pub type BoxedFn = Box<
-//     dyn Fn(CallingFrame, Vec<WasmValue>) -> Result<Vec<WasmValue>, error::HostFuncError>
-//         + Send
-//         + Sync,
-// >;
-
-// lazy_static! {
-//     pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
-//         RwLock::new(HashMap::new());
-// }
 
 /// Type alias for a boxed native function. This type is used in thread-safe cases.
 pub type BoxedAsyncFn = Box<
     dyn Fn(
             CallingFrame,
             Vec<WasmValue>,
-        ) -> Box<
-            dyn std::future::Future<Output = Result<Vec<WasmValue>, error::HostFuncError>> + Send,
-        > + Send
+        )
+            -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>
+        + Send
         + Sync,
 >;
 

@@ -4,11 +4,11 @@ use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::{AsyncState, FiberFuture};
 use crate::{
-    error::WasmEdgeError, instance::module::InnerInstance, types::WasmEdgeString, utils::check,
-    Config, Engine, FuncRef, Function, ImportObject, Instance, Module, Statistics, Store,
-    WasmEdgeResult, WasmValue,
+    instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
+    Function, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult, WasmValue,
 };
 use std::sync::Arc;
+use wasmedge_types::error::WasmEdgeError;
 
 /// Defines an execution environment for both pure WASM and compiled WASM.
 #[derive(Debug, Clone)]
@@ -368,7 +368,7 @@ mod tests {
     use crate::{instance::module::AsyncWasiModule, Loader, Validator};
     use crate::{
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
-        MemType, Memory, Statistics, Table, TableType, HOST_FUNCS_NEW, HOST_FUNC_FOOTPRINTS,
+        MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -449,7 +449,7 @@ mod tests {
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
-        assert_eq!(HOST_FUNCS_NEW.read().len(), 0);
+        assert_eq!(HOST_FUNCS.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         // add host function "func-add": (externref, i32) -> (i32)

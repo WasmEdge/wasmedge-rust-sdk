@@ -5,14 +5,9 @@
 //! the limit range specifies min size (initial size) of that memory, while the end
 //! restricts the size to which the memory can grow later.
 
-use crate::{
-    error::{MemError, WasmEdgeError},
-    ffi,
-    types::WasmEdgeLimit,
-    utils::check,
-    WasmEdgeResult,
-};
+use crate::{ffi, types::WasmEdgeLimit, utils::check, WasmEdgeResult};
 use std::sync::Arc;
+use wasmedge_types::error::{MemError, WasmEdgeError};
 
 /// Defines a WebAssembly memory instance, which is a linear memory described by its [type](crate::MemType). Each memory instance consists of a vector of bytes and an optional maximum size, and its size is a multiple of the WebAssembly page size (*64KiB* of each page).
 #[derive(Debug)]
@@ -360,11 +355,11 @@ unsafe impl Sync for InnerMemType {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{CoreError, CoreExecutionError, WasmEdgeError};
     use std::{
         sync::{Arc, Mutex},
         thread,
     };
+    use wasmedge_types::error::{CoreError, CoreExecutionError, WasmEdgeError};
 
     #[test]
     fn test_memory_type() {
