@@ -222,50 +222,6 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
 
 #[doc(hidden)]
 #[proc_macro_attribute]
-pub fn sys_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let body_ast = parse_macro_input!(item as Item);
-    if let Item::Fn(item_fn) = body_ast {
-        match sys_expand_host_func(&item_fn) {
-            Ok(token_stream) => token_stream.into(),
-            Err(err) => err.to_compile_error().into(),
-        }
-    } else {
-        TokenStream::new()
-    }
-}
-
-fn sys_expand_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
-    // * define the signature of wrapper function
-    // name of wrapper function
-    let fn_name_ident = &item_fn.sig.ident;
-    // return type of wrapper function
-    let fn_return = &item_fn.sig.output;
-    // visibility of wrapper function
-    let fn_visibility = &item_fn.vis;
-
-    // extract T from Option<&mut T>
-    let ret = match item_fn.sig.inputs.len() {
-        3 => {
-            let fn_generics = &item_fn.sig.generics;
-
-            // inputs of wrapper function
-            let fn_inputs = &item_fn.sig.inputs;
-
-            let fn_block = item_fn.block.clone();
-
-            quote!(
-                #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) #fn_return
-                    #fn_block
-            )
-        }
-        _ => panic!("Invalid numbers of host function arguments"),
-    };
-
-    Ok(ret)
-}
-
-#[doc(hidden)]
-#[proc_macro_attribute]
 pub fn sys_async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
@@ -285,6 +241,7 @@ pub fn sys_async_host_function(_attr: TokenStream, item: TokenStream) -> TokenSt
 fn sys_expand_async_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     // extract T from Option<&mut T>
     let ret = match &item_fn.sig.inputs.len() {
+        2 => sys_expand_async_host_func_with_two_args(item_fn),
         3 => sys_expand_async_host_func_with_three_args(item_fn),
         _ => panic!("Invalid numbers of host function arguments"),
     };
@@ -292,14 +249,21 @@ fn sys_expand_async_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2:
     Ok(ret)
 }
 
-fn sys_expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+fn sys_expand_async_host_func_with_two_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+    // function name
     let fn_name_ident = &item_fn.sig.ident;
+
+    // function visibility
     let fn_visibility = &item_fn.vis;
 
+    // generic types
     let fn_generics = &item_fn.sig.generics;
 
-    let fn_inputs = &item_fn.sig.inputs;
+    // arguments
+    let mut fn_inputs = item_fn.sig.inputs.clone();
+    fn_inputs.push(parse_quote!(_: *mut std::os::raw::c_void));
 
+    // function body
     let fn_block = &item_fn.block;
 
     quote!(
@@ -311,8 +275,34 @@ fn sys_expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_mac
     )
 }
 
+fn sys_expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+    // function name
+    let fn_name_ident = &item_fn.sig.ident;
+
+    // function visibility
+    let fn_visibility = &item_fn.vis;
+
+    // generic types
+    let fn_generics = &item_fn.sig.generics;
+
+    // arguments
+    let fn_inputs = &item_fn.sig.inputs;
+
+    // function body
+    let fn_block = &item_fn.block;
+
+    quote!(
+        #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)> {
+            Box::new(async move {
+                #fn_block
+            })
+        }
+    )
+}
+
+#[doc(hidden)]
 #[proc_macro_attribute]
-pub fn sys_host_function_new(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn sys_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
         match sys_expand_host_func_new(&item_fn) {
@@ -457,4 +447,134 @@ fn sys_expand_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::T
     };
 
     Ok(ret)
+}
+
+// ================== macros for wasmedge-sys wasi host functions ==================
+
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn sys_wasi_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let body_ast = parse_macro_input!(item as Item);
+    if let Item::Fn(item_fn) = body_ast {
+        match sys_expand_wasi_host_func(&item_fn) {
+            Ok(token_stream) => token_stream.into(),
+            Err(err) => err.to_compile_error().into(),
+        }
+    } else {
+        TokenStream::new()
+    }
+}
+
+fn sys_expand_wasi_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
+    // * define the signature of wrapper function
+    // name of wrapper function
+    let fn_name_ident = &item_fn.sig.ident;
+    // return type of wrapper function
+    let fn_return = &item_fn.sig.output;
+    // visibility of wrapper function
+    let fn_visibility = &item_fn.vis;
+
+    // extract T from Option<&mut T>
+    let ret = match item_fn.sig.inputs.len() {
+        3 => {
+            let fn_generics = &item_fn.sig.generics;
+
+            // inputs of wrapper function
+            let fn_inputs = &item_fn.sig.inputs;
+
+            let fn_block = item_fn.block.clone();
+
+            quote!(
+                #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) #fn_return
+                    #fn_block
+            )
+        }
+        _ => panic!("Invalid numbers of host function arguments"),
+    };
+
+    Ok(ret)
+}
+
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn sys_async_wasi_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let body_ast = parse_macro_input!(item as Item);
+    if let Item::Fn(item_fn) = body_ast {
+        if item_fn.sig.asyncness.is_none() {
+            panic!("The function must be async");
+        }
+
+        match sys_expand_async_wasi_host_func(&item_fn) {
+            Ok(token_stream) => token_stream.into(),
+            Err(err) => err.to_compile_error().into(),
+        }
+    } else {
+        TokenStream::new()
+    }
+}
+
+fn sys_expand_async_wasi_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
+    // extract T from Option<&mut T>
+    let ret = match &item_fn.sig.inputs.len() {
+        2 => sys_expand_async_wasi_host_func_with_two_args(item_fn),
+        3 => sys_expand_async_wasi_host_func_with_three_args(item_fn),
+        _ => panic!("Invalid numbers of host function arguments"),
+    };
+
+    Ok(ret)
+}
+
+fn sys_expand_async_wasi_host_func_with_two_args(
+    item_fn: &syn::ItemFn,
+) -> proc_macro2::TokenStream {
+    // function name
+    let fn_name_ident = &item_fn.sig.ident;
+
+    // function visibility
+    let fn_visibility = &item_fn.vis;
+
+    // generic types
+    let fn_generics = &item_fn.sig.generics;
+
+    // arguments
+    let mut fn_inputs = item_fn.sig.inputs.clone();
+    fn_inputs.push(parse_quote!(_: *mut std::os::raw::c_void));
+
+    // function body
+    let fn_block = &item_fn.block;
+
+    quote!(
+        #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)> {
+            Box::new(async move {
+                #fn_block
+            })
+        }
+    )
+}
+
+fn sys_expand_async_wasi_host_func_with_three_args(
+    item_fn: &syn::ItemFn,
+) -> proc_macro2::TokenStream {
+    // function name
+    let fn_name_ident = &item_fn.sig.ident;
+
+    // function visibility
+    let fn_visibility = &item_fn.vis;
+
+    // generic types
+    let fn_generics = &item_fn.sig.generics;
+
+    // arguments
+    let fn_inputs = &item_fn.sig.inputs;
+
+    // function body
+    let fn_block = &item_fn.block;
+
+    quote!(
+        #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)> {
+            Box::new(async move {
+                #fn_block
+            })
+        }
+    )
 }
