@@ -111,6 +111,7 @@ impl Func {
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
+                *mut std::os::raw::c_void,
             ) -> Box<
                 dyn std::future::Future<
                         Output = Result<Vec<WasmValue>, crate::error::HostFuncError>,
@@ -552,7 +553,8 @@ mod tests {
     async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
         // define an async closure
         let c = |_frame: CallingFrame,
-                 _args: Vec<WasmValue>|
+                 _args: Vec<WasmValue>,
+                 _data: *mut std::os::raw::c_void|
          -> Box<
             (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
         > {

@@ -266,6 +266,7 @@ mod tests {
         fn async_hello(
             _frame: CallingFrame,
             _inputs: Vec<WasmValue>,
+            _data: *mut std::os::raw::c_void,
         ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
         {
             Box::new(async move {
