@@ -152,8 +152,10 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_types::error::{CoreError, CoreLoadError};
-    use wasmedge_types::{wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat};
+    use wasmedge_types::{
+        error::{CoreError, CoreLoadError},
+        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
+    };
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]

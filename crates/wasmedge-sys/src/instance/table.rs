@@ -12,8 +12,10 @@ use crate::{
     WasmEdgeResult,
 };
 use std::sync::Arc;
-use wasmedge_types::error::{TableError, WasmEdgeError};
-use wasmedge_types::RefType;
+use wasmedge_types::{
+    error::{TableError, WasmEdgeError},
+    RefType,
+};
 
 /// A WasmEdge [Table] defines a WebAssembly table instance described by its [type](crate::TableType). A table is an array-like structure and stores function references.
 ///
