@@ -376,7 +376,7 @@ mod tests {
     };
     #[cfg(all(feature = "async", target_os = "linux"))]
     use wasmedge_macro::sys_async_host_function;
-    use wasmedge_macro::sys_host_function_new;
+    use wasmedge_macro::sys_host_function;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 
     #[test]
@@ -639,6 +639,7 @@ mod tests {
         fn async_hello(
             _frame: CallingFrame,
             _inputs: Vec<WasmValue>,
+            _: *mut std::os::raw::c_void,
         ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
         {
             Box::new(async move {
@@ -708,7 +709,7 @@ mod tests {
         Ok(())
     }
 
-    #[sys_host_function_new]
+    #[sys_host_function]
     fn real_add(
         _frame: CallingFrame,
         inputs: Vec<WasmValue>,
@@ -739,7 +740,7 @@ mod tests {
     async fn async_hello<T>(
         _frame: CallingFrame,
         _inputs: Vec<WasmValue>,
-        _data: Option<&mut T>,
+        _data: *mut std::os::raw::c_void,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         for _ in 0..10 {
             println!("[async hello] say hello");

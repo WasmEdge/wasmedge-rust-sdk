@@ -1,6 +1,6 @@
 //! This example demonstrates that the function in interpreter mode calls the functions in AOT mode, and vice versa.
 
-use wasmedge_macro::sys_host_function_new;
+use wasmedge_macro::sys_host_function;
 #[cfg(feature = "aot")]
 use wasmedge_sys::{
     AsImport, Compiler, Config, Executor, FuncType, Function, ImportModule, ImportObject, Loader,
@@ -11,7 +11,7 @@ use wasmedge_types::error::HostFuncError;
 #[cfg(feature = "aot")]
 use wasmedge_types::{NeverType, ValType};
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn host_print_i32(
     _frame: CallingFrame,
     val: Vec<WasmValue>,
@@ -21,7 +21,7 @@ fn host_print_i32(
     Ok(vec![])
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn host_print_f64(
     _frame: CallingFrame,
     val: Vec<WasmValue>,

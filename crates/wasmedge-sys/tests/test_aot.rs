@@ -1,5 +1,5 @@
 #[cfg(feature = "aot")]
-use wasmedge_macro::sys_host_function_new;
+use wasmedge_macro::sys_host_function;
 #[cfg(feature = "aot")]
 use wasmedge_sys::{
     AsImport, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
@@ -106,7 +106,7 @@ fn create_spec_test_module() -> ImportModule<NeverType> {
 }
 
 #[cfg(feature = "aot")]
-#[sys_host_function_new]
+#[sys_host_function]
 fn spec_test_print(
     _frame: CallingFrame,
     _inputs: Vec<WasmValue>,

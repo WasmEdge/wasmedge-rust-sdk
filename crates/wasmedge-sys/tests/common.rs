@@ -1,4 +1,4 @@
-use wasmedge_macro::sys_host_function_new;
+use wasmedge_macro::sys_host_function;
 use wasmedge_sys::{AsImport, CallingFrame, FuncType, Function, ImportModule, WasmValue};
 use wasmedge_types::{error::HostFuncError, NeverType, ValType};
 
@@ -59,7 +59,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     import
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn extern_add(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
@@ -82,7 +82,7 @@ fn extern_add(
     Ok(vec![WasmValue::from_i32(val1 + val2)])
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn extern_sub(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
@@ -106,7 +106,7 @@ fn extern_sub(
     Ok(vec![WasmValue::from_i32(val1 - val2)])
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn extern_mul(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
@@ -129,7 +129,7 @@ fn extern_mul(
     Ok(vec![WasmValue::from_i32(val1 * val2)])
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn extern_div(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
@@ -152,7 +152,7 @@ fn extern_div(
     Ok(vec![WasmValue::from_i32(val1 / val2)])
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn extern_term(
     _frame: CallingFrame,
     _inputs: Vec<WasmValue>,
@@ -160,7 +160,7 @@ fn extern_term(
     Ok(vec![WasmValue::from_i32(1234)])
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn extern_fail(
     _frame: CallingFrame,
     _inputs: Vec<WasmValue>,

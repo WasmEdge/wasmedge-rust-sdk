@@ -134,7 +134,7 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_macro::sys_host_function_new;
+    use wasmedge_macro::sys_host_function;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 
     #[test]
@@ -339,7 +339,7 @@ mod tests {
         Ok(())
     }
 
-    #[sys_host_function_new]
+    #[sys_host_function]
     fn real_add(
         _frame: CallingFrame,
         inputs: Vec<WasmValue>,

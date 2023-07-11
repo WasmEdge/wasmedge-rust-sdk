@@ -1,4 +1,4 @@
-use wasmedge_macro::sys_host_function_new;
+use wasmedge_macro::sys_host_function;
 use wasmedge_sys::{CallingFrame, Executor, FuncType, Function, WasmValue};
 use wasmedge_types::{error::HostFuncError, ValType};
 
@@ -10,7 +10,7 @@ struct Data<T, S> {
     _s: Vec<S>,
 }
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn real_add(
     _frame: CallingFrame,
     input: Vec<WasmValue>,

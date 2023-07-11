@@ -145,6 +145,7 @@ pub type BoxedAsyncFn = Box<
     dyn Fn(
             CallingFrame,
             Vec<WasmValue>,
+            *mut std::os::raw::c_void,
         )
             -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>
         + Send

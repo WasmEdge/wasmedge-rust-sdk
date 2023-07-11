@@ -4,14 +4,14 @@
 //! cargo run -p wasmedge-sys --example table_and_funcref -- --nocapture
 //! ```
 
-use wasmedge_macro::sys_host_function_new;
+use wasmedge_macro::sys_host_function;
 use wasmedge_sys::{
     AsImport, CallingFrame, Config, Executor, FuncType, Function, ImportModule, ImportObject,
     Store, Table, TableType, WasmValue,
 };
 use wasmedge_types::{error::HostFuncError, NeverType, RefType, ValType};
 
-#[sys_host_function_new]
+#[sys_host_function]
 fn real_add(_frame: CallingFrame, input: Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError> {
     println!("Rust: Entering Rust function real_add");
 
