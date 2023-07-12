@@ -468,10 +468,16 @@ pub struct PluginModule<T: Send + Sync + Clone> {
     pub(crate) registered: bool,
     name: String,
     _host_data: Option<Box<T>>,
+    funcs: Vec<Function>,
 }
 impl<T: Send + Sync + Clone> Drop for PluginModule<T> {
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+            dbg!("*** start dropping the plugin host functions");
+            dbg!(self.funcs.len());
+            self.funcs.drain(..);
+            dbg!("*** finish dropping the plugin host functions");
+
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
@@ -519,6 +525,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
                 registered: false,
                 name: name.as_ref().to_string(),
                 _host_data: host_data,
+                funcs: Vec::new(),
             }),
         }
     }
@@ -534,16 +541,18 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
         self.name.as_str()
     }
 
-    fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
+    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.funcs.push(func);
+        let f = self.funcs.last_mut().unwrap();
+
         let func_name: WasmEdgeString = name.into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddFunction(
                 self.inner.0,
                 func_name.as_raw(),
-                func.inner.lock().0,
+                f.inner.lock().0,
             );
         }
-        func.registered = true;
     }
 
     fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
