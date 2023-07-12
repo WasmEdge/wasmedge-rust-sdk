@@ -260,7 +260,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func_new<Args, Rets, D>(
+    pub fn with_func<Args, Rets, D>(
         mut self,
         name: impl AsRef<str>,
         real_func: impl Fn(
