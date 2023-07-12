@@ -6,13 +6,14 @@
 //! restricts the size to which the memory can grow later.
 
 use crate::{ffi, types::WasmEdgeLimit, utils::check, WasmEdgeResult};
+use parking_lot::Mutex;
 use std::sync::Arc;
 use wasmedge_types::error::{MemError, WasmEdgeError};
 
 /// Defines a WebAssembly memory instance, which is a linear memory described by its [type](crate::MemType). Each memory instance consists of a vector of bytes and an optional maximum size, and its size is a multiple of the WebAssembly page size (*64KiB* of each page).
 #[derive(Debug)]
 pub struct Memory {
-    pub(crate) inner: Arc<InnerMemory>,
+    pub(crate) inner: Arc<Mutex<InnerMemory>>,
     pub(crate) registered: bool,
 }
 impl Memory {
@@ -43,7 +44,7 @@ impl Memory {
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Mem(MemError::Create))),
             false => Ok(Memory {
-                inner: Arc::new(InnerMemory(ctx)),
+                inner: Arc::new(Mutex::new(InnerMemory(ctx))),
                 registered: false,
             }),
         }
@@ -56,7 +57,7 @@ impl Memory {
     /// If fail to get the type from the [Memory], then an error is returned.
     ///
     pub fn ty(&self) -> WasmEdgeResult<MemType> {
-        let ty_ctx = unsafe { ffi::WasmEdge_MemoryInstanceGetMemoryType(self.inner.0) };
+        let ty_ctx = unsafe { ffi::WasmEdge_MemoryInstanceGetMemoryType(self.inner.lock().0) };
         match ty_ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Mem(MemError::Type))),
             false => Ok(MemType {
@@ -82,7 +83,7 @@ impl Memory {
         let mut data = Vec::with_capacity(len as usize);
         unsafe {
             check(ffi::WasmEdge_MemoryInstanceGetData(
-                self.inner.0,
+                self.inner.lock().0,
                 data.as_mut_ptr(),
                 offset,
                 len,
@@ -143,7 +144,7 @@ impl Memory {
     pub fn set_data(&mut self, data: impl AsRef<[u8]>, offset: u32) -> WasmEdgeResult<()> {
         unsafe {
             check(ffi::WasmEdge_MemoryInstanceSetData(
-                self.inner.0,
+                self.inner.lock().0,
                 data.as_ref().as_ptr(),
                 offset,
                 data.as_ref().len() as u32,
@@ -166,7 +167,9 @@ impl Memory {
     /// If fail to get the data pointer, then an error is returned.
     ///
     pub fn data_pointer(&self, offset: u32, len: u32) -> WasmEdgeResult<*const u8> {
-        let ptr = unsafe { ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.0, offset, len) };
+        let ptr = unsafe {
+            ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.lock().0, offset, len)
+        };
         match ptr.is_null() {
             true => Err(Box::new(WasmEdgeError::Mem(MemError::ConstPtr))),
             false => Ok(ptr),
@@ -186,7 +189,8 @@ impl Memory {
     /// If fail to get the data pointer, then an error is returned.
     ///
     pub fn data_pointer_mut(&mut self, offset: u32, len: u32) -> WasmEdgeResult<*mut u8> {
-        let ptr = unsafe { ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.0, offset, len) };
+        let ptr =
+            unsafe { ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.lock().0, offset, len) };
         match ptr.is_null() {
             true => Err(Box::new(WasmEdgeError::Mem(MemError::MutPtr))),
             false => Ok(ptr),
@@ -195,7 +199,7 @@ impl Memory {
 
     /// Returns the size, in WebAssembly pages (64 KiB of each page), of this wasm memory.
     pub fn size(&self) -> u32 {
-        unsafe { ffi::WasmEdge_MemoryInstanceGetPageSize(self.inner.0) }
+        unsafe { ffi::WasmEdge_MemoryInstanceGetPageSize(self.inner.lock().0) }
     }
 
     /// Grows this WebAssembly memory by `count` pages.
@@ -226,27 +230,42 @@ impl Memory {
     /// ```
     ///
     pub fn grow(&mut self, count: u32) -> WasmEdgeResult<()> {
-        unsafe { check(ffi::WasmEdge_MemoryInstanceGrowPage(self.inner.0, count)) }
+        unsafe {
+            check(ffi::WasmEdge_MemoryInstanceGrowPage(
+                self.inner.lock().0,
+                count,
+            ))
+        }
     }
 
     /// Provides a raw pointer to the inner memory context.
     #[cfg(feature = "ffi")]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_MemoryInstanceContext {
-        self.inner.0 as *const _
+        self.inner.lock().0 as *const _
     }
 }
 impl Drop for Memory {
     fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_MemoryInstanceDelete(self.inner.0) };
+        dbg!("drop memory");
+        dbg!(self.registered);
+        dbg!(Arc::strong_count(&self.inner));
+
+        if self.registered {
+            dbg!("set memory ptr to null");
+            self.inner.lock().0 = std::ptr::null_mut();
+        } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
+            dbg!("===> drop ffi memory instance");
+            unsafe { ffi::WasmEdge_MemoryInstanceDelete(self.inner.lock().0) };
         }
+
+        dbg!("drop memory success");
     }
 }
 impl Clone for Memory {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            registered: false,
+            registered: self.registered,
         }
     }
 }
@@ -392,7 +411,7 @@ mod tests {
         let result = Memory::create(&ty);
         assert!(result.is_ok());
         let mut mem = result.unwrap();
-        assert!(!mem.inner.0.is_null());
+        assert!(!mem.inner.lock().0.is_null());
         assert!(!mem.registered);
 
         // get type
@@ -429,7 +448,7 @@ mod tests {
         let result = Memory::create(&ty);
         assert!(result.is_ok());
         let mut mem = result.unwrap();
-        assert!(!mem.inner.0.is_null());
+        assert!(!mem.inner.lock().0.is_null());
         assert!(!mem.registered);
 
         // check page count
@@ -496,7 +515,7 @@ mod tests {
             let result = Memory::create(&ty);
             assert!(result.is_ok());
             let mem = result.unwrap();
-            assert!(!mem.inner.0.is_null());
+            assert!(!mem.inner.lock().0.is_null());
             assert!(!mem.registered);
 
             let handle = thread::spawn(move || {
@@ -528,7 +547,7 @@ mod tests {
         let result = Memory::create(&ty);
         assert!(result.is_ok());
         let mem = result.unwrap();
-        assert!(!mem.inner.0.is_null());
+        assert!(!mem.inner.lock().0.is_null());
         assert!(!mem.registered);
         let memory = Arc::new(Mutex::new(mem));
 

@@ -7,6 +7,7 @@ use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
     Function, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult, WasmValue,
 };
+use parking_lot::Mutex;
 use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
@@ -134,7 +135,7 @@ impl Executor {
         }
 
         Ok(Instance {
-            inner: std::sync::Arc::new(InnerInstance(instance_ctx)),
+            inner: Arc::new(Mutex::new(InnerInstance(instance_ctx))),
             registered: false,
         })
     }
@@ -169,7 +170,7 @@ impl Executor {
             ))?;
         }
         Ok(Instance {
-            inner: std::sync::Arc::new(InnerInstance(instance_ctx)),
+            inner: Arc::new(Mutex::new(InnerInstance(instance_ctx))),
             registered: false,
         })
     }
@@ -195,7 +196,7 @@ impl Executor {
             check(ffi::WasmEdge_ExecutorRegisterImport(
                 self.inner.0,
                 store.inner.0,
-                instance.inner.0 as *const _,
+                instance.inner.lock().0 as *const _,
             ))?;
         }
 
@@ -333,6 +334,8 @@ impl Executor {
 }
 impl Drop for Executor {
     fn drop(&mut self) {
+        dbg!("drop Executor");
+
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             unsafe { ffi::WasmEdge_ExecutorDelete(self.inner.0) }
         }
@@ -499,6 +502,7 @@ mod tests {
         dbg!("*** register import object done");
         assert!(result.is_ok());
 
+        dbg!(">>>==============================");
         {
             let result = store.module("extern");
             assert!(result.is_ok());
@@ -509,6 +513,7 @@ mod tests {
             let global = result.unwrap();
             assert_eq!(global.get_value().to_i32(), 666);
         }
+        dbg!("==============================<<<");
 
         let handle = thread::spawn(move || {
             let result = store.module("extern");

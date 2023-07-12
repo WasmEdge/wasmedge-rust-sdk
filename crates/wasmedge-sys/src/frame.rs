@@ -6,6 +6,8 @@ use crate::{
     instance::{memory::InnerMemory, module::InnerInstance},
     Executor, Instance, Memory,
 };
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// Represents a calling frame on top of stack.
 #[derive(Debug)]
@@ -53,7 +55,7 @@ impl CallingFrame {
 
         match ctx.is_null() {
             false => Some(Instance {
-                inner: std::sync::Arc::new(InnerInstance(ctx as *mut _)),
+                inner: Arc::new(Mutex::new(InnerInstance(ctx as *mut _))),
                 registered: true,
             }),
             true => None,
@@ -77,7 +79,7 @@ impl CallingFrame {
 
         match ctx.is_null() {
             false => Some(Memory {
-                inner: std::sync::Arc::new(InnerMemory(ctx)),
+                inner: std::sync::Arc::new(Mutex::new(InnerMemory(ctx))),
                 registered: true,
             }),
             true => None,

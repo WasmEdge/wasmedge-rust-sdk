@@ -6,6 +6,7 @@ use crate::{
     types::WasmEdgeString,
     utils, AsImport, Instance, WasmEdgeResult,
 };
+use parking_lot::Mutex;
 use std::{ffi::CString, os::raw::c_void, sync::Arc};
 use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
@@ -158,7 +159,7 @@ impl Plugin {
         match ctx.is_null() {
             true => None,
             false => Some(Instance {
-                inner: std::sync::Arc::new(InnerInstance(ctx)),
+                inner: Arc::new(Mutex::new(InnerInstance(ctx))),
                 registered: false,
             }),
         }
@@ -558,7 +559,11 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
     fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
         let table_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddTable(self.inner.0, table_name.as_raw(), table.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddTable(
+                self.inner.0,
+                table_name.as_raw(),
+                table.inner.lock().0,
+            );
         }
         table.registered = true;
     }
@@ -566,7 +571,11 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
     fn add_memory(&mut self, name: impl AsRef<str>, mut memory: Memory) {
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddMemory(self.inner.0, mem_name.as_raw(), memory.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddMemory(
+                self.inner.0,
+                mem_name.as_raw(),
+                memory.inner.lock().0,
+            );
         }
         memory.registered = true;
     }
@@ -577,7 +586,7 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
             ffi::WasmEdge_ModuleInstanceAddGlobal(
                 self.inner.0,
                 global_name.as_raw(),
-                global.inner.0,
+                global.inner.lock().0,
             );
         }
         global.registered = true;

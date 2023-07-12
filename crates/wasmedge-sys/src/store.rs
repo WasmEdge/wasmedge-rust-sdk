@@ -6,6 +6,7 @@ use crate::{
     types::WasmEdgeString,
     WasmEdgeResult,
 };
+use parking_lot::Mutex;
 use std::sync::Arc;
 use wasmedge_types::error::{StoreError, WasmEdgeError};
 
@@ -79,7 +80,7 @@ impl Store {
                 name.as_ref().to_string(),
             )))),
             false => Ok(Instance {
-                inner: std::sync::Arc::new(InnerInstance(ctx as *mut _)),
+                inner: Arc::new(Mutex::new(InnerInstance(ctx as *mut _))),
                 registered: true,
             }),
         }
@@ -110,6 +111,8 @@ impl Store {
 }
 impl Drop for Store {
     fn drop(&mut self) {
+        dbg!("drop Store");
+
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             unsafe { ffi::WasmEdge_StoreDelete(self.inner.0) }
         }

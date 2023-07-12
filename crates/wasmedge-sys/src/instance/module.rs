@@ -20,15 +20,28 @@ use wasmedge_types::error::{InstanceError, WasmEdgeError};
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]
 pub struct Instance {
-    pub(crate) inner: Arc<InnerInstance>,
+    pub(crate) inner: Arc<Mutex<InnerInstance>>,
     pub(crate) registered: bool,
 }
 impl Drop for Instance {
     fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+        // if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null()
+        // {
+        //     unsafe {
+        //         ffi::WasmEdge_ModuleInstanceDelete(self.inner.lock().0);
+        //     }
+        // }
+
+        dbg!("drop Instance");
+
+        if self.registered {
+            dbg!("set instance pointer to null");
+            self.inner.lock().0 = std::ptr::null_mut();
+        } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
             unsafe {
-                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
+                ffi::WasmEdge_ModuleInstanceDelete(self.inner.lock().0);
             }
+            dbg!("dropped Instance");
         }
     }
 }
@@ -37,7 +50,8 @@ impl Instance {
     ///
     /// If this module instance is an active module instance, then None is returned.
     pub fn name(&self) -> Option<String> {
-        let name = unsafe { ffi::WasmEdge_ModuleInstanceGetModuleName(self.inner.0 as *const _) };
+        let name =
+            unsafe { ffi::WasmEdge_ModuleInstanceGetModuleName(self.inner.lock().0 as *const _) };
 
         let name: String = name.into();
         if name.is_empty() {
@@ -59,7 +73,10 @@ impl Instance {
     pub fn get_func(&self, name: impl AsRef<str>) -> WasmEdgeResult<Function> {
         let func_name: WasmEdgeString = name.as_ref().into();
         let func_ctx = unsafe {
-            ffi::WasmEdge_ModuleInstanceFindFunction(self.inner.0 as *const _, func_name.as_raw())
+            ffi::WasmEdge_ModuleInstanceFindFunction(
+                self.inner.lock().0 as *const _,
+                func_name.as_raw(),
+            )
         };
         match func_ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Instance(
@@ -84,14 +101,17 @@ impl Instance {
     pub fn get_table(&self, name: impl AsRef<str>) -> WasmEdgeResult<Table> {
         let table_name: WasmEdgeString = name.as_ref().into();
         let ctx = unsafe {
-            ffi::WasmEdge_ModuleInstanceFindTable(self.inner.0 as *const _, table_name.as_raw())
+            ffi::WasmEdge_ModuleInstanceFindTable(
+                self.inner.lock().0 as *const _,
+                table_name.as_raw(),
+            )
         };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::NotFoundTable(name.as_ref().to_string()),
             ))),
             false => Ok(Table {
-                inner: Arc::new(InnerTable(ctx)),
+                inner: Arc::new(Mutex::new(InnerTable(ctx))),
                 registered: true,
             }),
         }
@@ -109,14 +129,17 @@ impl Instance {
     pub fn get_memory(&self, name: impl AsRef<str>) -> WasmEdgeResult<Memory> {
         let mem_name: WasmEdgeString = name.as_ref().into();
         let ctx = unsafe {
-            ffi::WasmEdge_ModuleInstanceFindMemory(self.inner.0 as *const _, mem_name.as_raw())
+            ffi::WasmEdge_ModuleInstanceFindMemory(
+                self.inner.lock().0 as *const _,
+                mem_name.as_raw(),
+            )
         };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::NotFoundMem(name.as_ref().to_string()),
             ))),
             false => Ok(Memory {
-                inner: Arc::new(InnerMemory(ctx)),
+                inner: Arc::new(Mutex::new(InnerMemory(ctx))),
                 registered: true,
             }),
         }
@@ -134,14 +157,17 @@ impl Instance {
     pub fn get_global(&self, name: impl AsRef<str>) -> WasmEdgeResult<Global> {
         let global_name: WasmEdgeString = name.as_ref().into();
         let ctx = unsafe {
-            ffi::WasmEdge_ModuleInstanceFindGlobal(self.inner.0 as *const _, global_name.as_raw())
+            ffi::WasmEdge_ModuleInstanceFindGlobal(
+                self.inner.lock().0 as *const _,
+                global_name.as_raw(),
+            )
         };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::NotFoundGlobal(name.as_ref().to_string()),
             ))),
             false => Ok(Global {
-                inner: Arc::new(InnerGlobal(ctx)),
+                inner: Arc::new(Mutex::new(InnerGlobal(ctx))),
                 registered: true,
             }),
         }
@@ -149,7 +175,7 @@ impl Instance {
 
     /// Returns the length of the exported [function instances](crate::Function) in this module instance.
     pub fn func_len(&self) -> u32 {
-        unsafe { ffi::WasmEdge_ModuleInstanceListFunctionLength(self.inner.0) }
+        unsafe { ffi::WasmEdge_ModuleInstanceListFunctionLength(self.inner.lock().0) }
     }
 
     /// Returns the names of the exported [function instances](crate::Function) in this module instance.
@@ -160,7 +186,7 @@ impl Instance {
                 let mut func_names = Vec::with_capacity(len_func_names as usize);
                 unsafe {
                     ffi::WasmEdge_ModuleInstanceListFunction(
-                        self.inner.0,
+                        self.inner.lock().0,
                         func_names.as_mut_ptr(),
                         len_func_names,
                     );
@@ -179,7 +205,7 @@ impl Instance {
 
     /// Returns the length of the exported [table instances](crate::Table) in this module instance.
     pub fn table_len(&self) -> u32 {
-        unsafe { ffi::WasmEdge_ModuleInstanceListTableLength(self.inner.0) }
+        unsafe { ffi::WasmEdge_ModuleInstanceListTableLength(self.inner.lock().0) }
     }
 
     /// Returns the names of the exported [table instances](crate::Table) in this module instance.
@@ -190,7 +216,7 @@ impl Instance {
                 let mut table_names = Vec::with_capacity(len_table_names as usize);
                 unsafe {
                     ffi::WasmEdge_ModuleInstanceListTable(
-                        self.inner.0,
+                        self.inner.lock().0,
                         table_names.as_mut_ptr(),
                         len_table_names,
                     );
@@ -209,7 +235,7 @@ impl Instance {
 
     /// Returns the length of the exported [memory instances](crate::Memory) in this module instance.
     pub fn mem_len(&self) -> u32 {
-        unsafe { ffi::WasmEdge_ModuleInstanceListMemoryLength(self.inner.0) }
+        unsafe { ffi::WasmEdge_ModuleInstanceListMemoryLength(self.inner.lock().0) }
     }
 
     /// Returns the names of all exported [memory instances](crate::Memory) in this module instance.
@@ -220,7 +246,7 @@ impl Instance {
                 let mut mem_names = Vec::with_capacity(len_mem_names as usize);
                 unsafe {
                     ffi::WasmEdge_ModuleInstanceListMemory(
-                        self.inner.0,
+                        self.inner.lock().0,
                         mem_names.as_mut_ptr(),
                         len_mem_names,
                     );
@@ -239,7 +265,7 @@ impl Instance {
 
     /// Returns the length of the exported [global instances](crate::Global) in this module instance.
     pub fn global_len(&self) -> u32 {
-        unsafe { ffi::WasmEdge_ModuleInstanceListGlobalLength(self.inner.0) }
+        unsafe { ffi::WasmEdge_ModuleInstanceListGlobalLength(self.inner.lock().0) }
     }
 
     /// Returns the names of the exported [global instances](crate::Global) in this module instance.
@@ -250,7 +276,7 @@ impl Instance {
                 let mut global_names = Vec::with_capacity(len_global_names as usize);
                 unsafe {
                     ffi::WasmEdge_ModuleInstanceListGlobal(
-                        self.inner.0,
+                        self.inner.lock().0,
                         global_names.as_mut_ptr(),
                         len_global_names,
                     );
@@ -269,7 +295,7 @@ impl Instance {
 
     /// Returns the host data held by the module instance.
     pub fn host_data<T: Send + Sync + Clone>(&mut self) -> Option<&mut T> {
-        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceGetHostData(self.inner.0) };
+        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceGetHostData(self.inner.lock().0) };
 
         match ctx.is_null() {
             true => None,
@@ -283,14 +309,14 @@ impl Instance {
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
-        self.inner.0 as *const _
+        self.inner.lock().0 as *const _
     }
 }
 impl Clone for Instance {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            registered: false,
+            registered: self.registered,
         }
     }
 }
@@ -379,19 +405,31 @@ pub struct ImportModule<T: Send + Sync + Clone> {
     name: String,
     _host_data: Option<Box<T>>,
     funcs: Vec<Function>,
+    memories: Vec<Memory>,
 }
 impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
+        dbg!("***** drop ImportModule");
+
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+            dbg!("free the module instance ptr");
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
+            }
+            dbg!("the module instance ptr freed");
+
             dbg!("*** start dropping the registered host functions");
             dbg!(self.funcs.len());
             self.funcs.drain(..);
             dbg!("*** finish dropping the registered host functions");
 
-            unsafe {
-                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
-            }
+            dbg!("*** start dropping the registered memories");
+            dbg!(self.memories.len());
+            self.memories.drain(..);
+            dbg!("*** finish dropping the registered memories");
         }
+
+        dbg!("***** ImportModule dropped");
     }
 }
 impl<T: Send + Sync + Clone> ImportModule<T> {
@@ -431,6 +469,7 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     name: name.as_ref().to_string(),
                     _host_data: host_data,
                     funcs: Vec::new(),
+                    memories: Vec::new(),
                 }),
                 false => Ok(Self {
                     inner: std::sync::Arc::new(InnerInstance(ctx)),
@@ -438,6 +477,7 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     name: name.as_ref().to_string(),
                     _host_data: None,
                     funcs: Vec::new(),
+                    memories: Vec::new(),
                 }),
             },
         }
@@ -468,32 +508,45 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
         }
     }
 
-    fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
+    fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
         let table_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddTable(self.inner.0, table_name.as_raw(), table.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddTable(
+                self.inner.0,
+                table_name.as_raw(),
+                table.inner.lock().0,
+            );
         }
-        table.registered = true;
+
+        table.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn add_memory(&mut self, name: impl AsRef<str>, mut memory: Memory) {
+    fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
+        self.memories.push(memory);
+        let memory = self.memories.last_mut().unwrap();
+
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddMemory(self.inner.0, mem_name.as_raw(), memory.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddMemory(
+                self.inner.0,
+                mem_name.as_raw(),
+                memory.inner.lock().0,
+            );
         }
-        memory.registered = true;
+
+        memory.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn add_global(&mut self, name: impl AsRef<str>, mut global: Global) {
+    fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
         let global_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddGlobal(
                 self.inner.0,
                 global_name.as_raw(),
-                global.inner.0,
+                global.inner.lock().0,
             );
         }
-        global.registered = true;
+        global.inner.lock().0 = std::ptr::null_mut();
     }
 }
 
@@ -503,6 +556,8 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
 pub struct WasiModule {
     pub(crate) inner: Arc<InnerInstance>,
     pub(crate) registered: bool,
+    funcs: Vec<Function>,
+    memories: Vec<Memory>,
 }
 #[cfg(not(feature = "async"))]
 impl Drop for WasiModule {
@@ -511,6 +566,16 @@ impl Drop for WasiModule {
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
+
+            dbg!("*** start dropping the wasi host functions");
+            dbg!(self.funcs.len());
+            self.funcs.drain(..);
+            dbg!("*** finish dropping the wasi host functions");
+
+            dbg!("*** start dropping the registered memories");
+            dbg!(self.memories.len());
+            self.memories.drain(..);
+            dbg!("*** finish dropping the registered memories");
         }
     }
 }
@@ -585,6 +650,8 @@ impl WasiModule {
             false => Ok(Self {
                 inner: std::sync::Arc::new(InnerInstance(ctx)),
                 registered: false,
+                funcs: Vec::new(),
+                memories: Vec::new(),
             }),
         }
     }
@@ -721,7 +788,7 @@ impl AsInstance for WasiModule {
                 InstanceError::NotFoundTable(name.as_ref().to_string()),
             ))),
             false => Ok(Table {
-                inner: Arc::new(InnerTable(ctx)),
+                inner: Arc::new(Mutex::new(InnerTable(ctx))),
                 registered: true,
             }),
         }
@@ -737,7 +804,7 @@ impl AsInstance for WasiModule {
                 InstanceError::NotFoundMem(name.as_ref().to_string()),
             ))),
             false => Ok(Memory {
-                inner: Arc::new(InnerMemory(ctx)),
+                inner: Arc::new(Mutex::new(InnerMemory(ctx))),
                 registered: true,
             }),
         }
@@ -753,7 +820,7 @@ impl AsInstance for WasiModule {
                 InstanceError::NotFoundGlobal(name.as_ref().to_string()),
             ))),
             false => Ok(Global {
-                inner: Arc::new(InnerGlobal(ctx)),
+                inner: Arc::new(Mutex::new(InnerGlobal(ctx))),
                 registered: true,
             }),
         }
@@ -885,44 +952,58 @@ impl AsImport for WasiModule {
         "wasi_snapshot_preview1"
     }
 
-    fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
+    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.funcs.push(func);
+        let f = self.funcs.last_mut().unwrap();
+
         let func_name: WasmEdgeString = name.into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddFunction(
                 self.inner.0,
                 func_name.as_raw(),
-                func.inner.lock().0,
+                f.inner.lock().0,
             );
         }
-        func.registered = true;
     }
 
-    fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
+    fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
         let table_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddTable(self.inner.0, table_name.as_raw(), table.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddTable(
+                self.inner.0,
+                table_name.as_raw(),
+                table.inner.lock().0,
+            );
         }
-        table.registered = true;
+
+        table.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn add_memory(&mut self, name: impl AsRef<str>, mut memory: Memory) {
+    fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
+        self.memories.push(memory);
+        let memory = self.memories.last_mut().unwrap();
+
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddMemory(self.inner.0, mem_name.as_raw(), memory.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddMemory(
+                self.inner.0,
+                mem_name.as_raw(),
+                memory.inner.lock().0,
+            );
         }
-        memory.registered = true;
     }
 
-    fn add_global(&mut self, name: impl AsRef<str>, mut global: Global) {
+    fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
         let global_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddGlobal(
                 self.inner.0,
                 global_name.as_raw(),
-                global.inner.0,
+                global.inner.lock().0,
             );
         }
-        global.registered = true;
+
+        global.inner.lock().0 = std::ptr::null_mut();
     }
 }
 
@@ -936,6 +1017,7 @@ pub struct AsyncWasiModule {
     wasi_ctx: Arc<Mutex<WasiCtx>>,
     wasi_funcs: Vec<Function>,
     funcs: Vec<Function>,
+    memories: Vec<Memory>,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
 impl Drop for AsyncWasiModule {
@@ -944,6 +1026,21 @@ impl Drop for AsyncWasiModule {
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
+
+            dbg!("*** start dropping the registered host functions");
+            dbg!(self.wasi_funcs.len());
+            self.wasi_funcs.drain(..);
+            dbg!("*** finish dropping the registered host functions");
+
+            dbg!("*** start dropping the registered host functions");
+            dbg!(self.funcs.len());
+            self.funcs.drain(..);
+            dbg!("*** finish dropping the registered host functions");
+
+            dbg!("*** start dropping the registered memories");
+            dbg!(self.memories.len());
+            self.memories.drain(..);
+            dbg!("*** finish dropping the registered memories");
         }
     }
 }
@@ -984,6 +1081,7 @@ impl AsyncWasiModule {
             wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
             wasi_funcs: Vec::new(),
             funcs: Vec::new(),
+            memories: Vec::new(),
         };
 
         // add sync/async host functions to the module
@@ -1117,7 +1215,7 @@ impl AsInstance for AsyncWasiModule {
                 InstanceError::NotFoundTable(name.as_ref().to_string()),
             ))),
             false => Ok(Table {
-                inner: Arc::new(InnerTable(ctx)),
+                inner: Arc::new(Mutex::new(InnerTable(ctx))),
                 registered: true,
             }),
         }
@@ -1133,7 +1231,7 @@ impl AsInstance for AsyncWasiModule {
                 InstanceError::NotFoundMem(name.as_ref().to_string()),
             ))),
             false => Ok(Memory {
-                inner: Arc::new(InnerMemory(ctx)),
+                inner: Arc::new(Mutex::new(InnerMemory(ctx))),
                 registered: true,
             }),
         }
@@ -1149,7 +1247,7 @@ impl AsInstance for AsyncWasiModule {
                 InstanceError::NotFoundGlobal(name.as_ref().to_string()),
             ))),
             false => Ok(Global {
-                inner: Arc::new(InnerGlobal(ctx)),
+                inner: Arc::new(Mutex::new(InnerGlobal(ctx))),
                 registered: true,
             }),
         }
@@ -1295,32 +1393,42 @@ impl AsImport for AsyncWasiModule {
         }
     }
 
-    fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
+    fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
         let table_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddTable(self.inner.0, table_name.as_raw(), table.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddTable(
+                self.inner.0,
+                table_name.as_raw(),
+                table.inner.lock().0,
+            );
         }
-        table.registered = true;
+        table.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn add_memory(&mut self, name: impl AsRef<str>, mut memory: Memory) {
+    fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
+        self.memories.push(memory);
+        let memory = self.memories.last_mut().unwrap();
+
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddMemory(self.inner.0, mem_name.as_raw(), memory.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddMemory(
+                self.inner.0,
+                mem_name.as_raw(),
+                memory.inner.lock().0,
+            );
         }
-        memory.registered = true;
     }
 
-    fn add_global(&mut self, name: impl AsRef<str>, mut global: Global) {
+    fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
         let global_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddGlobal(
                 self.inner.0,
                 global_name.as_raw(),
-                global.inner.0,
+                global.inner.lock().0,
             );
         }
-        global.registered = true;
+        global.inner.lock().0 = std::ptr::null_mut();
     }
 }
 
@@ -1585,7 +1693,7 @@ mod tests {
             let result = instance.get_global("global");
             assert!(result.is_ok());
             let global = result.unwrap();
-            assert!(!global.inner.0.is_null() && global.registered);
+            assert!(!global.inner.lock().0.is_null() && global.registered);
             let val = global.get_value();
             assert_eq!(val.to_f32(), 3.5);
 
