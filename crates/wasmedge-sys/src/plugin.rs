@@ -459,9 +459,6 @@ impl PluginDescriptor {
     }
 }
 
-/// The finalizer funtion used to free the host data.
-pub type Finalizer = unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void);
-
 /// Represents a Plugin module instance.
 #[derive(Debug, Clone)]
 pub struct PluginModule<T: Send + Sync + Clone> {
@@ -509,11 +506,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
     /// # Error
     ///
     /// If fail to create the import module instance, then an error is returned.
-    pub fn create(
-        name: impl AsRef<str>,
-        mut host_data: Option<Box<T>>,
-        finalizer: Option<Finalizer>,
-    ) -> WasmEdgeResult<Self> {
+    pub fn create(name: impl AsRef<str>, mut host_data: Option<Box<T>>) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
         let ctx = match host_data.as_mut() {
@@ -521,7 +514,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
                 ffi::WasmEdge_ModuleInstanceCreateWithData(
                     raw_name.as_raw(),
                     data.as_mut() as *mut T as *mut c_void,
-                    finalizer,
+                    Some(host_data_finalizer::<T>),
                 )
             },
             None => unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) },
@@ -604,6 +597,11 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
         }
         global.inner.lock().0 = std::ptr::null_mut();
     }
+}
+
+unsafe extern "C" fn host_data_finalizer<T: Sized + Send>(raw: *mut ::std::os::raw::c_void) {
+    let host_data: Box<T> = Box::from_raw(raw as *mut T);
+    drop(host_data);
 }
 
 #[cfg(test)]
