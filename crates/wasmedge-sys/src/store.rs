@@ -111,8 +111,6 @@ impl Store {
 }
 impl Drop for Store {
     fn drop(&mut self) {
-        dbg!("drop Store");
-
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             unsafe { ffi::WasmEdge_StoreDelete(self.inner.0) }
         }

@@ -25,23 +25,12 @@ pub struct Instance {
 }
 impl Drop for Instance {
     fn drop(&mut self) {
-        // if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null()
-        // {
-        //     unsafe {
-        //         ffi::WasmEdge_ModuleInstanceDelete(self.inner.lock().0);
-        //     }
-        // }
-
-        dbg!("drop Instance");
-
         if self.registered {
-            dbg!("set instance pointer to null");
             self.inner.lock().0 = std::ptr::null_mut();
         } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.lock().0);
             }
-            dbg!("dropped Instance");
         }
     }
 }
@@ -409,27 +398,18 @@ pub struct ImportModule<T: Send + Sync + Clone> {
 }
 impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
-        dbg!("***** drop ImportModule");
-
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            dbg!("free the module instance ptr");
+            // free the module instance
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
-            dbg!("the module instance ptr freed");
 
-            dbg!("*** start dropping the registered host functions");
-            dbg!(self.funcs.len());
+            // drop the registered host functions
             self.funcs.drain(..);
-            dbg!("*** finish dropping the registered host functions");
 
-            dbg!("*** start dropping the registered memories");
-            dbg!(self.memories.len());
+            // drop the registered memories
             self.memories.drain(..);
-            dbg!("*** finish dropping the registered memories");
         }
-
-        dbg!("***** ImportModule dropped");
     }
 }
 impl<T: Send + Sync + Clone> ImportModule<T> {
@@ -563,19 +543,16 @@ pub struct WasiModule {
 impl Drop for WasiModule {
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+            // free the module instance
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
 
-            dbg!("*** start dropping the wasi host functions");
-            dbg!(self.funcs.len());
+            // drop the registered host functions
             self.funcs.drain(..);
-            dbg!("*** finish dropping the wasi host functions");
 
-            dbg!("*** start dropping the registered memories");
-            dbg!(self.memories.len());
+            // drop the registered memories
             self.memories.drain(..);
-            dbg!("*** finish dropping the registered memories");
         }
     }
 }
@@ -1023,24 +1000,19 @@ pub struct AsyncWasiModule {
 impl Drop for AsyncWasiModule {
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+            // free the module instance
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
 
-            dbg!("*** start dropping the registered host functions");
-            dbg!(self.wasi_funcs.len());
+            // drop the registered wasi host functions
             self.wasi_funcs.drain(..);
-            dbg!("*** finish dropping the registered host functions");
 
-            dbg!("*** start dropping the registered host functions");
-            dbg!(self.funcs.len());
+            // drop the registered host functions
             self.funcs.drain(..);
-            dbg!("*** finish dropping the registered host functions");
 
-            dbg!("*** start dropping the registered memories");
-            dbg!(self.memories.len());
+            // drop the registered memories
             self.memories.drain(..);
-            dbg!("*** finish dropping the registered memories");
         }
     }
 }

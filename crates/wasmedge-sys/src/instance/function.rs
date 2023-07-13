@@ -671,21 +671,12 @@ impl Function {
 }
 impl Drop for Function {
     fn drop(&mut self) {
-        dbg!("drop function");
-        dbg!(self.registered);
-        dbg!(Arc::strong_count(&self.inner));
-
         if !self.registered && Arc::strong_count(&self.inner) == 1 {
             // remove the real_func from HOST_FUNCS
             let footprint = self.inner.lock().0 as usize;
-            dbg!(&footprint);
             if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
-                dbg!("drop key");
-                dbg!(&key);
-
                 let mut map_host_func = HOST_FUNCS.write();
                 if map_host_func.contains_key(&key) {
-                    dbg!("found from HOST_FUNCS_NEW");
                     map_host_func.remove(&key).expect(
                         "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
                     );
@@ -706,11 +697,8 @@ impl Drop for Function {
 
             // delete the function instance
             if !self.inner.lock().0.is_null() {
-                dbg!("===> drop ffi function instance");
                 unsafe { ffi::WasmEdge_FunctionInstanceDelete(self.inner.lock().0) };
             }
-
-            dbg!("drop function success");
         }
     }
 }
@@ -1490,16 +1478,12 @@ mod tests {
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // drop the import object
-        dbg!("drop import object");
         drop(import);
-        dbg!("drop import object done");
 
         assert!(store.module("extern").is_err());
 
         assert_eq!(HOST_FUNCS.read().len(), 0);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
-        dbg!("*** all done");
 
         // ! if `add_again` is not dropped before dropping `import`, then calling `add_again` will crash
         // let result = executor.call_func(

@@ -246,19 +246,11 @@ impl Memory {
 }
 impl Drop for Memory {
     fn drop(&mut self) {
-        dbg!("drop memory");
-        dbg!(self.registered);
-        dbg!(Arc::strong_count(&self.inner));
-
         if self.registered {
-            dbg!("set memory ptr to null");
             self.inner.lock().0 = std::ptr::null_mut();
         } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
-            dbg!("===> drop ffi memory instance");
             unsafe { ffi::WasmEdge_MemoryInstanceDelete(self.inner.lock().0) };
         }
-
-        dbg!("drop memory success");
     }
 }
 impl Clone for Memory {

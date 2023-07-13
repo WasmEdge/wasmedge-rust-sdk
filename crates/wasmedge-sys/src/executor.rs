@@ -334,8 +334,6 @@ impl Executor {
 }
 impl Drop for Executor {
     fn drop(&mut self) {
-        dbg!("drop Executor");
-
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             unsafe { ffi::WasmEdge_ExecutorDelete(self.inner.0) }
         }
@@ -497,12 +495,9 @@ mod tests {
 
         let import = ImportObject::Import(import);
 
-        dbg!("*** register import object");
         let result = executor.register_import_object(&mut store, &import);
-        dbg!("*** register import object done");
         assert!(result.is_ok());
 
-        dbg!(">>>==============================");
         {
             let result = store.module("extern");
             assert!(result.is_ok());
@@ -513,7 +508,6 @@ mod tests {
             let global = result.unwrap();
             assert_eq!(global.get_value().to_i32(), 666);
         }
-        dbg!("==============================<<<");
 
         let handle = thread::spawn(move || {
             let result = store.module("extern");

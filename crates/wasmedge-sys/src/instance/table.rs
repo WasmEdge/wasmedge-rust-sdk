@@ -163,19 +163,11 @@ impl Table {
 }
 impl Drop for Table {
     fn drop(&mut self) {
-        dbg!("drop table");
-        dbg!(self.registered);
-        dbg!(Arc::strong_count(&self.inner));
-
         if self.registered {
-            dbg!("set table ptr to null");
             self.inner.lock().0 = std::ptr::null_mut();
         } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
-            dbg!("===> drop ffi table instance");
             unsafe { ffi::WasmEdge_TableInstanceDelete(self.inner.lock().0) };
         }
-
-        dbg!("drop table success");
     }
 }
 impl Clone for Table {

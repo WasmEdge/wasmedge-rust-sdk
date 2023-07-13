@@ -111,20 +111,11 @@ impl Global {
 }
 impl Drop for Global {
     fn drop(&mut self) {
-        dbg!("*drop global");
-        dbg!(self.registered);
-        dbg!(Arc::strong_count(&self.inner));
-
         if self.registered {
-            dbg!("set global ptr to null");
             self.inner.lock().0 = std::ptr::null_mut();
         } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
-            dbg!("free global instance ptr");
             unsafe { ffi::WasmEdge_GlobalInstanceDelete(self.inner.lock().0) };
-            dbg!("global instance ptr freed");
         }
-
-        dbg!("drop global success");
     }
 }
 impl Clone for Global {
