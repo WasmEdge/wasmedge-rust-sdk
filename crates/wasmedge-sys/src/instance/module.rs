@@ -394,7 +394,6 @@ pub struct ImportModule<T: Send + Sync + Clone> {
     name: String,
     _host_data: Option<Box<T>>,
     funcs: Vec<Function>,
-    memories: Vec<Memory>,
 }
 impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
@@ -406,9 +405,6 @@ impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
 
             // drop the registered host functions
             self.funcs.drain(..);
-
-            // drop the registered memories
-            self.memories.drain(..);
         }
     }
 }
@@ -449,7 +445,6 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     name: name.as_ref().to_string(),
                     _host_data: host_data,
                     funcs: Vec::new(),
-                    memories: Vec::new(),
                 }),
                 false => Ok(Self {
                     inner: std::sync::Arc::new(InnerInstance(ctx)),
@@ -457,7 +452,6 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
                     name: name.as_ref().to_string(),
                     _host_data: None,
                     funcs: Vec::new(),
-                    memories: Vec::new(),
                 }),
             },
         }
@@ -486,6 +480,8 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
                 f.inner.lock().0,
             );
         }
+
+        // ! Notice that, `f.inner.lock().0` is not set to null here as the pointer will be used in `Function::drop`.
     }
 
     fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
@@ -502,9 +498,6 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
     }
 
     fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
-        self.memories.push(memory);
-        let memory = self.memories.last_mut().unwrap();
-
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddMemory(
@@ -513,7 +506,6 @@ impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
                 memory.inner.lock().0,
             );
         }
-
         memory.inner.lock().0 = std::ptr::null_mut();
     }
 
@@ -537,7 +529,6 @@ pub struct WasiModule {
     pub(crate) inner: Arc<InnerInstance>,
     pub(crate) registered: bool,
     funcs: Vec<Function>,
-    memories: Vec<Memory>,
 }
 #[cfg(not(feature = "async"))]
 impl Drop for WasiModule {
@@ -550,9 +541,6 @@ impl Drop for WasiModule {
 
             // drop the registered host functions
             self.funcs.drain(..);
-
-            // drop the registered memories
-            self.memories.drain(..);
         }
     }
 }
@@ -628,7 +616,6 @@ impl WasiModule {
                 inner: std::sync::Arc::new(InnerInstance(ctx)),
                 registered: false,
                 funcs: Vec::new(),
-                memories: Vec::new(),
             }),
         }
     }
@@ -957,9 +944,6 @@ impl AsImport for WasiModule {
     }
 
     fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
-        self.memories.push(memory);
-        let memory = self.memories.last_mut().unwrap();
-
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddMemory(
@@ -968,6 +952,8 @@ impl AsImport for WasiModule {
                 memory.inner.lock().0,
             );
         }
+
+        memory.inner.lock().0 = std::ptr::null_mut();
     }
 
     fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
@@ -992,9 +978,7 @@ pub struct AsyncWasiModule {
     pub(crate) registered: bool,
     name: String,
     wasi_ctx: Arc<Mutex<WasiCtx>>,
-    wasi_funcs: Vec<Function>,
     funcs: Vec<Function>,
-    memories: Vec<Memory>,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
 impl Drop for AsyncWasiModule {
@@ -1005,14 +989,8 @@ impl Drop for AsyncWasiModule {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
 
-            // drop the registered wasi host functions
-            self.wasi_funcs.drain(..);
-
             // drop the registered host functions
             self.funcs.drain(..);
-
-            // drop the registered memories
-            self.memories.drain(..);
         }
     }
 }
@@ -1051,9 +1029,7 @@ impl AsyncWasiModule {
             registered: false,
             name: name.to_string(),
             wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
-            wasi_funcs: Vec::new(),
             funcs: Vec::new(),
-            memories: Vec::new(),
         };
 
         // add sync/async host functions to the module
@@ -1086,19 +1062,16 @@ impl AsyncWasiModule {
     }
 
     fn add_wasi_func(&mut self, name: impl AsRef<str>, func: Function) {
-        self.wasi_funcs.push(func);
-        let f = self.wasi_funcs.last_mut().unwrap();
-
         let func_name: WasmEdgeString = name.into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddFunction(
                 self.inner.0,
                 func_name.as_raw(),
-                f.inner.lock().0,
+                func.inner.lock().0,
             );
         }
 
-        f.inner.lock().0 = std::ptr::null_mut();
+        func.inner.lock().0 = std::ptr::null_mut();
     }
 
     pub fn init_wasi(
@@ -1378,9 +1351,6 @@ impl AsImport for AsyncWasiModule {
     }
 
     fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
-        self.memories.push(memory);
-        let memory = self.memories.last_mut().unwrap();
-
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddMemory(
@@ -1389,6 +1359,7 @@ impl AsImport for AsyncWasiModule {
                 memory.inner.lock().0,
             );
         }
+        memory.inner.lock().0 = std::ptr::null_mut();
     }
 
     fn add_global(&mut self, name: impl AsRef<str>, global: Global) {

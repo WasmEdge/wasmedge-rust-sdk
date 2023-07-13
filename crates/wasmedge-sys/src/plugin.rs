@@ -467,29 +467,17 @@ pub struct PluginModule<T: Send + Sync + Clone> {
     name: String,
     _host_data: Option<Box<T>>,
     funcs: Vec<Function>,
-    memories: Vec<Memory>,
 }
 impl<T: Send + Sync + Clone> Drop for PluginModule<T> {
     fn drop(&mut self) {
-        dbg!("***** drop PluginModule");
-
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
 
-            dbg!("*** start dropping the plugin host functions");
-            dbg!(self.funcs.len());
+            // drop the registered host functions
             self.funcs.drain(..);
-            dbg!("*** finish dropping the plugin host functions");
-
-            dbg!("*** start dropping the registered memories");
-            dbg!(self.memories.len());
-            self.memories.drain(..);
-            dbg!("*** finish dropping the registered memories");
         }
-
-        dbg!("***** PluginModule dropped");
     }
 }
 impl<T: Send + Sync + Clone> PluginModule<T> {
@@ -530,7 +518,6 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
                 name: name.as_ref().to_string(),
                 _host_data: host_data,
                 funcs: Vec::new(),
-                memories: Vec::new(),
             }),
         }
     }
@@ -573,9 +560,6 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
     }
 
     fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
-        self.memories.push(memory);
-        let memory = self.memories.last_mut().unwrap();
-
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddMemory(
@@ -584,6 +568,7 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
                 memory.inner.lock().0,
             );
         }
+        memory.inner.lock().0 = std::ptr::null_mut();
     }
 
     fn add_global(&mut self, name: impl AsRef<str>, global: Global) {

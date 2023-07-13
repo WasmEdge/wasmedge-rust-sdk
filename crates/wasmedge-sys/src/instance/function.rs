@@ -1345,7 +1345,7 @@ mod tests {
     }
 
     #[test]
-    fn test_func_closure_drop() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_func_drop() -> Result<(), Box<dyn std::error::Error>> {
         // create a host function
         let real_add = |_: CallingFrame,
                         input: Vec<WasmValue>,
