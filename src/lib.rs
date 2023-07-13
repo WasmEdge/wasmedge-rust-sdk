@@ -131,9 +131,6 @@ pub type CallingFrame = wasmedge_sys::CallingFrame;
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type HostFn<T> = wasmedge_sys::instance::function::HostFn<T>;
 
-/// Defines the signature of a finalizer funtion that is used to free the host data.
-pub type Finalizer = wasmedge_sys::plugin::Finalizer;
-
 /// Defines the types used in the `async` scenarios.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async {

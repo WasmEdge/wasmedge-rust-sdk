@@ -1,8 +1,7 @@
 //! Defines plugin related structs.
 
 use crate::{
-    instance::Instance, io::WasmValTypeList, Finalizer, FuncType, Global, Memory, Table,
-    WasmEdgeResult,
+    instance::Instance, io::WasmValTypeList, FuncType, Global, Memory, Table, WasmEdgeResult,
 };
 use wasmedge_sys::{self as sys, AsImport};
 pub mod ffi {
@@ -230,7 +229,6 @@ pub struct PluginModuleBuilder<T: Send + Sync + Clone> {
     memories: Vec<(String, sys::Memory)>,
     tables: Vec<(String, sys::Table)>,
     host_data: Option<Box<T>>,
-    finalizer: Option<Finalizer>,
 }
 impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     /// Creates a new [PluginModuleBuilder].
@@ -241,7 +239,6 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
             memories: Vec::new(),
             tables: Vec::new(),
             host_data: None,
-            finalizer: None,
         }
     }
 
@@ -372,9 +369,8 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// * `finalizer` - The function to drop the host data. Notice that this argument is available only if `host_data` is set some value.
     ///
-    pub fn with_host_data(mut self, host_data: Box<T>, finalizer: Option<Finalizer>) -> Self {
+    pub fn with_host_data(mut self, host_data: Box<T>) -> Self {
         self.host_data = Some(host_data);
-        self.finalizer = finalizer;
         self
     }
 
@@ -388,8 +384,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// If fail to create the [PluginModule], then an error is returned.
     pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<PluginModule<T>> {
-        let mut inner =
-            sys::plugin::PluginModule::create(name.as_ref(), self.host_data, self.finalizer)?;
+        let mut inner = sys::plugin::PluginModule::create(name.as_ref(), self.host_data)?;
 
         // add func
         for (name, func) in self.funcs.into_iter() {
