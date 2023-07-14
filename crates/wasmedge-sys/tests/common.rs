@@ -11,7 +11,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     // add host function: "func-add"
     let result = FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
     let func_ty = result.unwrap();
-    let result = Function::create::<NeverType>(&func_ty, extern_add, None, 0);
+    let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_add), None, 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
     import.add_func("func-add", host_func);
@@ -19,7 +19,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     // add host function: "func-sub"
     let result = FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
     let func_ty = result.unwrap();
-    let result = Function::create::<NeverType>(&func_ty, extern_sub, None, 0);
+    let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_sub), None, 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
     import.add_func("func-sub", host_func);
@@ -27,7 +27,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     // add host function: "func-mul"
     let result = FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
     let func_ty = result.unwrap();
-    let result = Function::create::<NeverType>(&func_ty, extern_mul, None, 0);
+    let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_mul), None, 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
     import.add_func("func-mul", host_func);
@@ -35,7 +35,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     // add host function: "func-div"
     let result = FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
     let func_ty = result.unwrap();
-    let result = Function::create::<NeverType>(&func_ty, extern_div, None, 0);
+    let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_div), None, 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
     import.add_func("func-div", host_func);
@@ -44,7 +44,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     let result = FuncType::create([], [ValType::I32]);
     assert!(result.is_ok());
     let func_ty = result.unwrap();
-    let result = Function::create::<NeverType>(&func_ty, extern_term, None, 0);
+    let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_term), None, 0);
     let host_func = result.unwrap();
     import.add_func("func-term", host_func);
 
@@ -52,7 +52,7 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
     let result = FuncType::create([], [ValType::I32]);
     assert!(result.is_ok());
     let func_ty = result.unwrap();
-    let result = Function::create::<NeverType>(&func_ty, extern_fail, None, 0);
+    let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_fail), None, 0);
     let host_func = result.unwrap();
     import.add_func("func-fail", host_func);
 
@@ -60,10 +60,9 @@ pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
 }
 
 #[sys_host_function]
-fn extern_add<T>(
+fn extern_add(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
-    _: Option<&mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     let val1 = if inputs[0].ty() == ValType::ExternRef {
         inputs[0]
@@ -84,10 +83,9 @@ fn extern_add<T>(
 }
 
 #[sys_host_function]
-fn extern_sub<T>(
+fn extern_sub(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
-    _: Option<&mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     let val1 = if inputs[0].ty() == ValType::ExternRef {
         inputs[0]
@@ -109,10 +107,9 @@ fn extern_sub<T>(
 }
 
 #[sys_host_function]
-fn extern_mul<T>(
+fn extern_mul(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
-    _: Option<&mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     let val1 = if inputs[0].ty() == ValType::ExternRef {
         inputs[0]
@@ -133,10 +130,9 @@ fn extern_mul<T>(
 }
 
 #[sys_host_function]
-fn extern_div<T>(
+fn extern_div(
     _frame: CallingFrame,
     inputs: Vec<WasmValue>,
-    _: Option<&mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     let val1 = if inputs[0].ty() == ValType::ExternRef {
         inputs[0]
@@ -157,19 +153,17 @@ fn extern_div<T>(
 }
 
 #[sys_host_function]
-fn extern_term<T>(
+fn extern_term(
     _frame: CallingFrame,
     _inputs: Vec<WasmValue>,
-    _: Option<&mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     Ok(vec![WasmValue::from_i32(1234)])
 }
 
 #[sys_host_function]
-fn extern_fail<T>(
+fn extern_fail(
     _frame: CallingFrame,
     _inputs: Vec<WasmValue>,
-    _: Option<&mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     Err(HostFuncError::User(2))
 }

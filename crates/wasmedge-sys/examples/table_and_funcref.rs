@@ -12,11 +12,7 @@ use wasmedge_sys::{
 use wasmedge_types::{error::HostFuncError, NeverType, RefType, ValType};
 
 #[sys_host_function]
-fn real_add<T>(
-    _frame: CallingFrame,
-    input: Vec<WasmValue>,
-    _: Option<&mut T>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
+fn real_add(_frame: CallingFrame, input: Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError> {
     println!("Rust: Entering Rust function real_add");
 
     if input.len() != 2 {
@@ -47,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create a FuncType
     let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32])?;
     // create a host function
-    let host_func = Function::create::<NeverType>(&func_ty, real_add, None, 0)?;
+    let host_func = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0)?;
 
     // create a TableType instance
     let ty = TableType::create(RefType::FuncRef, 10, Some(20))?;

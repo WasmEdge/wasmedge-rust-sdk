@@ -1,13 +1,14 @@
 //! Defines WasmEdge Store struct.
 
 use crate::{
-    error::{StoreError, WasmEdgeError},
     ffi,
     instance::module::{InnerInstance, Instance},
     types::WasmEdgeString,
     WasmEdgeResult,
 };
+use parking_lot::Mutex;
 use std::sync::Arc;
+use wasmedge_types::error::{StoreError, WasmEdgeError};
 
 /// A [Store] represents all global state that can be manipulated by WebAssembly programs. It consists of the runtime representation of all instances of [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global).
 #[derive(Debug, Clone)]
@@ -79,7 +80,7 @@ impl Store {
                 name.as_ref().to_string(),
             )))),
             false => Ok(Instance {
-                inner: std::sync::Arc::new(InnerInstance(ctx as *mut _)),
+                inner: Arc::new(Mutex::new(InnerInstance(ctx as *mut _))),
                 registered: true,
             }),
         }
@@ -161,7 +162,7 @@ mod tests {
         let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         import.add_func("add", host_func);
@@ -247,7 +248,8 @@ mod tests {
             let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
             assert!(result.is_ok());
             let func_ty = result.unwrap();
-            let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+            let result =
+                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
             assert!(result.is_ok());
             let host_func = result.unwrap();
             import.add_func("add", host_func);
@@ -339,10 +341,9 @@ mod tests {
     }
 
     #[sys_host_function]
-    fn real_add<T>(
+    fn real_add(
         _frame: CallingFrame,
         inputs: Vec<WasmValue>,
-        _: Option<&mut T>,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         if inputs.len() != 2 {
             return Err(HostFuncError::User(1));

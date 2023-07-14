@@ -1,7 +1,8 @@
 //! Defines WasmEdge ahead-of-time compiler.
 
-use crate::{error::WasmEdgeError, ffi, utils, utils::check, Config, WasmEdgeResult};
+use crate::{ffi, utils, utils::check, Config, WasmEdgeResult};
 use std::path::Path;
+use wasmedge_types::error::WasmEdgeError;
 
 /// Defines WasmEdge ahead-of-time(AOT) compiler and the relevant APIs.
 #[derive(Debug)]
@@ -145,16 +146,16 @@ unsafe impl Sync for InnerCompiler {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        error::{CoreError, CoreLoadError},
-        Config,
-    };
+    use crate::Config;
     use std::{
         io::Read,
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_types::{wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat};
+    use wasmedge_types::{
+        error::{CoreError, CoreLoadError},
+        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
+    };
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]

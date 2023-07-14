@@ -2,12 +2,13 @@
 
 use super::ffi;
 use crate::{
-    error::{InstanceError, WasmEdgeError},
     instance::{module::InnerInstance, Function, Global, Memory, Table},
     types::WasmEdgeString,
     utils, AsImport, Instance, WasmEdgeResult,
 };
+use parking_lot::Mutex;
 use std::{ffi::CString, os::raw::c_void, sync::Arc};
+use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
 /// Defines the APIs for loading plugins and check the basic information of the loaded plugins.
 #[derive(Debug)]
@@ -158,7 +159,7 @@ impl Plugin {
         match ctx.is_null() {
             true => None,
             false => Some(Instance {
-                inner: std::sync::Arc::new(InnerInstance(ctx)),
+                inner: Arc::new(Mutex::new(InnerInstance(ctx))),
                 registered: false,
             }),
         }
@@ -458,9 +459,6 @@ impl PluginDescriptor {
     }
 }
 
-/// The finalizer funtion used to free the host data.
-pub type Finalizer = unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void);
-
 /// Represents a Plugin module instance.
 #[derive(Debug, Clone)]
 pub struct PluginModule<T: Send + Sync + Clone> {
@@ -468,6 +466,7 @@ pub struct PluginModule<T: Send + Sync + Clone> {
     pub(crate) registered: bool,
     name: String,
     _host_data: Option<Box<T>>,
+    funcs: Vec<Function>,
 }
 impl<T: Send + Sync + Clone> Drop for PluginModule<T> {
     fn drop(&mut self) {
@@ -475,6 +474,9 @@ impl<T: Send + Sync + Clone> Drop for PluginModule<T> {
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
+
+            // drop the registered host functions
+            self.funcs.drain(..);
         }
     }
 }
@@ -492,11 +494,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
     /// # Error
     ///
     /// If fail to create the import module instance, then an error is returned.
-    pub fn create(
-        name: impl AsRef<str>,
-        mut host_data: Option<Box<T>>,
-        finalizer: Option<Finalizer>,
-    ) -> WasmEdgeResult<Self> {
+    pub fn create(name: impl AsRef<str>, mut host_data: Option<Box<T>>) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
         let ctx = match host_data.as_mut() {
@@ -504,7 +502,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
                 ffi::WasmEdge_ModuleInstanceCreateWithData(
                     raw_name.as_raw(),
                     data.as_mut() as *mut T as *mut c_void,
-                    finalizer,
+                    Some(host_data_finalizer::<T>),
                 )
             },
             None => unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) },
@@ -519,6 +517,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
                 registered: false,
                 name: name.as_ref().to_string(),
                 _host_data: host_data,
+                funcs: Vec::new(),
             }),
         }
     }
@@ -534,41 +533,60 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
         self.name.as_str()
     }
 
-    fn add_func(&mut self, name: impl AsRef<str>, mut func: Function) {
+    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.funcs.push(func);
+        let f = self.funcs.last_mut().unwrap();
+
         let func_name: WasmEdgeString = name.into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                f.inner.lock().0,
+            );
         }
-        func.registered = true;
     }
 
-    fn add_table(&mut self, name: impl AsRef<str>, mut table: Table) {
+    fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
         let table_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddTable(self.inner.0, table_name.as_raw(), table.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddTable(
+                self.inner.0,
+                table_name.as_raw(),
+                table.inner.lock().0,
+            );
         }
-        table.registered = true;
+        table.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn add_memory(&mut self, name: impl AsRef<str>, mut memory: Memory) {
+    fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
         let mem_name: WasmEdgeString = name.as_ref().into();
         unsafe {
-            ffi::WasmEdge_ModuleInstanceAddMemory(self.inner.0, mem_name.as_raw(), memory.inner.0);
+            ffi::WasmEdge_ModuleInstanceAddMemory(
+                self.inner.0,
+                mem_name.as_raw(),
+                memory.inner.lock().0,
+            );
         }
-        memory.registered = true;
+        memory.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn add_global(&mut self, name: impl AsRef<str>, mut global: Global) {
+    fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
         let global_name: WasmEdgeString = name.as_ref().into();
         unsafe {
             ffi::WasmEdge_ModuleInstanceAddGlobal(
                 self.inner.0,
                 global_name.as_raw(),
-                global.inner.0,
+                global.inner.lock().0,
             );
         }
-        global.registered = true;
+        global.inner.lock().0 = std::ptr::null_mut();
     }
+}
+
+unsafe extern "C" fn host_data_finalizer<T: Sized + Send>(raw: *mut ::std::os::raw::c_void) {
+    let host_data: Box<T> = Box::from_raw(raw as *mut T);
+    drop(host_data);
 }
 
 #[cfg(test)]

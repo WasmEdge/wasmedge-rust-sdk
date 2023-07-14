@@ -6,21 +6,24 @@
 //! the end resticts the upper bound (inclusive).
 
 use crate::{
-    error::{TableError, WasmEdgeError},
     ffi,
     types::{WasmEdgeLimit, WasmValue},
     utils::check,
     WasmEdgeResult,
 };
+use parking_lot::Mutex;
 use std::sync::Arc;
-use wasmedge_types::RefType;
+use wasmedge_types::{
+    error::{TableError, WasmEdgeError},
+    RefType,
+};
 
 /// A WasmEdge [Table] defines a WebAssembly table instance described by its [type](crate::TableType). A table is an array-like structure and stores function references.
 ///
 /// This [example](https://github.com/WasmEdge/WasmEdge/tree/master/bindings/rust/wasmedge-sys/examples/table_and_funcref.rs) shows how to use [Table] to store and retrieve function references.
 #[derive(Debug)]
 pub struct Table {
-    pub(crate) inner: Arc<InnerTable>,
+    pub(crate) inner: Arc<Mutex<InnerTable>>,
     pub(crate) registered: bool,
 }
 impl Table {
@@ -52,7 +55,7 @@ impl Table {
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Table(TableError::Create))),
             false => Ok(Table {
-                inner: Arc::new(InnerTable(ctx)),
+                inner: Arc::new(Mutex::new(InnerTable(ctx))),
                 registered: false,
             }),
         }
@@ -64,7 +67,7 @@ impl Table {
     ///
     /// If fail to get type, then an error is returned.
     pub fn ty(&self) -> WasmEdgeResult<TableType> {
-        let ty_ctx = unsafe { ffi::WasmEdge_TableInstanceGetTableType(self.inner.0) };
+        let ty_ctx = unsafe { ffi::WasmEdge_TableInstanceGetTableType(self.inner.lock().0) };
         match ty_ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Table(TableError::Type))),
             false => Ok(TableType {
@@ -87,7 +90,7 @@ impl Table {
         let raw_val = unsafe {
             let mut data = ffi::WasmEdge_ValueGenI32(0);
             check(ffi::WasmEdge_TableInstanceGetData(
-                self.inner.0,
+                self.inner.lock().0,
                 &mut data as *mut _,
                 idx,
             ))?;
@@ -110,7 +113,7 @@ impl Table {
     pub fn set_data(&mut self, data: WasmValue, idx: u32) -> WasmEdgeResult<()> {
         unsafe {
             check(ffi::WasmEdge_TableInstanceSetData(
-                self.inner.0,
+                self.inner.lock().0,
                 data.as_raw(),
                 idx,
             ))
@@ -134,7 +137,7 @@ impl Table {
     /// ```
     ///
     pub fn capacity(&self) -> usize {
-        unsafe { ffi::WasmEdge_TableInstanceGetSize(self.inner.0) as usize }
+        unsafe { ffi::WasmEdge_TableInstanceGetSize(self.inner.lock().0) as usize }
     }
 
     /// Increases the capacity of the [Table].
@@ -149,19 +152,21 @@ impl Table {
     ///
     /// If fail to increase the size of the [Table], then an error is returned.
     pub fn grow(&mut self, size: u32) -> WasmEdgeResult<()> {
-        unsafe { check(ffi::WasmEdge_TableInstanceGrow(self.inner.0, size)) }
+        unsafe { check(ffi::WasmEdge_TableInstanceGrow(self.inner.lock().0, size)) }
     }
 
     /// Provides a raw pointer to the inner table context.
     #[cfg(feature = "ffi")]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_TableInstanceContext {
-        self.inner.0 as *const _
+        self.inner.lock().0 as *const _
     }
 }
 impl Drop for Table {
     fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_TableInstanceDelete(self.inner.0) };
+        if self.registered {
+            self.inner.lock().0 = std::ptr::null_mut();
+        } else if Arc::strong_count(&self.inner) == 1 && !self.inner.lock().0.is_null() {
+            unsafe { ffi::WasmEdge_TableInstanceDelete(self.inner.lock().0) };
         }
     }
 }
@@ -169,7 +174,7 @@ impl Clone for Table {
     fn clone(&self) -> Self {
         Table {
             inner: self.inner.clone(),
-            registered: false,
+            registered: self.registered,
         }
     }
 }
@@ -346,7 +351,7 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -406,7 +411,7 @@ mod tests {
         let table = result.unwrap();
 
         let handle = thread::spawn(move || {
-            assert!(!table.inner.0.is_null());
+            assert!(!table.inner.lock().0.is_null());
 
             // check capacity
             assert_eq!(table.capacity(), 10);
@@ -488,10 +493,9 @@ mod tests {
     }
 
     #[sys_host_function]
-    fn real_add<T>(
+    fn real_add(
         _frame: CallingFrame,
         input: Vec<WasmValue>,
-        _: Option<&mut T>,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         println!("Rust: Entering Rust function real_add");
 

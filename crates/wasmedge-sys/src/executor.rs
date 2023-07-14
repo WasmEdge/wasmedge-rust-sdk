@@ -4,11 +4,12 @@ use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::r#async::{AsyncState, FiberFuture};
 use crate::{
-    error::WasmEdgeError, instance::module::InnerInstance, types::WasmEdgeString, utils::check,
-    Config, Engine, FuncRef, Function, ImportObject, Instance, Module, Statistics, Store,
-    WasmEdgeResult, WasmValue,
+    instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
+    Function, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult, WasmValue,
 };
+use parking_lot::Mutex;
 use std::sync::Arc;
+use wasmedge_types::error::WasmEdgeError;
 
 /// Defines an execution environment for both pure WASM and compiled WASM.
 #[derive(Debug, Clone)]
@@ -134,7 +135,7 @@ impl Executor {
         }
 
         Ok(Instance {
-            inner: std::sync::Arc::new(InnerInstance(instance_ctx)),
+            inner: Arc::new(Mutex::new(InnerInstance(instance_ctx))),
             registered: false,
         })
     }
@@ -169,7 +170,7 @@ impl Executor {
             ))?;
         }
         Ok(Instance {
-            inner: std::sync::Arc::new(InnerInstance(instance_ctx)),
+            inner: Arc::new(Mutex::new(InnerInstance(instance_ctx))),
             registered: false,
         })
     }
@@ -195,7 +196,7 @@ impl Executor {
             check(ffi::WasmEdge_ExecutorRegisterImport(
                 self.inner.0,
                 store.inner.0,
-                instance.inner.0 as *const _,
+                instance.inner.lock().0 as *const _,
             ))?;
         }
 
@@ -228,7 +229,7 @@ impl Executor {
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
-                func.inner.0 as *const _,
+                func.inner.lock().0 as *const _,
                 raw_params.as_ptr(),
                 raw_params.len() as u32,
                 returns.as_mut_ptr(),
@@ -368,7 +369,7 @@ mod tests {
     use crate::{instance::module::AsyncWasiModule, Loader, Validator};
     use crate::{
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
-        MemType, Memory, Statistics, Table, TableType,
+        MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -443,18 +444,20 @@ mod tests {
         assert!(result.is_ok());
         let mut store = result.unwrap();
 
-        let host_name = "extern";
-
         // create an ImportObj module
+        let host_name = "extern";
         let result = ImportModule::<NeverType>::create(host_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
+
+        assert_eq!(HOST_FUNCS.read().len(), 0);
+        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
 
         // add host function "func-add": (externref, i32) -> (i32)
         let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create::<NeverType>(&func_ty, real_add, None, 0);
+        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
         assert!(result.is_ok());
         let host_func = result.unwrap();
         // add the function into the import_obj module
@@ -491,6 +494,7 @@ mod tests {
         import.add_global("global_i32", host_global);
 
         let import = ImportObject::Import(import);
+
         let result = executor.register_import_object(&mut store, &import);
         assert!(result.is_ok());
 
@@ -616,10 +620,14 @@ mod tests {
         }
         tokio::spawn(tick());
 
+        dbg!("call async host func");
+
         let async_state = AsyncState::new();
         let _ = executor
             .call_func_async(&async_state, &fn_start, [])
             .await?;
+
+        dbg!("call async host func done");
 
         Ok(())
     }
@@ -627,6 +635,24 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_executor_run_async_host_func() -> Result<(), Box<dyn std::error::Error>> {
+        fn async_hello(
+            _frame: CallingFrame,
+            _inputs: Vec<WasmValue>,
+            _: *mut std::os::raw::c_void,
+        ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
+        {
+            Box::new(async move {
+                for _ in 0..10 {
+                    println!("[async hello] say hello");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+
+                println!("[async hello] Done!");
+
+                Ok(vec![])
+            })
+        }
+
         // create a Config
         let mut config = Config::create()?;
         config.wasi(true);
@@ -654,7 +680,7 @@ mod tests {
         assert!(result.is_ok());
 
         let ty = FuncType::create([], [])?;
-        let async_hello_func = Function::create_async::<NeverType>(&ty, async_hello, None, 0)?;
+        let async_hello_func = Function::create_async_func(&ty, Box::new(async_hello), 0)?;
         let mut import = ImportModule::<NeverType>::create("extern", None)?;
         import.add_func("async_hello", async_hello_func);
 
@@ -683,10 +709,9 @@ mod tests {
     }
 
     #[sys_host_function]
-    fn real_add<T>(
+    fn real_add(
         _frame: CallingFrame,
         inputs: Vec<WasmValue>,
-        _: Option<&mut T>,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         if inputs.len() != 2 {
             return Err(HostFuncError::User(1));
@@ -714,7 +739,7 @@ mod tests {
     async fn async_hello<T>(
         _frame: CallingFrame,
         _inputs: Vec<WasmValue>,
-        _data: Option<&mut T>,
+        _data: *mut std::os::raw::c_void,
     ) -> Result<Vec<WasmValue>, HostFuncError> {
         for _ in 0..10 {
             println!("[async hello] say hello");

@@ -25,11 +25,7 @@ use wasmedge_sys::{
 use wasmedge_types::{error::HostFuncError, wat2wasm, NeverType, ValType};
 
 #[sys_host_function]
-fn real_add<T>(
-    _frame: CallingFrame,
-    input: Vec<WasmValue>,
-    _: Option<&mut T>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
+fn real_add(_frame: CallingFrame, input: Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError> {
     println!("Rust: Entering Rust function real_add");
 
     if input.len() != 3 {
@@ -61,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         vec![ValType::ExternRef, ValType::I32, ValType::I32],
         vec![ValType::I32],
     )?;
-    let host_func = Function::create::<NeverType>(&func_ty, real_add, None, 0)?;
+    let host_func = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0)?;
 
     // create an ImportObject module
     let mut import = ImportModule::<NeverType>::create("extern_module", None)?;
@@ -102,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let active_instance = executor.register_active_module(&mut store, &module)?;
     let call_add = active_instance.get_func("call_add")?;
 
-    let add_ref = WasmValue::from_extern_ref(&mut real_add::<NeverType>);
+    let add_ref = WasmValue::from_extern_ref(&mut real_add);
     let returns = executor.call_func(
         &call_add,
         [

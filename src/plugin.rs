@@ -1,10 +1,7 @@
 //! Defines plugin related structs.
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncHostFn;
 use crate::{
-    instance::Instance, io::WasmValTypeList, Finalizer, FuncType, Global, HostFn, Memory, Table,
-    WasmEdgeResult,
+    instance::Instance, io::WasmValTypeList, FuncType, Global, Memory, Table, WasmEdgeResult,
 };
 use wasmedge_sys::{self as sys, AsImport};
 pub mod ffi {
@@ -12,6 +9,8 @@ pub mod ffi {
         WasmEdge_ModuleDescriptor, WasmEdge_ModuleInstanceContext, WasmEdge_PluginDescriptor,
     };
 }
+
+use crate::{error::HostFuncError, CallingFrame, WasmValue};
 
 /// Defines the API to manage plugins.
 #[derive(Debug)]
@@ -230,7 +229,6 @@ pub struct PluginModuleBuilder<T: Send + Sync + Clone> {
     memories: Vec<(String, sys::Memory)>,
     tables: Vec<(String, sys::Table)>,
     host_data: Option<Box<T>>,
-    finalizer: Option<Finalizer>,
 }
 impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     /// Creates a new [PluginModuleBuilder].
@@ -241,11 +239,10 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
             memories: Vec::new(),
             tables: Vec::new(),
             host_data: None,
-            finalizer: None,
         }
     }
 
-    /// Adds a [host function](crate::Func) to the [PluginModule] to create.
+    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
     ///
@@ -255,22 +252,33 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// * `real_func` - The native function.
     ///
+    /// * `data` - The additional data object to set to this host function context.
+    ///
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func<Args, Rets>(
+    pub fn with_func<Args, Rets, D>(
         mut self,
         name: impl AsRef<str>,
-        real_func: HostFn<T>,
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+                *mut std::os::raw::c_void,
+            ) -> Result<Vec<WasmValue>, HostFuncError>
+            + Send
+            + Sync
+            + 'static,
+        data: Option<&mut D>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
         Rets: WasmValTypeList,
     {
+        let boxed_func = Box::new(real_func);
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create::<T>(&ty.into(), real_func, None, 0)?;
+        let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
@@ -289,10 +297,18 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn with_func_async<Args, Rets>(
+    pub fn with_async_func<Args, Rets>(
         mut self,
         name: impl AsRef<str>,
-        real_func: AsyncHostFn<T>,
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+                *mut std::os::raw::c_void,
+            ) -> Box<
+                dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send,
+            > + Send
+            + Sync
+            + 'static,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -301,7 +317,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_async(&ty.into(), real_func, None, 0)?;
+        let inner_func = sys::Function::create_async_func(&ty.into(), Box::new(real_func), 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
@@ -353,9 +369,8 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// * `finalizer` - The function to drop the host data. Notice that this argument is available only if `host_data` is set some value.
     ///
-    pub fn with_host_data(mut self, host_data: Box<T>, finalizer: Option<Finalizer>) -> Self {
+    pub fn with_host_data(mut self, host_data: Box<T>) -> Self {
         self.host_data = Some(host_data);
-        self.finalizer = finalizer;
         self
     }
 
@@ -369,8 +384,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// If fail to create the [PluginModule], then an error is returned.
     pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<PluginModule<T>> {
-        let mut inner =
-            sys::plugin::PluginModule::create(name.as_ref(), self.host_data, self.finalizer)?;
+        let mut inner = sys::plugin::PluginModule::create(name.as_ref(), self.host_data)?;
 
         // add func
         for (name, func) in self.funcs.into_iter() {

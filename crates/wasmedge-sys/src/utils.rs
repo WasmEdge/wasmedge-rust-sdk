@@ -1,16 +1,16 @@
 //! Defines the versioning and logging functions.
 
 use crate::{
-    error::{
-        CoreCommonError, CoreError, CoreExecutionError, CoreInstantiationError, CoreLoadError,
-        CoreValidationError, WasmEdgeError,
-    },
     ffi::{self, WasmEdge_Result, WasmEdge_ResultGetCode, WasmEdge_ResultOK},
     WasmEdgeResult,
 };
 use std::{
     ffi::{CStr, CString},
     path::Path,
+};
+use wasmedge_types::error::{
+    CoreCommonError, CoreError, CoreExecutionError, CoreInstantiationError, CoreLoadError,
+    CoreValidationError, WasmEdgeError,
 };
 
 #[cfg(unix)]

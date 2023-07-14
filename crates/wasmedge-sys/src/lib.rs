@@ -41,6 +41,12 @@
 
 #![deny(rust_2018_idioms, unreachable_pub)]
 
+#[macro_use]
+extern crate lazy_static;
+
+use parking_lot::{Mutex, RwLock};
+use std::{collections::HashMap, sync::Arc};
+
 #[allow(warnings)]
 /// Foreign function interfaces generated from WasmEdge C-API.
 pub mod ffi {
@@ -97,7 +103,7 @@ pub use instance::module::WasiModule;
 pub use instance::{function::AsyncHostFn, module::AsyncWasiModule};
 #[doc(inline)]
 pub use instance::{
-    function::{FuncRef, FuncType, Function, HostFn},
+    function::{FuncRef, FuncType, Function},
     global::{Global, GlobalType},
     memory::{MemType, Memory},
     module::{AsImport, AsInstance, ImportModule, ImportObject, Instance},
@@ -113,11 +119,48 @@ pub use store::Store;
 pub use types::WasmValue;
 #[doc(inline)]
 pub use validator::Validator;
-use wasmedge_types::{error, WasmEdgeResult};
+use wasmedge_types::{error::HostFuncError, WasmEdgeResult};
 
 /// Type of wasi context that is used to configure the wasi environment.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
+
+pub type BoxedFn = Box<
+    dyn Fn(
+            CallingFrame,
+            Vec<WasmValue>,
+            *mut std::os::raw::c_void,
+        ) -> Result<Vec<WasmValue>, HostFuncError>
+        + Send
+        + Sync,
+>;
+
+lazy_static! {
+    pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
+        RwLock::new(HashMap::new());
+}
+
+/// Type alias for a boxed native function. This type is used in thread-safe cases.
+pub type BoxedAsyncFn = Box<
+    dyn Fn(
+            CallingFrame,
+            Vec<WasmValue>,
+            *mut std::os::raw::c_void,
+        )
+            -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>
+        + Send
+        + Sync,
+>;
+
+lazy_static! {
+    pub static ref ASYNC_HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedAsyncFn>>>> =
+        RwLock::new(HashMap::new());
+}
+
+// Stores the mapping from the address of each host function pointer to the key of the `HOST_FUNCS`.
+lazy_static! {
+    pub static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> = Mutex::new(HashMap::new());
+}
 
 /// The object that is used to perform a [host function](crate::Function) is required to implement this trait.
 pub trait Engine {
