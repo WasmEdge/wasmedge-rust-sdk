@@ -688,7 +688,7 @@ mod tests {
         let ty = FuncType::create([], [])?;
         let async_hello_func =
             Function::create_async_func::<NeverType>(&ty, Box::new(async_hello), None, 0)?;
-        let mut import = ImportModule::create::<NeverType>("extern", None)?;
+        let mut import = ImportModule::<NeverType>::create("extern", None)?;
         import.add_func("async_hello", async_hello_func);
 
         let extern_import = ImportObject::Import(import);

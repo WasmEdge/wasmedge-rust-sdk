@@ -380,11 +380,11 @@ impl Function {
     pub fn create_sync_func<T>(
         ty: &FuncType,
         real_fn: BoxedFn,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let data = match data {
-            Some(d) => d as *mut T as *mut std::os::raw::c_void,
+            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
             None => std::ptr::null_mut(),
         };
 
@@ -1011,22 +1011,22 @@ mod tests {
             _v: Vec<T>,
             _s: Vec<S>,
         }
-        let mut data: Data<i32, &str> = Data {
+        let data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
             _s: vec!["macos", "linux", "windows"],
         };
 
-        #[sys_host_function]
         fn real_add<T: core::fmt::Debug>(
             _frame: CallingFrame,
             input: Vec<WasmValue>,
-            data: &mut Data<i32, &str>,
+            data: *mut std::ffi::c_void,
         ) -> Result<Vec<WasmValue>, HostFuncError> {
             println!("Rust: Entering Rust function real_add");
 
-            println!("data: {:?}", data);
+            let host_data = unsafe { Box::from_raw(data as *mut T) };
+            println!("host_data: {:?}", host_data);
 
             if input.len() != 2 {
                 return Err(HostFuncError::User(1));
@@ -1059,7 +1059,12 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_sync_func(&func_ty, Box::new(real_add), Some(&mut data), 0);
+        let result = Function::create_sync_func(
+            &func_ty,
+            Box::new(real_add::<Data<i32, &str>>),
+            Some(Box::new(data)),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
