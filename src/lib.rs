@@ -138,7 +138,7 @@ pub type HostFn<T> = wasmedge_sys::instance::function::HostFn<T>;
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async {
     /// The state of an asynchronous task.
-    pub type AsyncState = wasmedge_sys::r#async::AsyncState;
+    pub type AsyncState = wasmedge_sys::r#async::fiber::AsyncState;
     /// Defines the signature of an asynchronous host function.
     pub type AsyncHostFn<T> = wasmedge_sys::AsyncHostFn<T>;
     /// Type of wasi context that is used to configure the wasi environment.
