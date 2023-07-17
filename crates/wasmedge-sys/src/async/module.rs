@@ -1,8 +1,10 @@
 use crate::{
     ffi,
-    instance::function::{AsyncHostFn, HostFn},
     instance::{
-        function::InnerFunc, global::InnerGlobal, memory::InnerMemory, module::InnerInstance,
+        function::{AsyncHostFn, HostFn, InnerFunc},
+        global::InnerGlobal,
+        memory::InnerMemory,
+        module::InnerInstance,
         table::InnerTable,
     },
     types::WasmEdgeString,
