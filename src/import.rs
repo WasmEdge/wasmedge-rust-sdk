@@ -54,7 +54,7 @@ impl ImportObjectBuilder {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut D>,
+        data: Option<Box<D>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -98,7 +98,7 @@ impl ImportObjectBuilder {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut D>,
+        data: Option<Box<D>>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
