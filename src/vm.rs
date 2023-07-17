@@ -252,7 +252,7 @@ impl VmBuilder {
 ///     #[cfg(not(feature = "async"))]
 ///     {
 ///         // create a Vm context
-///         let vm = VmBuilder::new().build::<NeverType>()?;
+///         let vm = VmBuilder::new().build()?;
 ///
 ///         // register a wasm module from the given in-memory wasm bytes
 ///         let wasm_bytes = wat2wasm(
