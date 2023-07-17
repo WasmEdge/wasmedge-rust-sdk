@@ -56,7 +56,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut D>,
+        data: Option<Box<D>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -100,7 +100,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut D>,
+        data: Option<Box<D>>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
@@ -122,7 +122,7 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn with_async_func<Args, Rets>(
+    pub fn with_async_func<Args, Rets, D>(
         mut self,
         name: impl AsRef<str>,
         real_func: impl Fn(
@@ -134,15 +134,18 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
             > + Send
             + Sync
             + 'static,
+        data: Option<Box<D>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
         Rets: WasmValTypeList,
+        D: Send + Sync,
     {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_async_func(&ty.into(), Box::new(real_func), 0)?;
+        let inner_func =
+            sys::Function::create_async_func(&ty.into(), Box::new(real_func), data, 0)?;
         self.funcs.push((name.as_ref().to_owned(), inner_func));
         Ok(self)
     }
