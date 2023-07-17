@@ -398,10 +398,10 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_func_basic() {
         // create an ImportModule
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -527,15 +527,15 @@ mod tests {
         };
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             // .with_sync_closure::<(i32, i32), i32>("add", real_add)?
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)?
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
         // create a Vm context
-        let result = VmBuilder::new().build::<NeverType>();
+        let result = VmBuilder::new().build();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -590,14 +590,14 @@ mod tests {
         };
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_async_func::<(), (), Data<i32, &str>>("async_hello", c, Some(Box::new(data)))?
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
         // create a Vm context
-        let result = VmBuilder::new().build::<NeverType>();
+        let result = VmBuilder::new().build();
         assert!(result.is_ok());
         let vm = result.unwrap();
 

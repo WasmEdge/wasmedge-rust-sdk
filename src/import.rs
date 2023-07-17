@@ -11,14 +11,13 @@ use wasmedge_sys::{self as sys, AsImport, WasmValue};
 /// This example shows how to create a normal import object that contains a host function, a global variable, a memory and a table. The import object is named "extern".
 ///
 #[derive(Debug, Default)]
-pub struct ImportObjectBuilder<T: Send + Sync + Clone> {
+pub struct ImportObjectBuilder {
     funcs: Vec<(String, sys::Function)>,
     globals: Vec<(String, sys::Global)>,
     memories: Vec<(String, sys::Memory)>,
     tables: Vec<(String, sys::Table)>,
-    host_data: Option<Box<T>>,
 }
-impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
+impl ImportObjectBuilder {
     /// Creates a new [ImportObjectBuilder].
     pub fn new() -> Self {
         Self {
@@ -26,7 +25,6 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
             globals: Vec::new(),
             memories: Vec::new(),
             tables: Vec::new(),
-            host_data: None,
         }
     }
 
@@ -189,28 +187,23 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
         self
     }
 
-    /// Adds host data to the [ImportObject] to create.
-    ///
-    /// # Arguments
-    ///
-    /// * `host_data` - The host data to be stored in the module instance.
-    ///
-    pub fn with_host_data(mut self, host_data: Box<T>) -> Self {
-        self.host_data = Some(host_data);
-        self
-    }
-
     /// Creates a new [ImportObject].
     ///
     /// # Argument
     ///
     /// * `name` - The name of the [ImportObject] to create.
     ///
+    /// * `host_data` - The host data to be stored in the module instance.
+    ///
     /// # Error
     ///
     /// If fail to create the [ImportObject], then an error is returned.
-    pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<ImportObject<T>> {
-        let mut inner = sys::ImportModule::create(name.as_ref(), self.host_data)?;
+    pub fn build<T: Send + Sync>(
+        self,
+        name: impl AsRef<str>,
+        host_data: Option<Box<T>>,
+    ) -> WasmEdgeResult<ImportObject> {
+        let mut inner = sys::ImportModule::create(name.as_ref(), host_data)?;
 
         // add func
         for (name, func) in self.funcs.into_iter() {
@@ -240,8 +233,8 @@ impl<T: Send + Sync + Clone> ImportObjectBuilder<T> {
 ///
 /// An [ImportObject] instance is created with [ImportObjectBuilder](crate::ImportObjectBuilder).
 #[derive(Debug, Clone)]
-pub struct ImportObject<T: Send + Sync + Clone>(pub(crate) sys::ImportObject<T>);
-impl<T: Send + Sync + Clone> ImportObject<T> {
+pub struct ImportObject(pub(crate) sys::ImportObject);
+impl ImportObject {
     /// Returns the name of the import object.
     pub fn name(&self) -> &str {
         match &self.0 {
@@ -253,7 +246,7 @@ impl<T: Send + Sync + Clone> ImportObject<T> {
         }
     }
 
-    pub(crate) fn inner_ref(&self) -> &sys::ImportObject<T> {
+    pub(crate) fn inner_ref(&self) -> &sys::ImportObject {
         &self.0
     }
 
@@ -283,7 +276,7 @@ mod tests {
     #[test]
     #[allow(clippy::assertions_on_result_states)]
     fn test_import_builder() {
-        let result = ImportObjectBuilder::<NeverType>::new().build("extern");
+        let result = ImportObjectBuilder::new().build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
         assert_eq!(import.name(), "extern");
@@ -298,11 +291,9 @@ mod tests {
             radius: i32,
         }
 
-        let circle = Box::new(Circle { radius: 10 });
+        let circle = Circle { radius: 10 };
 
-        let result = ImportObjectBuilder::<Circle>::new()
-            .with_host_data(circle)
-            .build("extern");
+        let result = ImportObjectBuilder::new().build("extern", Some(Box::new(circle)));
         assert!(result.is_ok());
 
         let import = result.unwrap();
@@ -359,10 +350,10 @@ mod tests {
         }
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -420,9 +411,9 @@ mod tests {
         let memory = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_memory("memory", memory)
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -500,10 +491,10 @@ mod tests {
         let global_var = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_global("const-global", global_const)
             .with_global("var-global", global_var)
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -605,11 +596,11 @@ mod tests {
         let table = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
             .with_table("table", table)
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -732,13 +723,13 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("memory", memory)
             .with_table("table", table)
-            .build("extern-module-send");
+            .build::<NeverType>("extern-module-send", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -850,13 +841,13 @@ mod tests {
         let table = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("memory", memory)
             .with_table("table", table)
-            .build("extern-module-sync");
+            .build::<NeverType>("extern-module-sync", None);
         assert!(result.is_ok());
         let import = result.unwrap();
         let import = Arc::new(Mutex::new(import));
