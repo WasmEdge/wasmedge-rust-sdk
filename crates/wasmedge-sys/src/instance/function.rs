@@ -380,11 +380,11 @@ impl Function {
     pub fn create_sync_func<T>(
         ty: &FuncType,
         real_fn: BoxedFn,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let data = match data {
-            Some(d) => d as *mut T as *mut std::os::raw::c_void,
+            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
             None => std::ptr::null_mut(),
         };
 
@@ -463,11 +463,17 @@ impl Function {
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn create_async_func(
+    pub fn create_async_func<T: Send + Sync>(
         ty: &FuncType,
         real_fn: BoxedAsyncFn,
+        data: Option<Box<T>>,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
+        let data = match data {
+            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
+            None => std::ptr::null_mut(),
+        };
+
         let mut map_host_func = ASYNC_HOST_FUNCS.write();
 
         // generate key for the coming host function
@@ -484,7 +490,7 @@ impl Function {
                 ty.inner.0,
                 Some(wrap_async_fn),
                 key as *const usize as *mut c_void,
-                std::ptr::null_mut(),
+                data,
                 cost,
             )
         };
@@ -934,8 +940,6 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use wasmedge_macro::sys_async_host_function;
     use wasmedge_macro::sys_host_function;
     use wasmedge_types::{NeverType, ValType};
 
@@ -1005,22 +1009,22 @@ mod tests {
             _v: Vec<T>,
             _s: Vec<S>,
         }
-        let mut data: Data<i32, &str> = Data {
+        let data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
             _s: vec!["macos", "linux", "windows"],
         };
 
-        #[sys_host_function]
-        fn real_add(
+        fn real_add<T: core::fmt::Debug>(
             _frame: CallingFrame,
             input: Vec<WasmValue>,
-            data: &mut Data<i32, &str>,
+            data: *mut std::ffi::c_void,
         ) -> Result<Vec<WasmValue>, HostFuncError> {
             println!("Rust: Entering Rust function real_add");
 
-            println!("data: {:?}", data);
+            let host_data = unsafe { Box::from_raw(data as *mut T) };
+            println!("host_data: {:?}", host_data);
 
             if input.len() != 2 {
                 return Err(HostFuncError::User(1));
@@ -1053,7 +1057,12 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_sync_func(&func_ty, Box::new(real_add), Some(&mut data), 0);
+        let result = Function::create_sync_func(
+            &func_ty,
+            Box::new(real_add::<Data<i32, &str>>),
+            Some(Box::new(data)),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -1498,17 +1507,42 @@ mod tests {
     #[tokio::test]
     async fn test_func_async_closure() -> Result<(), Box<dyn std::error::Error>> {
         {
+            #[derive(Debug)]
+            struct Data<T, S> {
+                _x: i32,
+                _y: String,
+                _v: Vec<T>,
+                _s: Vec<S>,
+            }
+            impl<T, S> Drop for Data<T, S> {
+                fn drop(&mut self) {
+                    println!("Dropping Data");
+                }
+            }
+
+            let data: Data<i32, &str> = Data {
+                _x: 12,
+                _y: "hello".to_string(),
+                _v: vec![1, 2, 3],
+                _s: vec!["macos", "linux", "windows"],
+            };
+
             // define an async closure
             let c = |_frame: CallingFrame,
                      _args: Vec<WasmValue>,
-                     _: *mut std::os::raw::c_void|
+                     data: *mut std::os::raw::c_void|
              -> Box<
                 (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
             > {
+                // let host_data = unsafe { &mut *(data as *mut Data<i32, &str>) };
+                let host_data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
+
                 Box::new(async move {
                     for _ in 0..10 {
                         println!("[async hello] say hello");
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                        println!("host_data: {:?}", host_data);
                     }
 
                     println!("[async hello] Done!");
@@ -1523,7 +1557,8 @@ mod tests {
             let func_ty = result.unwrap();
 
             // create an async host function
-            let result = Function::create_async_func(&func_ty, Box::new(c), 0);
+            let result =
+                Function::create_async_func(&func_ty, Box::new(c), Some(Box::new(data)), 0);
             assert!(result.is_ok());
             let async_hello_func = result.unwrap();
 
@@ -1584,20 +1619,40 @@ mod tests {
     #[tokio::test]
     async fn test_func_async_func() -> Result<(), Box<dyn std::error::Error>> {
         {
+            #[derive(Debug)]
+            struct Data<T, S> {
+                _x: i32,
+                _y: String,
+                _v: Vec<T>,
+                _s: Vec<S>,
+            }
+            let data: Data<i32, &str> = Data {
+                _x: 12,
+                _y: "hello".to_string(),
+                _v: vec![1, 2, 3],
+                _s: vec!["macos", "linux", "windows"],
+            };
+
             // define async host function
-            #[sys_async_host_function]
-            async fn f(
+            fn f<T: core::fmt::Debug + Send + Sync + 'static>(
                 _frame: CallingFrame,
                 _args: Vec<WasmValue>,
-            ) -> Result<Vec<WasmValue>, HostFuncError> {
-                for _ in 0..10 {
-                    println!("[async hello] say hello");
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                }
+                data: *mut std::ffi::c_void,
+            ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
+            {
+                let data = unsafe { Box::from_raw(data as *mut T) };
 
-                println!("[async hello] Done!");
+                Box::new(async move {
+                    for _ in 0..10 {
+                        println!("[async hello] say hello");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        println!("host_data: {:?}", data);
+                    }
 
-                Ok(vec![])
+                    println!("[async hello] Done!");
+
+                    Ok(vec![])
+                })
             }
 
             // create a FuncType
@@ -1606,7 +1661,12 @@ mod tests {
             let func_ty = result.unwrap();
 
             // create an async host function
-            let result = Function::create_async_func(&func_ty, Box::new(f), 0);
+            let result = Function::create_async_func(
+                &func_ty,
+                Box::new(f::<Data<i32, &str>>),
+                Some(Box::new(data)),
+                0,
+            );
             assert!(result.is_ok());
             let async_hello_func = result.unwrap();
 
