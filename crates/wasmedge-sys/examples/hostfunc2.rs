@@ -48,7 +48,7 @@ fn real_add(_frame: CallingFrame, input: Vec<WasmValue>) -> Result<Vec<WasmValue
 #[cfg_attr(test, test)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::create()?;
-    let mut import = ImportModule::<NeverType>::create("extern_module", None)?;
+    let mut import = ImportModule::create::<NeverType>("extern_module", None)?;
 
     let result = FuncType::create(
         vec![ValType::ExternRef, ValType::I32, ValType::I32],

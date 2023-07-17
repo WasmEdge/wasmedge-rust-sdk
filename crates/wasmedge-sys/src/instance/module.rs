@@ -14,7 +14,7 @@ use crate::{
 use parking_lot::Mutex;
 #[cfg(all(feature = "async", target_os = "linux"))]
 use std::path::PathBuf;
-use std::{os::raw::c_void, sync::Arc};
+use std::sync::Arc;
 use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
@@ -388,14 +388,13 @@ pub trait AsInstance {
 
 /// An [ImportModule] represents a host module with a name. A host module consists of one or more host [function](crate::Function), [table](crate::Table), [memory](crate::Memory), and [global](crate::Global) instances,  which are defined outside wasm modules and fed into wasm modules as imports.
 #[derive(Debug, Clone)]
-pub struct ImportModule<T: Send + Sync + Clone> {
+pub struct ImportModule {
     pub(crate) inner: Arc<InnerInstance>,
     pub(crate) registered: bool,
     name: String,
-    _host_data: Option<Box<T>>,
     funcs: Vec<Function>,
 }
-impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
+impl Drop for ImportModule {
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             // free the module instance
@@ -408,7 +407,7 @@ impl<T: Send + Sync + Clone> Drop for ImportModule<T> {
         }
     }
 }
-impl<T: Send + Sync + Clone> ImportModule<T> {
+impl ImportModule {
     /// Creates a module instance which is used to import host functions, tables, memories, and globals into a wasm module.
     ///
     /// # Argument
@@ -420,17 +419,23 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
     /// # Error
     ///
     /// If fail to create the import module instance, then an error is returned.
-    pub fn create(name: impl AsRef<str>, mut host_data: Option<Box<T>>) -> WasmEdgeResult<Self> {
+    pub fn create<T: Send + Sync>(
+        name: impl AsRef<str>,
+        host_data: Option<Box<T>>,
+    ) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
-        let ctx = match host_data.as_mut() {
-            Some(data) => unsafe {
-                ffi::WasmEdge_ModuleInstanceCreateWithData(
-                    raw_name.as_raw(),
-                    data.as_mut() as *mut T as *mut c_void,
-                    None,
-                )
-            },
+        let ctx = match host_data {
+            Some(boxed_data) => {
+                let p = Box::into_raw(boxed_data);
+                unsafe {
+                    ffi::WasmEdge_ModuleInstanceCreateWithData(
+                        raw_name.as_raw(),
+                        p as *mut std::ffi::c_void,
+                        Some(host_data_finalizer::<T>),
+                    )
+                }
+            }
             None => unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) },
         };
 
@@ -438,22 +443,12 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
             true => Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::CreateImportModule,
             ))),
-            false => match host_data.is_some() {
-                true => Ok(Self {
-                    inner: std::sync::Arc::new(InnerInstance(ctx)),
-                    registered: false,
-                    name: name.as_ref().to_string(),
-                    _host_data: host_data,
-                    funcs: Vec::new(),
-                }),
-                false => Ok(Self {
-                    inner: std::sync::Arc::new(InnerInstance(ctx)),
-                    registered: false,
-                    name: name.as_ref().to_string(),
-                    _host_data: None,
-                    funcs: Vec::new(),
-                }),
-            },
+            false => Ok(Self {
+                inner: std::sync::Arc::new(InnerInstance(ctx)),
+                registered: false,
+                name: name.as_ref().to_string(),
+                funcs: Vec::new(),
+            }),
         }
     }
 
@@ -463,7 +458,7 @@ impl<T: Send + Sync + Clone> ImportModule<T> {
         self.inner.0 as *const _
     }
 }
-impl<T: Send + Sync + Clone> AsImport for ImportModule<T> {
+impl AsImport for ImportModule {
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -1419,9 +1414,9 @@ pub trait AsImport {
 
 /// Defines three types of module instances that can be imported into a WasmEdge [Store](crate::Store) instance.
 #[derive(Debug, Clone)]
-pub enum ImportObject<T: Send + Sync + Clone> {
+pub enum ImportObject {
     /// Defines the import module instance of ImportModule type.
-    Import(ImportModule<T>),
+    Import(ImportModule),
     /// Defines the import module instance of WasiModule type.
     #[cfg(not(feature = "async"))]
     Wasi(WasiModule),
@@ -1429,7 +1424,7 @@ pub enum ImportObject<T: Send + Sync + Clone> {
     #[cfg(all(feature = "async", target_os = "linux"))]
     AsyncWasi(AsyncWasiModule),
 }
-impl<T: Send + Sync + Clone> ImportObject<T> {
+impl ImportObject {
     /// Returns the name of the import object.
     pub fn name(&self) -> &str {
         match self {
@@ -1452,6 +1447,13 @@ impl<T: Send + Sync + Clone> ImportObject<T> {
             ImportObject::AsyncWasi(async_wasi) => async_wasi.inner.0,
         }
     }
+}
+
+pub(crate) unsafe extern "C" fn host_data_finalizer<T: Sized + Send>(
+    raw: *mut ::std::os::raw::c_void,
+) {
+    let host_data: Box<T> = Box::from_raw(raw as *mut T);
+    drop(host_data);
 }
 
 #[cfg(test)]
@@ -1477,7 +1479,7 @@ mod tests {
         let host_name = "extern";
 
         // create an import module
-        let result = ImportModule::<NeverType>::create(host_name, None);
+        let result = ImportModule::create::<NeverType>(host_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -1535,7 +1537,7 @@ mod tests {
         let host_name = "extern";
 
         // create an ImportModule instance
-        let result = ImportModule::<NeverType>::create(host_name, None);
+        let result = ImportModule::create::<NeverType>(host_name, None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -1554,7 +1556,7 @@ mod tests {
         let host_name = "extern";
 
         // create an ImportModule instance
-        let result = ImportModule::<NeverType>::create(host_name, None);
+        let result = ImportModule::create::<NeverType>(host_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -1704,7 +1706,7 @@ mod tests {
         let module_name = "extern_module";
 
         // create ImportModule instance
-        let result = ImportModule::<NeverType>::create(module_name, None);
+        let result = ImportModule::create::<NeverType>(module_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -1827,7 +1829,7 @@ mod tests {
         let module_name = "extern_module";
 
         // create ImportModule instance
-        let result = ImportModule::<NeverType>::create(module_name, None);
+        let result = ImportModule::create::<NeverType>(module_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -1925,7 +1927,7 @@ mod tests {
         assert!(store.module_names().is_none());
 
         // create ImportObject instance
-        let result = ImportModule::<NeverType>::create(module_name, None);
+        let result = ImportModule::create::<NeverType>(module_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -2031,7 +2033,7 @@ mod tests {
             let host_name = "extern";
 
             // create an import module
-            let result = ImportModule::<NeverType>::create(host_name, None);
+            let result = ImportModule::create::<NeverType>(host_name, None);
             assert!(result.is_ok());
             let mut import = result.unwrap();
 
@@ -2140,9 +2142,9 @@ mod tests {
             radius: i32,
         }
 
-        let circle = Box::new(Circle { radius: 10 });
+        let circle = Circle { radius: 10 };
         // create an import module
-        let result = ImportModule::create(module_name, Some(circle));
+        let result = ImportModule::create(module_name, Some(Box::new(circle)));
 
         assert!(result.is_ok());
         let import = result.unwrap();

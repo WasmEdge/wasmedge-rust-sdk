@@ -154,7 +154,7 @@ mod tests {
         assert!(store.module_names().is_none());
 
         // create ImportObject instance
-        let result = ImportModule::<NeverType>::create(module_name, None);
+        let result = ImportModule::create::<NeverType>(module_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -240,7 +240,7 @@ mod tests {
         let store_cloned = Arc::clone(&store);
         let handle = thread::spawn(move || {
             // create ImportObject instance
-            let result = ImportModule::<NeverType>::create("extern_module", None);
+            let result = ImportModule::create::<NeverType>("extern_module", None);
             assert!(result.is_ok());
             let mut import = result.unwrap();
 

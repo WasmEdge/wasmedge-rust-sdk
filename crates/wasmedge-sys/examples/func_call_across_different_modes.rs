@@ -45,7 +45,7 @@ fn interpreter_call_aot() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = Store::create()?;
 
     // create an import module
-    let mut import = ImportModule::<NeverType>::create("host", None)?;
+    let mut import = ImportModule::create::<NeverType>("host", None)?;
 
     // import host_print_i32 as a host function
     let func_ty = FuncType::create([ValType::I32], [])?;
@@ -132,7 +132,7 @@ fn aot_call_interpreter() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = Store::create()?;
 
     // create an import module
-    let mut import = ImportModule::<NeverType>::create("host", None)?;
+    let mut import = ImportModule::create::<NeverType>("host", None)?;
 
     // import host_print_i32 as a host function
     let func_ty = FuncType::create([ValType::I32], [])?;

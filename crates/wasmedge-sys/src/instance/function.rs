@@ -1327,7 +1327,7 @@ mod tests {
             let mut store = result.unwrap();
 
             // create an ImportModule
-            let mut import = ImportModule::<NeverType>::create("extern", None)?;
+            let mut import = ImportModule::create::<NeverType>("extern", None)?;
             import.add_func("add", host_func);
             let extern_import = ImportObject::Import(import);
 
@@ -1411,7 +1411,7 @@ mod tests {
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // create an ImportModule
-        let mut import_module = ImportModule::<NeverType>::create("extern", None)?;
+        let mut import_module = ImportModule::create::<NeverType>("extern", None)?;
         // add the host function to the import module
         import_module.add_func("add", host_func);
 
@@ -1579,12 +1579,12 @@ mod tests {
             let async_wasi_module = result.unwrap();
 
             // register async_wasi module into the store
-            let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
+            let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
             let result = executor.register_import_object(&mut store, &wasi_import);
             assert!(result.is_ok());
 
             // create an ImportModule
-            let mut import = ImportModule::<NeverType>::create("extern", None)?;
+            let mut import = ImportModule::create::<NeverType>("extern", None)?;
             import.add_func("async_hello", async_hello_func);
 
             let extern_import = ImportObject::Import(import);
@@ -1687,12 +1687,12 @@ mod tests {
             let async_wasi_module = result.unwrap();
 
             // register async_wasi module into the store
-            let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
+            let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
             let result = executor.register_import_object(&mut store, &wasi_import);
             assert!(result.is_ok());
 
             // create an ImportModule
-            let mut import = ImportModule::<NeverType>::create("extern", None)?;
+            let mut import = ImportModule::create::<NeverType>("extern", None)?;
             import.add_func("async_hello", async_hello_func);
 
             let extern_import = ImportObject::Import(import);
