@@ -594,9 +594,9 @@ mod tests {
         };
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_async_func::<(), (), Data<i32, &str>>("async_hello", c, Some(Box::new(data)))?
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
