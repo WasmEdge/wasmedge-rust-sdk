@@ -44,7 +44,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
@@ -78,7 +78,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -594,9 +594,9 @@ mod tests {
         };
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::new()
+        let result = ImportObjectBuilder::<NeverType>::new()
             .with_async_func::<(), (), Data<i32, &str>>("async_hello", c, Some(Box::new(data)))?
-            .build::<NeverType>("extern", None);
+            .build("extern");
         assert!(result.is_ok());
         let import = result.unwrap();
 
