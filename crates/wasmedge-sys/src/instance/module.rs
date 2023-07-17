@@ -1,15 +1,15 @@
 //! Defines WasmEdge Instance and other relevant types.
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::{
-    async_wasi::{wasi_impls, WasiFunc},
-    WasiCtx,
-};
 use crate::{
     ffi,
     instance::{function::InnerFunc, global::InnerGlobal, memory::InnerMemory, table::InnerTable},
     types::WasmEdgeString,
     Function, Global, Memory, Table, WasmEdgeResult,
+};
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::{
+    r#async::module::{wasi_impls, WasiFunc},
+    WasiCtx,
 };
 use parking_lot::Mutex;
 #[cfg(all(feature = "async", target_os = "linux"))]

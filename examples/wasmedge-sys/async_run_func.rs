@@ -9,7 +9,9 @@
 //! ```
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-use wasmedge_sys::{r#async::AsyncState, Config, Executor, Loader, Store, Validator, WasmValue};
+use wasmedge_sys::{
+    r#async::fiber::AsyncState, Config, Executor, Loader, Store, Validator, WasmValue,
+};
 #[cfg(all(feature = "async", target_os = "linux"))]
 use wasmedge_types::wat2wasm;
 

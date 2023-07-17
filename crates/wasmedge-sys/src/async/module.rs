@@ -1,9 +1,14 @@
 use crate::{
+    ffi,
     instance::function::{AsyncHostFn, HostFn},
-    CallingFrame, Memory, WasmValue,
+    instance::{
+        function::InnerFunc, global::InnerGlobal, memory::InnerMemory, module::InnerInstance,
+        table::InnerTable,
+    },
+    types::WasmEdgeString,
+    AsImport, AsInstance, CallingFrame, Function, Global, Memory, Table, WasmEdgeResult, WasmValue,
 };
-use async_wasi as wasi;
-use wasi::snapshots::{
+use async_wasi::snapshots::{
     common::{
         error::Errno,
         memory::WasmPtr,
@@ -11,100 +16,416 @@ use wasi::snapshots::{
     },
     preview_1 as p, WasiCtx,
 };
+use parking_lot::Mutex;
+use std::{path::PathBuf, sync::Arc};
 use wasmedge_macro::{sys_async_wasi_host_function, sys_wasi_host_function};
-use wasmedge_types::{error::HostFuncError, ValType};
+use wasmedge_types::{
+    error::{HostFuncError, InstanceError, WasmEdgeError},
+    ValType,
+};
 
-fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
-    let code = if let Err(e) = r { e.0 } else { 0 };
-    vec![WasmValue::from_i32(code as i32)]
+/// A [AsyncWasiModule] is a module instance for the WASI specification and used in the `async` scenario.
+#[cfg(all(feature = "async", target_os = "linux"))]
+#[derive(Debug, Clone)]
+pub struct AsyncWasiModule {
+    pub(crate) inner: Arc<InnerInstance>,
+    pub(crate) registered: bool,
+    name: String,
+    wasi_ctx: Arc<Mutex<WasiCtx>>,
+    funcs: Vec<Function>,
 }
-
-impl async_wasi::snapshots::common::memory::Memory for Memory {
-    fn get_data<T: Sized>(&self, offset: WasmPtr<T>) -> Result<&T, Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self
-                .data_pointer(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-            Ok(ptr.cast::<T>().as_ref().unwrap())
-        }
-    }
-
-    fn get_slice<T: Sized>(&self, offset: WasmPtr<T>, len: usize) -> Result<&[T], Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self
-                .data_pointer(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const T;
-            Ok(std::slice::from_raw_parts(ptr, len))
-        }
-    }
-
-    fn get_iovec<'a>(
-        &self,
-        iovec_ptr: WasmPtr<__wasi_ciovec_t>,
-        iovec_len: __wasi_size_t,
-    ) -> Result<Vec<std::io::IoSlice<'a>>, Errno> {
-        unsafe {
-            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
-            let mut result = Vec::with_capacity(iovec.len());
-            for i in iovec {
-                let ptr = self
-                    .data_pointer(i.buf, i.buf_len)
-                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-                let s = std::io::IoSlice::new(std::slice::from_raw_parts(ptr, i.buf_len as usize));
-                result.push(s);
+#[cfg(all(feature = "async", target_os = "linux"))]
+impl Drop for AsyncWasiModule {
+    fn drop(&mut self) {
+        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+            // free the module instance
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
-            Ok(result)
+
+            // drop the registered host functions
+            self.funcs.drain(..);
         }
     }
+}
+#[cfg(all(feature = "async", target_os = "linux"))]
+impl AsyncWasiModule {
+    pub fn create(
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<(&str, &str)>>,
+        preopens: Option<Vec<(PathBuf, PathBuf)>>,
+    ) -> WasmEdgeResult<Self> {
+        // create wasi context
+        let mut wasi_ctx = WasiCtx::new();
+        if let Some(args) = args {
+            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
+        }
+        if let Some(envs) = envs {
+            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+        }
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                wasi_ctx.push_preopen(host_dir, guest_dir)
+            }
+        }
 
-    fn mut_data<T: Sized>(&mut self, offset: WasmPtr<T>) -> Result<&mut T, Errno> {
+        // create wasi module
+        let name = "wasi_snapshot_preview1";
+        let raw_name = WasmEdgeString::from(name);
+        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
+        if ctx.is_null() {
+            return Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::CreateImportModule,
+            )));
+        }
+        let mut async_wasi_module = Self {
+            inner: std::sync::Arc::new(InnerInstance(ctx)),
+            registered: false,
+            name: name.to_string(),
+            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
+            funcs: Vec::new(),
+        };
+
+        // add sync/async host functions to the module
+        for wasi_func in wasi_impls() {
+            match wasi_func {
+                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create_wasi_func(
+                        &func_ty,
+                        real_fn,
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        0,
+                    )?;
+                    async_wasi_module.add_wasi_func(name, func);
+                }
+                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create_async_wasi_func(
+                        &func_ty,
+                        real_async_fn,
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        0,
+                    )?;
+                    async_wasi_module.add_wasi_func(name, func);
+                }
+            }
+        }
+
+        Ok(async_wasi_module)
+    }
+
+    fn add_wasi_func(&mut self, name: impl AsRef<str>, func: Function) {
+        let func_name: WasmEdgeString = name.into();
         unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self
-                .data_pointer_mut(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-            Ok(ptr.cast::<T>().as_mut().unwrap())
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                func.inner.lock().0,
+            );
         }
+
+        func.inner.lock().0 = std::ptr::null_mut();
     }
 
-    fn mut_slice<T: Sized>(&mut self, offset: WasmPtr<T>, len: usize) -> Result<&mut [T], Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self
-                .data_pointer_mut(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut T;
-            Ok(std::slice::from_raw_parts_mut(ptr, len))
-        }
-    }
-
-    fn mut_iovec(
+    pub fn init_wasi(
         &mut self,
-        iovec_ptr: WasmPtr<async_wasi::snapshots::env::wasi_types::__wasi_iovec_t>,
-        iovec_len: async_wasi::snapshots::env::wasi_types::__wasi_size_t,
-    ) -> Result<Vec<std::io::IoSliceMut<'_>>, Errno> {
-        unsafe {
-            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
-            let mut result = Vec::with_capacity(iovec.len());
-            for i in iovec {
-                let ptr = self
-                    .data_pointer_mut(i.buf, i.buf_len)
-                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-                let s = std::io::IoSliceMut::new(std::slice::from_raw_parts_mut(
-                    ptr,
-                    i.buf_len as usize,
-                ));
-                result.push(s);
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<(&str, &str)>>,
+        preopens: Option<Vec<(PathBuf, PathBuf)>>,
+    ) -> WasmEdgeResult<()> {
+        // create wasi context
+        let mut wasi_ctx = WasiCtx::new();
+        if let Some(args) = args {
+            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
+        }
+        if let Some(envs) = envs {
+            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+        }
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                wasi_ctx.push_preopen(host_dir, guest_dir)
             }
-            Ok(result)
+        }
+
+        self.wasi_ctx = Arc::new(Mutex::new(wasi_ctx));
+
+        // add sync/async host functions to the module
+        for wasi_func in wasi_impls() {
+            match wasi_func {
+                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create_wasi_func(
+                        &func_ty,
+                        real_fn,
+                        Some(&mut self.wasi_ctx.lock()),
+                        0,
+                    )?;
+                    self.add_wasi_func(name, func);
+                }
+                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func = Function::create_async_wasi_func(
+                        &func_ty,
+                        real_async_fn,
+                        Some(&mut self.wasi_ctx.lock()),
+                        0,
+                    )?;
+                    self.add_wasi_func(name, func);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns the WASI exit code.
+    ///
+    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
+    pub fn exit_code(&self) -> u32 {
+        self.wasi_ctx.lock().exit_code
+    }
+}
+#[cfg(all(feature = "async", target_os = "linux"))]
+impl AsInstance for AsyncWasiModule {
+    fn get_func(&self, name: impl AsRef<str>) -> WasmEdgeResult<Function> {
+        let func_name: WasmEdgeString = name.as_ref().into();
+        let func_ctx = unsafe {
+            ffi::WasmEdge_ModuleInstanceFindFunction(self.inner.0 as *const _, func_name.as_raw())
+        };
+        match func_ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::NotFoundFunc(name.as_ref().to_string()),
+            ))),
+            false => Ok(Function {
+                inner: Arc::new(Mutex::new(InnerFunc(func_ctx))),
+                registered: true,
+            }),
         }
     }
 
-    fn write_data<T: Sized>(&mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno> {
-        let p = self.mut_data(offset)?;
-        *p = data;
-        Ok(())
+    fn get_table(&self, name: impl AsRef<str>) -> WasmEdgeResult<Table> {
+        let table_name: WasmEdgeString = name.as_ref().into();
+        let ctx = unsafe {
+            ffi::WasmEdge_ModuleInstanceFindTable(self.inner.0 as *const _, table_name.as_raw())
+        };
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::NotFoundTable(name.as_ref().to_string()),
+            ))),
+            false => Ok(Table {
+                inner: Arc::new(Mutex::new(InnerTable(ctx))),
+                registered: true,
+            }),
+        }
+    }
+
+    fn get_memory(&self, name: impl AsRef<str>) -> WasmEdgeResult<Memory> {
+        let mem_name: WasmEdgeString = name.as_ref().into();
+        let ctx = unsafe {
+            ffi::WasmEdge_ModuleInstanceFindMemory(self.inner.0 as *const _, mem_name.as_raw())
+        };
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::NotFoundMem(name.as_ref().to_string()),
+            ))),
+            false => Ok(Memory {
+                inner: Arc::new(Mutex::new(InnerMemory(ctx))),
+                registered: true,
+            }),
+        }
+    }
+
+    fn get_global(&self, name: impl AsRef<str>) -> WasmEdgeResult<Global> {
+        let global_name: WasmEdgeString = name.as_ref().into();
+        let ctx = unsafe {
+            ffi::WasmEdge_ModuleInstanceFindGlobal(self.inner.0 as *const _, global_name.as_raw())
+        };
+        match ctx.is_null() {
+            true => Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::NotFoundGlobal(name.as_ref().to_string()),
+            ))),
+            false => Ok(Global {
+                inner: Arc::new(Mutex::new(InnerGlobal(ctx))),
+                registered: true,
+            }),
+        }
+    }
+
+    /// Returns the length of the exported [function instances](crate::Function) in this module instance.
+    fn func_len(&self) -> u32 {
+        unsafe { ffi::WasmEdge_ModuleInstanceListFunctionLength(self.inner.0) }
+    }
+
+    /// Returns the names of the exported [function instances](crate::Function) in this module instance.
+    fn func_names(&self) -> Option<Vec<String>> {
+        let len_func_names = self.func_len();
+        match len_func_names > 0 {
+            true => {
+                let mut func_names = Vec::with_capacity(len_func_names as usize);
+                unsafe {
+                    ffi::WasmEdge_ModuleInstanceListFunction(
+                        self.inner.0,
+                        func_names.as_mut_ptr(),
+                        len_func_names,
+                    );
+                    func_names.set_len(len_func_names as usize);
+                }
+
+                let names = func_names
+                    .into_iter()
+                    .map(|x| x.into())
+                    .collect::<Vec<String>>();
+                Some(names)
+            }
+            false => None,
+        }
+    }
+
+    /// Returns the length of the exported [table instances](crate::Table) in this module instance.
+    fn table_len(&self) -> u32 {
+        unsafe { ffi::WasmEdge_ModuleInstanceListTableLength(self.inner.0) }
+    }
+
+    /// Returns the names of the exported [table instances](crate::Table) in this module instance.
+    fn table_names(&self) -> Option<Vec<String>> {
+        let len_table_names = self.table_len();
+        match len_table_names > 0 {
+            true => {
+                let mut table_names = Vec::with_capacity(len_table_names as usize);
+                unsafe {
+                    ffi::WasmEdge_ModuleInstanceListTable(
+                        self.inner.0,
+                        table_names.as_mut_ptr(),
+                        len_table_names,
+                    );
+                    table_names.set_len(len_table_names as usize);
+                }
+
+                let names = table_names
+                    .into_iter()
+                    .map(|x| x.into())
+                    .collect::<Vec<String>>();
+                Some(names)
+            }
+            false => None,
+        }
+    }
+
+    /// Returns the length of the exported [memory instances](crate::Memory) in this module instance.
+    fn mem_len(&self) -> u32 {
+        unsafe { ffi::WasmEdge_ModuleInstanceListMemoryLength(self.inner.0) }
+    }
+
+    /// Returns the names of all exported [memory instances](crate::Memory) in this module instance.
+    fn mem_names(&self) -> Option<Vec<String>> {
+        let len_mem_names = self.mem_len();
+        match len_mem_names > 0 {
+            true => {
+                let mut mem_names = Vec::with_capacity(len_mem_names as usize);
+                unsafe {
+                    ffi::WasmEdge_ModuleInstanceListMemory(
+                        self.inner.0,
+                        mem_names.as_mut_ptr(),
+                        len_mem_names,
+                    );
+                    mem_names.set_len(len_mem_names as usize);
+                }
+
+                let names = mem_names
+                    .into_iter()
+                    .map(|x| x.into())
+                    .collect::<Vec<String>>();
+                Some(names)
+            }
+            false => None,
+        }
+    }
+
+    /// Returns the length of the exported [global instances](crate::Global) in this module instance.
+    fn global_len(&self) -> u32 {
+        unsafe { ffi::WasmEdge_ModuleInstanceListGlobalLength(self.inner.0) }
+    }
+
+    /// Returns the names of the exported [global instances](crate::Global) in this module instance.
+    fn global_names(&self) -> Option<Vec<String>> {
+        let len_global_names = self.global_len();
+        match len_global_names > 0 {
+            true => {
+                let mut global_names = Vec::with_capacity(len_global_names as usize);
+                unsafe {
+                    ffi::WasmEdge_ModuleInstanceListGlobal(
+                        self.inner.0,
+                        global_names.as_mut_ptr(),
+                        len_global_names,
+                    );
+                    global_names.set_len(len_global_names as usize);
+                }
+
+                let names = global_names
+                    .into_iter()
+                    .map(|x| x.into())
+                    .collect::<Vec<String>>();
+                Some(names)
+            }
+            false => None,
+        }
+    }
+}
+#[cfg(all(feature = "async", target_os = "linux"))]
+impl AsImport for AsyncWasiModule {
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
+        self.funcs.push(func);
+        let f = self.funcs.last_mut().unwrap();
+
+        let func_name: WasmEdgeString = name.into();
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                f.inner.lock().0,
+            );
+        }
+    }
+
+    fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
+        let table_name: WasmEdgeString = name.as_ref().into();
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddTable(
+                self.inner.0,
+                table_name.as_raw(),
+                table.inner.lock().0,
+            );
+        }
+        table.inner.lock().0 = std::ptr::null_mut();
+    }
+
+    fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
+        let mem_name: WasmEdgeString = name.as_ref().into();
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddMemory(
+                self.inner.0,
+                mem_name.as_raw(),
+                memory.inner.lock().0,
+            );
+        }
+        memory.inner.lock().0 = std::ptr::null_mut();
+    }
+
+    fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
+        let global_name: WasmEdgeString = name.as_ref().into();
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddGlobal(
+                self.inner.0,
+                global_name.as_raw(),
+                global.inner.lock().0,
+            );
+        }
+        global.inner.lock().0 = std::ptr::null_mut();
     }
 }
 
@@ -2135,4 +2456,98 @@ pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
             sock_getaddrinfo
         ),
     ]
+}
+
+fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
+    let code = if let Err(e) = r { e.0 } else { 0 };
+    vec![WasmValue::from_i32(code as i32)]
+}
+
+impl async_wasi::snapshots::common::memory::Memory for Memory {
+    fn get_data<T: Sized>(&self, offset: WasmPtr<T>) -> Result<&T, Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>();
+            let ptr = self
+                .data_pointer(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+            Ok(ptr.cast::<T>().as_ref().unwrap())
+        }
+    }
+
+    fn get_slice<T: Sized>(&self, offset: WasmPtr<T>, len: usize) -> Result<&[T], Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>() * len;
+            let ptr = self
+                .data_pointer(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const T;
+            Ok(std::slice::from_raw_parts(ptr, len))
+        }
+    }
+
+    fn get_iovec<'a>(
+        &self,
+        iovec_ptr: WasmPtr<__wasi_ciovec_t>,
+        iovec_len: __wasi_size_t,
+    ) -> Result<Vec<std::io::IoSlice<'a>>, Errno> {
+        unsafe {
+            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
+            let mut result = Vec::with_capacity(iovec.len());
+            for i in iovec {
+                let ptr = self
+                    .data_pointer(i.buf, i.buf_len)
+                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+                let s = std::io::IoSlice::new(std::slice::from_raw_parts(ptr, i.buf_len as usize));
+                result.push(s);
+            }
+            Ok(result)
+        }
+    }
+
+    fn mut_data<T: Sized>(&mut self, offset: WasmPtr<T>) -> Result<&mut T, Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>();
+            let ptr = self
+                .data_pointer_mut(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+            Ok(ptr.cast::<T>().as_mut().unwrap())
+        }
+    }
+
+    fn mut_slice<T: Sized>(&mut self, offset: WasmPtr<T>, len: usize) -> Result<&mut [T], Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>() * len;
+            let ptr = self
+                .data_pointer_mut(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut T;
+            Ok(std::slice::from_raw_parts_mut(ptr, len))
+        }
+    }
+
+    fn mut_iovec(
+        &mut self,
+        iovec_ptr: WasmPtr<async_wasi::snapshots::env::wasi_types::__wasi_iovec_t>,
+        iovec_len: async_wasi::snapshots::env::wasi_types::__wasi_size_t,
+    ) -> Result<Vec<std::io::IoSliceMut<'_>>, Errno> {
+        unsafe {
+            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
+            let mut result = Vec::with_capacity(iovec.len());
+            for i in iovec {
+                let ptr = self
+                    .data_pointer_mut(i.buf, i.buf_len)
+                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+                let s = std::io::IoSliceMut::new(std::slice::from_raw_parts_mut(
+                    ptr,
+                    i.buf_len as usize,
+                ));
+                result.push(s);
+            }
+            Ok(result)
+        }
+    }
+
+    fn write_data<T: Sized>(&mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno> {
+        let p = self.mut_data(offset)?;
+        *p = data;
+        Ok(())
+    }
 }

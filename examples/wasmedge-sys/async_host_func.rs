@@ -7,7 +7,9 @@
 //! ```
 
 #[cfg(feature = "async")]
-use wasmedge_sys::{r#async::AsyncState, CallingFrame, Executor, FuncType, Function, WasmValue};
+use wasmedge_sys::{
+    r#async::fiber::AsyncState, CallingFrame, Executor, FuncType, Function, WasmValue,
+};
 #[cfg(feature = "async")]
 use wasmedge_types::error::HostFuncError;
 

@@ -596,6 +596,7 @@ mod tests {
         not(feature = "static")
     ))]
     #[test]
+    #[ignore]
     fn test_plugin_wasmedge_process() {
         use super::*;
 

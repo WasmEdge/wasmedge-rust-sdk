@@ -5,7 +5,7 @@ use crate::{
 };
 #[cfg(all(feature = "async", target_os = "linux"))]
 use crate::{
-    r#async::{AsyncState, FiberFuture},
+    r#async::fiber::{AsyncCx, AsyncState, FiberFuture},
     BoxedAsyncFn, ASYNC_HOST_FUNCS,
 };
 use core::ffi::c_void;
@@ -141,7 +141,7 @@ extern "C" fn wrap_async_wasi_fn<T: 'static>(
         .expect("len of returns should not greater than usize");
     let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
 
-    let async_cx = crate::r#async::AsyncCx::new();
+    let async_cx = AsyncCx::new();
     let mut future = Pin::from(real_func(frame, input, data));
     let result = match unsafe { async_cx.block_on(future.as_mut()) } {
         Ok(Ok(ret)) => Ok(ret),
@@ -280,7 +280,7 @@ extern "C" fn wrap_async_fn(
             drop(map_host_func);
 
             let frame = CallingFrame::create(call_frame_ctx);
-            let async_cx = crate::r#async::AsyncCx::new();
+            let async_cx = AsyncCx::new();
             let mut future = std::pin::Pin::from(real_fn_locked(frame, input, data));
             // call host function
             let result = match unsafe { async_cx.block_on(future.as_mut()) } {

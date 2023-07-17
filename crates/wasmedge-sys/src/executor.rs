@@ -2,7 +2,7 @@
 
 use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::{AsyncState, FiberFuture};
+use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
     Function, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult, WasmValue,
