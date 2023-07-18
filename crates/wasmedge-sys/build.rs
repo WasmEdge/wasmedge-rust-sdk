@@ -1,18 +1,10 @@
 use std::path::PathBuf;
-#[cfg(all(
-    feature = "standalone",
-    target_family = "unix",
-    not(feature = "static")
-))]
+#[cfg(all(feature = "standalone", target_family = "unix",))]
 use std::{env, process::Command};
 
 const WASMEDGE_H: &str = "wasmedge.h";
-#[cfg(all(
-    feature = "standalone",
-    target_family = "unix",
-    not(feature = "static")
-))]
-const WASMEDGE_RELEASE_VERSION: &str = "0.13.0";
+#[cfg(all(feature = "standalone", target_family = "unix",))]
+const WASMEDGE_RELEASE_VERSION: &str = "0.13.1";
 
 macro_rules! env_path {
     ($env_var:literal) => {
@@ -69,6 +61,12 @@ fn find_wasmedge() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(all(feature = "static", target_os = "linux"))]
 fn find_wasmedge() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(all(
+        feature = "standalone",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    install_libwasmedge();
+
     let Paths {
         header,
         lib_dir,
@@ -431,4 +429,34 @@ fn install_libwasmedge() {
         .output()
         .expect("[wasmedge-sys] Failed to source the env");
     println!("cargo:warning=[wasmedge-sys] source the env: {:?}", output);
+}
+
+#[cfg(all(
+    feature = "standalone",
+    feature = "static",
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn install_libwasmedge() {
+    let arch = env::var("CARGO_CFG_TARGET_ARCH")
+        .expect("[wasmedge-sys] Failed to get CARGO_CFG_TARGET_ARCH");
+    println!("cargo:warning=[wasmedge-sys] CARGO_CFG_TARGET_ARCH: {arch}");
+
+    let out_dir = env::var("OUT_DIR").expect("[wasmedge-sys] Failed to get OUT_DIR");
+    println!("cargo:warning=[wasmedge-sys] OUT_DIR: {out_dir}");
+
+    let url = format!("https://github.com/WasmEdge/WasmEdge/releases/download/{WASMEDGE_RELEASE_VERSION}/WasmEdge-{WASMEDGE_RELEASE_VERSION}-manylinux2014_{arch}_static.tar.gz");
+    println!("cargo:warning=[wasmedge-sys] Url for libwasmedge archive: {url}");
+
+    let cmd = format!("wget -qO- {url} | tar xz --strip-components=1");
+
+    let output = Command::new("/bin/bash")
+        .current_dir(&out_dir)
+        .args(["-c", &cmd])
+        .output()
+        .expect("[wasmedge-sys] Failed to download libwasmedge archive");
+    println!("cargo:warning=[wasmedge-sys] Download libwasmedge archive: {output:?}");
+
+    env::set_var("WASMEDGE_INCLUDE_DIR", format!("{out_dir}/include"));
+    env::set_var("WASMEDGE_LIB_DIR", format!("{out_dir}/lib64"));
 }
