@@ -69,7 +69,7 @@ impl Executor {
     /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
     pub fn register_import_object<T: Send + Sync + Clone>(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         import: &ImportObject<T>,
     ) -> WasmEdgeResult<()> {
         match import {
@@ -118,7 +118,7 @@ impl Executor {
     /// If fail to register the given [module](crate::Module), then an error is returned.
     pub fn register_named_module(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         module: &Module,
         name: impl AsRef<str>,
     ) -> WasmEdgeResult<Instance> {
@@ -157,7 +157,7 @@ impl Executor {
     /// If fail to instantiate the given [module](crate::Module), then an error is returned.
     pub fn register_active_module(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         module: &Module,
     ) -> WasmEdgeResult<Instance> {
         let mut instance_ctx = std::ptr::null_mut();
@@ -189,7 +189,7 @@ impl Executor {
     /// If fail to register the given plugin module instance, then an error is returned.
     pub fn register_plugin_instance(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         instance: &Instance,
     ) -> WasmEdgeResult<()> {
         unsafe {

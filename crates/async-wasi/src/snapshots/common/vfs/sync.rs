@@ -111,7 +111,7 @@ impl WasiStdin {
 
     pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'_>],
+        bufs: &[io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
@@ -224,13 +224,13 @@ impl WasiStdout {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+    pub fn fd_read(&mut self, bufs: &[io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
     pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'_>],
+        bufs: &[io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
@@ -343,13 +343,13 @@ impl WasiStderr {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+    pub fn fd_read(&mut self, bufs: &[io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
     pub fn fd_pread(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'_>],
+        bufs: &[io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)

@@ -133,7 +133,7 @@ impl VmBuilder {
             if cfg.wasi_enabled() {
                 if let Ok(wasi_module) = sys::WasiModule::create(None, None, None) {
                     vm.executor.inner.register_import_object(
-                        &mut vm.store.inner,
+                        &vm.store.inner,
                         &sys::ImportObject::<NeverType>::Wasi(wasi_module.clone()),
                     )?;
 
@@ -153,7 +153,7 @@ impl VmBuilder {
                 Some(instance) => {
                     vm.plugin_host_instances.push(instance);
                     vm.executor.inner.register_plugin_instance(
-                        &mut vm.store.inner,
+                        &vm.store.inner,
                         &vm.plugin_host_instances.last().unwrap().inner,
                     )?;
                 }
@@ -200,7 +200,7 @@ impl VmBuilder {
             if cfg.wasi_enabled() {
                 if let Ok(wasi_module) = sys::AsyncWasiModule::create(None, None, None) {
                     vm.executor.inner.register_import_object(
-                        &mut vm.store.inner,
+                        &vm.store.inner,
                         &sys::ImportObject::<NeverType>::AsyncWasi(wasi_module.clone()),
                     )?;
 
@@ -220,7 +220,7 @@ impl VmBuilder {
                 Some(instance) => {
                     vm.plugin_host_instances.push(instance);
                     vm.executor.inner.register_plugin_instance(
-                        &mut vm.store.inner,
+                        &vm.store.inner,
                         &vm.plugin_host_instances.last().unwrap().inner,
                     )?;
                 }
@@ -436,7 +436,7 @@ impl<T: Send + Sync + Clone> Vm<T> {
                     if let Some(mod_instance) = plugin.mod_instance(mod_name) {
                         self.plugin_host_instances.push(mod_instance);
                         self.executor.inner.register_plugin_instance(
-                            &mut self.store.inner,
+                            &self.store.inner,
                             &self.plugin_host_instances.last().unwrap().inner,
                         )?;
                     }

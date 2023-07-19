@@ -18,7 +18,7 @@ pub mod async_poll;
 pub mod async_socket;
 
 pub fn args_get<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     argv: WasmPtr<__wasi_size_t>,
     argv_buf: WasmPtr<u8>,
@@ -38,7 +38,7 @@ pub fn args_get<M: Memory>(
 }
 
 pub fn args_sizes_get<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     argc: WasmPtr<__wasi_size_t>,
     argv_buf_size: WasmPtr<__wasi_size_t>,
@@ -60,7 +60,7 @@ pub fn args_sizes_get<M: Memory>(
 }
 
 pub fn environ_get<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     environ: WasmPtr<__wasi_size_t>,
     environ_buf: WasmPtr<u8>,
@@ -81,7 +81,7 @@ pub fn environ_get<M: Memory>(
 }
 
 pub fn environ_sizes_get<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     environ_count: WasmPtr<__wasi_size_t>,
     environ_buf_size: WasmPtr<__wasi_size_t>,
@@ -118,7 +118,7 @@ pub fn clock_res_get<M: Memory>(
 }
 
 pub fn clock_time_get<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     clock_id: __wasi_clockid_t::Type,
     precision: __wasi_timestamp_t,
@@ -480,8 +480,8 @@ pub fn fd_pread<M: Memory>(
             mem.write_data(nread, n.to_le())
         }
         VFD::Inode(INode::Stdin(fs)) => {
-            let mut bufs = mem.mut_iovec(iovs, iovs_len)?;
-            let n = fs.fd_pread(&mut bufs, offset)? as __wasi_size_t;
+            let bufs = mem.mut_iovec(iovs, iovs_len)?;
+            let n = fs.fd_pread(&bufs, offset)? as __wasi_size_t;
             mem.write_data(nread, n.to_le())
         }
         _ => Err(Errno::__WASI_ERRNO_BADF),
@@ -579,7 +579,7 @@ pub fn fd_readdir<M: Memory>(
 
 pub fn path_create_directory<M: Memory>(
     ctx: &mut WasiCtx,
-    mem: &mut M,
+    mem: &M,
     dirfd: __wasi_fd_t,
     path_ptr: WasmPtr<u8>,
     path_len: __wasi_size_t,
@@ -714,7 +714,7 @@ pub fn path_readlink<M: Memory>(
 
 pub fn path_remove_directory<M: Memory>(
     ctx: &mut WasiCtx,
-    mem: &mut M,
+    mem: &M,
     dirfd: __wasi_fd_t,
     path_ptr: WasmPtr<u8>,
     path_len: __wasi_size_t,
@@ -733,8 +733,8 @@ pub fn path_remove_directory<M: Memory>(
 }
 
 pub fn path_rename<M: Memory>(
-    ctx: &mut WasiCtx,
-    mem: &mut M,
+    ctx: &WasiCtx,
+    mem: &M,
     old_fd: __wasi_fd_t,
     old_path: WasmPtr<u8>,
     old_path_len: __wasi_size_t,
@@ -780,7 +780,7 @@ pub fn path_symlink<M: Memory>(
 
 pub fn path_unlink_file<M: Memory>(
     ctx: &mut WasiCtx,
-    mem: &mut M,
+    mem: &M,
     dirfd: __wasi_fd_t,
     path_ptr: WasmPtr<u8>,
     path_len: __wasi_size_t,
