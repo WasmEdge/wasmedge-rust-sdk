@@ -819,7 +819,7 @@ pub fn path_create_directory(
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let dirfd = p1.to_i32();
@@ -828,7 +828,7 @@ pub fn path_create_directory(
 
         Ok(to_wasm_return(p::path_create_directory(
             data,
-            &mut mem,
+            &mem,
             dirfd,
             WasmPtr::from(path_ptr),
             path_len,
@@ -949,7 +949,7 @@ pub fn path_remove_directory(
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -958,7 +958,7 @@ pub fn path_remove_directory(
 
         Ok(to_wasm_return(p::path_remove_directory(
             data,
-            &mut mem,
+            &mem,
             fd,
             WasmPtr::from(path_ptr),
             path_len,
@@ -976,7 +976,7 @@ pub fn path_rename(
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3, p4, p5, p6]) = args.get(0..6) {
         let old_fd = p1.to_i32();
@@ -988,7 +988,7 @@ pub fn path_rename(
 
         Ok(to_wasm_return(p::path_rename(
             data,
-            &mut mem,
+            &mem,
             old_fd,
             WasmPtr::from(old_path),
             old_path_len,
@@ -1020,7 +1020,7 @@ pub fn path_unlink_file(
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1029,7 +1029,7 @@ pub fn path_unlink_file(
 
         Ok(to_wasm_return(p::path_unlink_file(
             data,
-            &mut mem,
+            &mem,
             fd,
             WasmPtr::from(path_ptr),
             path_len,
@@ -1118,7 +1118,7 @@ pub fn sock_bind(
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1126,7 +1126,7 @@ pub fn sock_bind(
         let port = p3.to_i32() as u32;
         Ok(to_wasm_return(p::async_socket::sock_bind(
             data,
-            &mut mem,
+            &mem,
             fd,
             WasmPtr::from(addr_ptr),
             port,
@@ -1469,7 +1469,7 @@ pub fn sock_setsockopt(
 ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -1479,7 +1479,7 @@ pub fn sock_setsockopt(
         let flag_size = p5.to_i32() as u32;
         Ok(to_wasm_return(p::async_socket::sock_setsockopt(
             data,
-            &mut mem,
+            &mem,
             fd,
             level,
             name,

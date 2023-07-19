@@ -98,7 +98,7 @@ async fn wait_fd(fd: &AsyncWasiSocket, type_: SubscriptionFdType) -> Result<__wa
 }
 
 async fn poll_only_fd<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     out_ptr: WasmPtr<__wasi_event_t>,
     nsubscriptions: usize,
@@ -161,7 +161,7 @@ async fn poll_only_fd<M: Memory>(
 }
 
 async fn poll_fd_timeout<M: Memory>(
-    ctx: &mut WasiCtx,
+    ctx: &WasiCtx,
     mem: &mut M,
     out_ptr: WasmPtr<__wasi_event_t>,
     nsubscriptions: usize,

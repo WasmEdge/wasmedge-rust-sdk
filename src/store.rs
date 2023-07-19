@@ -37,7 +37,7 @@ impl Store {
     ) -> WasmEdgeResult<()> {
         executor
             .inner
-            .register_import_object(&mut self.inner, import.inner_ref())
+            .register_import_object(&self.inner, import.inner_ref())
     }
 
     /// Registers and instantiates a WasmEdge [compiled module](crate::Module) into this [store](crate::Store) as a named [module instance](crate::Instance), and returns the module instance.
@@ -61,11 +61,10 @@ impl Store {
         mod_name: impl AsRef<str>,
         module: &Module,
     ) -> WasmEdgeResult<Instance> {
-        let inner_instance = executor.inner.register_named_module(
-            &mut self.inner,
-            &module.inner,
-            mod_name.as_ref(),
-        )?;
+        let inner_instance =
+            executor
+                .inner
+                .register_named_module(&self.inner, &module.inner, mod_name.as_ref())?;
         Ok(Instance {
             inner: inner_instance,
         })
@@ -89,7 +88,7 @@ impl Store {
     ) -> WasmEdgeResult<Instance> {
         let inner = executor
             .inner
-            .register_active_module(&mut self.inner, &module.inner)?;
+            .register_active_module(&self.inner, &module.inner)?;
 
         Ok(Instance { inner })
     }

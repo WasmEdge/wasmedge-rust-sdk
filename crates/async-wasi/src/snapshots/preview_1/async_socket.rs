@@ -80,7 +80,7 @@ pub fn sock_open<M: Memory>(
 
 pub fn sock_bind<M: Memory>(
     ctx: &mut WasiCtx,
-    mem: &mut M,
+    mem: &M,
     fd: __wasi_fd_t,
     addr_ptr: WasmPtr<__wasi_address_t>,
     port: u32,
@@ -579,7 +579,7 @@ pub fn sock_getsockopt<M: Memory>(
 
 pub fn sock_setsockopt<M: Memory>(
     ctx: &mut WasiCtx,
-    mem: &mut M,
+    mem: &M,
     fd: __wasi_fd_t,
     level: __wasi_sock_opt_level_t::Type,
     name: __wasi_sock_opt_so_t::Type,
