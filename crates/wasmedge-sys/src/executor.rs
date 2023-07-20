@@ -365,8 +365,13 @@ unsafe impl Sync for InnerExecutor {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use crate::{instance::module::AsyncWasiModule, Loader, Validator};
+    cfg_if::cfg_if! {
+        if #[cfg(all(feature = "async", target_os = "linux"))] {
+            use crate::r#async::AsyncWasiModule;
+            use crate::{Loader, Validator};
+            use wasmedge_macro::sys_async_host_function;
+        }
+    }
     use crate::{
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
         MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
@@ -375,8 +380,6 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use wasmedge_macro::sys_async_host_function;
     use wasmedge_macro::sys_host_function;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 

@@ -932,12 +932,12 @@ unsafe impl Sync for InnerFuncRef {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    use crate::{r#async::AsyncWasiModule, ASYNC_HOST_FUNCS};
     use crate::{
         types::WasmValue, AsImport, Executor, ImportModule, ImportObject, Store,
         HOST_FUNC_FOOTPRINTS,
     };
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use crate::{AsyncWasiModule, ASYNC_HOST_FUNCS};
     use std::{
         sync::{Arc, Mutex},
         thread,

@@ -98,12 +98,12 @@ pub use config::Config;
 pub use executor::Executor;
 #[doc(inline)]
 pub use frame::CallingFrame;
+#[cfg(all(feature = "async", target_os = "linux"))]
+#[doc(inline)]
+pub use instance::function::AsyncHostFn;
 #[cfg(not(feature = "async"))]
 #[doc(inline)]
 pub use instance::module::WasiModule;
-#[cfg(all(feature = "async", target_os = "linux"))]
-#[doc(inline)]
-pub use instance::{function::AsyncHostFn, module::AsyncWasiModule};
 #[doc(inline)]
 pub use instance::{
     function::{FuncRef, FuncType, Function},
