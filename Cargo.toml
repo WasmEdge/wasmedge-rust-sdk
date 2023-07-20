@@ -22,10 +22,13 @@ wasmedge-types = {path = "crates/wasmedge-types", version = "0.4"}
 [workspace.dependencies]
 wat = "=1.0.67"
 
+[workspace.dependencies]
+cfg-if = "1.0.0"
+
 [features]
 aot = ["wasmedge-sys/aot"]
 async = ["wasmedge-sys/async"]
-default = []
+default = ["async"]
 ffi = ["wasmedge-sys/ffi"]
 standalone = ["wasmedge-sys/standalone"]
 static = ["wasmedge-sys/static"]

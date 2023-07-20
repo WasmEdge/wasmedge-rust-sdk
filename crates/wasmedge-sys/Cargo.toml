@@ -24,6 +24,7 @@ wat.workspace = true
 lazy_static = "1.4.0"
 parking_lot = "0.12.1"
 rand = "0.8.4"
+cfg-if.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 async-wasi = {path = "../async-wasi", version = "0.0.2", optional = true}
