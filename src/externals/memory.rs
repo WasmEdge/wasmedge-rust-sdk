@@ -200,9 +200,9 @@ mod tests {
         let memory = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_memory("memory", memory)
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 

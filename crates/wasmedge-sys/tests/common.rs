@@ -2,9 +2,9 @@ use wasmedge_macro::sys_host_function;
 use wasmedge_sys::{AsImport, CallingFrame, FuncType, Function, ImportModule, WasmValue};
 use wasmedge_types::{error::HostFuncError, NeverType, ValType};
 
-pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
+pub fn create_extern_module(name: impl AsRef<str>) -> ImportModule {
     // create an import module
-    let result = ImportModule::<NeverType>::create(name, None);
+    let result = ImportModule::create::<NeverType>(name, None);
     assert!(result.is_ok());
     let mut import = result.unwrap();
 

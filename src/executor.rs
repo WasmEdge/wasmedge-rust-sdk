@@ -281,8 +281,23 @@ mod tests {
             })
         }
 
+        #[derive(Debug)]
+        struct Data<T, S> {
+            _x: i32,
+            _y: String,
+            _v: Vec<T>,
+            _s: Vec<S>,
+        }
+        let data: Data<i32, &str> = Data {
+            _x: 12,
+            _y: "hello".to_string(),
+            _v: vec![1, 2, 3],
+            _s: vec!["macos", "linux", "windows"],
+        };
+
         // create an async host function
-        let result = Func::wrap_async_func::<(), ()>(async_hello);
+        let result =
+            Func::wrap_async_func::<(), (), Data<i32, &str>>(async_hello, Some(Box::new(data)));
         assert!(result.is_ok());
         let func = result.unwrap();
 

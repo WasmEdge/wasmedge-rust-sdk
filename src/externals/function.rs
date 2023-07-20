@@ -44,7 +44,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
@@ -76,7 +76,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -107,7 +107,7 @@ impl Func {
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn wrap_async_func<Args, Rets>(
+    pub fn wrap_async_func<Args, Rets, T>(
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
@@ -119,16 +119,18 @@ impl Func {
             > + Send
             + Sync
             + 'static,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
         Rets: WasmValTypeList,
+        T: Send + Sync,
     {
         let boxed_func = Box::new(real_func);
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner = sys::Function::create_async_func(&ty.clone().into(), boxed_func, 0)?;
+        let inner = sys::Function::create_async_func(&ty.clone().into(), boxed_func, data, 0)?;
         Ok(Self {
             inner,
             name: None,
@@ -396,10 +398,10 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_func_basic() {
         // create an ImportModule
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -525,15 +527,15 @@ mod tests {
         };
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             // .with_sync_closure::<(i32, i32), i32>("add", real_add)?
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)?
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
         // create a Vm context
-        let result = VmBuilder::new().build::<NeverType>();
+        let result = VmBuilder::new().build();
         assert!(result.is_ok());
         let vm = result.unwrap();
 
@@ -554,14 +556,17 @@ mod tests {
         // define an async closure
         let c = |_frame: CallingFrame,
                  _args: Vec<WasmValue>,
-                 _data: *mut std::os::raw::c_void|
+                 data: *mut std::os::raw::c_void|
          -> Box<
             (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
         > {
+            let data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
+
             Box::new(async move {
                 for _ in 0..10 {
                     println!("[async hello] say hello");
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    println!("host_data: {:?}", data);
                 }
 
                 println!("[async hello] Done!");
@@ -570,15 +575,29 @@ mod tests {
             })
         };
 
+        #[derive(Debug)]
+        struct Data<T, S> {
+            _x: i32,
+            _y: String,
+            _v: Vec<T>,
+            _s: Vec<S>,
+        }
+        let data: Data<i32, &str> = Data {
+            _x: 12,
+            _y: "hello".to_string(),
+            _v: vec![1, 2, 3],
+            _s: vec!["macos", "linux", "windows"],
+        };
+
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
-            .with_async_func::<(), ()>("async_hello", c)?
-            .build("extern");
+        let result = ImportObjectBuilder::new()
+            .with_async_func::<(), (), Data<i32, &str>>("async_hello", c, Some(Box::new(data)))?
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
         // create a Vm context
-        let result = VmBuilder::new().build::<NeverType>();
+        let result = VmBuilder::new().build();
         assert!(result.is_ok());
         let vm = result.unwrap();
 

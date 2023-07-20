@@ -150,11 +150,11 @@ mod tests {
         let table = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host func")
             .with_table("table", table)
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 

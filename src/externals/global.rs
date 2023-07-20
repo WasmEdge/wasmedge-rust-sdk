@@ -120,10 +120,10 @@ mod tests {
         let global_var = result.unwrap();
 
         // create an import object
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_global("const-global", global_const)
             .with_global("var-global", global_var)
-            .build("extern");
+            .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 

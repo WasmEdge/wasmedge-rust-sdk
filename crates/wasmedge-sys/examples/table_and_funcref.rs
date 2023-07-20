@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     table.set_data(WasmValue::from_func_ref(host_func.as_ref()), 3)?;
 
     // add the table instance to the import object
-    let mut import = ImportModule::<NeverType>::create("extern", None)?;
+    let mut import = ImportModule::create::<NeverType>("extern", None)?;
     import.add_table("my-table", table);
 
     // create a config

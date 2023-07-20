@@ -67,10 +67,10 @@ impl Executor {
     /// # Error
     ///
     /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_object<T: Send + Sync + Clone>(
+    pub fn register_import_object(
         &mut self,
         store: &Store,
-        import: &ImportObject<T>,
+        import: &ImportObject,
     ) -> WasmEdgeResult<()> {
         match import {
             ImportObject::Import(import) => unsafe {
@@ -446,7 +446,7 @@ mod tests {
 
         // create an ImportObj module
         let host_name = "extern";
-        let result = ImportModule::<NeverType>::create(host_name, None);
+        let result = ImportModule::create::<NeverType>(host_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -601,7 +601,7 @@ mod tests {
         let async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
+        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
         let result = executor.register_import_object(&mut store, &wasi_import);
         assert!(result.is_ok());
 
@@ -675,13 +675,14 @@ mod tests {
         let async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = ImportObject::<NeverType>::AsyncWasi(async_wasi_module);
+        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
         let result = executor.register_import_object(&mut store, &wasi_import);
         assert!(result.is_ok());
 
         let ty = FuncType::create([], [])?;
-        let async_hello_func = Function::create_async_func(&ty, Box::new(async_hello), 0)?;
-        let mut import = ImportModule::<NeverType>::create("extern", None)?;
+        let async_hello_func =
+            Function::create_async_func::<NeverType>(&ty, Box::new(async_hello), None, 0)?;
+        let mut import = ImportModule::create::<NeverType>("extern", None)?;
         import.add_func("async_hello", async_hello_func);
 
         let extern_import = ImportObject::Import(import);

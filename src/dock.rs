@@ -7,17 +7,17 @@ use std::any::Any;
 
 /// Extends a [Vm](crate::Vm) instance by supporting function arguments of Rust built-in types.
 #[derive(Debug)]
-pub struct VmDock<T: Send + Sync + Clone> {
-    pub(crate) vm: Box<Vm<T>>, // Can't use Arc because vm can be get_mut after cloned for hostfunc
+pub struct VmDock {
+    pub(crate) vm: Box<Vm>, // Can't use Arc because vm can be get_mut after cloned for hostfunc
 }
-impl<T: Send + Sync + Clone> VmDock<T> {
+impl VmDock {
     /// Creates a new [VmDock] to be associated with the given [Vm](crate::Vm).
     ///
     /// # Arguments
     ///
     /// * `vm` - The [Vm] instance to be extended.
     ///
-    pub fn new(vm: Vm<T>) -> Self {
+    pub fn new(vm: Vm) -> Self {
         VmDock { vm: Box::new(vm) }
     }
 
@@ -251,8 +251,8 @@ impl<T: Send + Sync + Clone> VmDock<T> {
         self.vm.run_func(mod_name, "deallocate", args)
     }
 }
-unsafe impl<T: Send + Sync + Clone> Send for VmDock<T> {}
-unsafe impl<T: Send + Sync + Clone> Sync for VmDock<T> {}
+unsafe impl Send for VmDock {}
+unsafe impl Sync for VmDock {}
 
 /// Defines a type container that wraps a value of Rust built-in type.
 #[derive(Debug)]
@@ -279,11 +279,7 @@ pub enum Param<'a> {
     String(&'a str),
 }
 impl<'a> Param<'a> {
-    fn settle<T: Send + Sync + Clone>(
-        &self,
-        vm: &VmDock<T>,
-        mem: &mut Memory,
-    ) -> WasmEdgeResult<(i32, i32)> {
+    fn settle(&self, vm: &VmDock, mem: &mut Memory) -> WasmEdgeResult<(i32, i32)> {
         match self {
             Param::I8(v) => {
                 let length = 1;
@@ -471,7 +467,7 @@ impl<'a> Param<'a> {
         }
     }
 
-    fn allocate<T: Send + Sync + Clone>(dock: &VmDock<T>, size: i32) -> WasmEdgeResult<i32> {
+    fn allocate(dock: &VmDock, size: i32) -> WasmEdgeResult<i32> {
         let res = dock.vm.run_func(None, "allocate", params!(size))?;
 
         Ok(res[0].to_i32())

@@ -30,10 +30,10 @@ impl Store {
     /// # Error
     ///
     /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_module<T: Send + Sync + Clone>(
+    pub fn register_import_module(
         &mut self,
         executor: &mut Executor,
-        import: &ImportObject<T>,
+        import: &ImportObject,
     ) -> WasmEdgeResult<()> {
         executor
             .inner
@@ -187,13 +187,13 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("mem", memory)
             .with_table("table", table)
-            .build("extern-module");
+            .build::<NeverType>("extern-module", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 
@@ -365,13 +365,13 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("mem", memory)
             .with_table("table", table)
-            .build("extern-module");
+            .build::<NeverType>("extern-module", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 

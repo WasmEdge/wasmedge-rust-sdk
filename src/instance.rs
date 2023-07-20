@@ -251,13 +251,13 @@ mod tests {
         let table = result.unwrap();
 
         // create an ImportModule instance
-        let result = ImportObjectBuilder::<NeverType>::new()
+        let result = ImportObjectBuilder::new()
             .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("mem", memory)
             .with_table("table", table)
-            .build("extern-module");
+            .build::<NeverType>("extern-module", None);
         assert!(result.is_ok());
         let import = result.unwrap();
 

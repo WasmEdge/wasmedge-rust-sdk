@@ -97,7 +97,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{CompilerConfigOptions, ConfigBuilder},
-        params, wat2wasm, CompilerOutputFormat, NeverType, VmBuilder, WasmVal,
+        params, wat2wasm, CompilerOutputFormat, VmBuilder, WasmVal,
     };
     use std::io::Read;
 
@@ -133,11 +133,10 @@ mod tests {
             let wasm_magic: [u8; 4] = [0x00, 0x61, 0x73, 0x6D];
             assert_ne!(buffer, wasm_magic);
 
-            let res = VmBuilder::new().build::<NeverType>()?.run_func_from_file(
-                &aot_file_path,
-                "fib",
-                params!(5),
-            )?;
+            let res =
+                VmBuilder::new()
+                    .build()?
+                    .run_func_from_file(&aot_file_path, "fib", params!(5))?;
             assert_eq!(res[0].to_i32(), 8);
 
             // cleanup
@@ -207,11 +206,10 @@ mod tests {
             let wasm_magic: [u8; 4] = [0x00, 0x61, 0x73, 0x6D];
             assert_ne!(buffer, wasm_magic);
 
-            let res = VmBuilder::new().build::<NeverType>()?.run_func_from_file(
-                &aot_file_path,
-                "fib",
-                params!(5),
-            )?;
+            let res =
+                VmBuilder::new()
+                    .build()?
+                    .run_func_from_file(&aot_file_path, "fib", params!(5))?;
             assert_eq!(res[0].to_i32(), 8);
 
             // cleanup
