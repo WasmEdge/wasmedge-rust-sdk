@@ -445,7 +445,7 @@ fn install_libwasmedge() {
     let out_dir = env::var("OUT_DIR").expect("[wasmedge-sys] Failed to get OUT_DIR");
     println!("cargo:warning=[wasmedge-sys] OUT_DIR: {out_dir}");
 
-    let url = format!("https://github.com/WasmEdge/WasmEdge/releases/download/{WASMEDGE_RELEASE_VERSION}/WasmEdge-{WASMEDGE_RELEASE_VERSION}-manylinux2014_{arch}_static.tar.gz");
+    let url = format!("https://github.com/WasmEdge/WasmEdge/releases/download/{WASMEDGE_RELEASE_VERSION}/WasmEdge-{WASMEDGE_RELEASE_VERSION}-debian11_{arch}_static.tar.gz");
     println!("cargo:warning=[wasmedge-sys] Url for libwasmedge archive: {url}");
 
     let cmd = format!("wget -qO- {url} | tar xz --strip-components=1");
@@ -458,5 +458,5 @@ fn install_libwasmedge() {
     println!("cargo:warning=[wasmedge-sys] Download libwasmedge archive: {output:?}");
 
     env::set_var("WASMEDGE_INCLUDE_DIR", format!("{out_dir}/include"));
-    env::set_var("WASMEDGE_LIB_DIR", format!("{out_dir}/lib64"));
+    env::set_var("WASMEDGE_LIB_DIR", format!("{out_dir}/lib"));
 }
