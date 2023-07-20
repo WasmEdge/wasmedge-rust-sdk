@@ -18,7 +18,9 @@ thiserror = "1.0.30"
 wasmedge-macro = {path = "crates/wasmedge-macro", version = "0.5"}
 wasmedge-sys = {path = "crates/wasmedge-sys", version = "0.15", default-features = false}
 wasmedge-types = {path = "crates/wasmedge-types", version = "0.4"}
-wat = "1.0"
+
+[workspace.dependencies]
+wat = "^1.0.67"
 
 [features]
 aot = ["wasmedge-sys/aot"]
