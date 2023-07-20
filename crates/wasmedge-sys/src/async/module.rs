@@ -1,14 +1,13 @@
 use crate::{
     ffi,
     instance::{
-        function::{AsyncHostFn, HostFn, InnerFunc},
-        global::InnerGlobal,
-        memory::InnerMemory,
-        module::InnerInstance,
+        function::InnerFunc, global::InnerGlobal, memory::InnerMemory, module::InnerInstance,
         table::InnerTable,
     },
+    r#async::fiber::AsyncCx,
     types::WasmEdgeString,
-    AsImport, AsInstance, CallingFrame, Function, Global, Memory, Table, WasmEdgeResult, WasmValue,
+    AsImport, AsInstance, CallingFrame, FuncType, Function, Global, Memory, Table, WasmEdgeResult,
+    WasmValue,
 };
 use async_wasi::snapshots::{
     common::{
@@ -19,12 +18,160 @@ use async_wasi::snapshots::{
     preview_1 as p, WasiCtx,
 };
 use parking_lot::Mutex;
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, pin::Pin, sync::Arc};
 use wasmedge_macro::{sys_async_wasi_host_function, sys_wasi_host_function};
 use wasmedge_types::{
-    error::{HostFuncError, InstanceError, WasmEdgeError},
-    ValType,
+    error::{FuncError, HostFuncError, InstanceError, WasmEdgeError},
+    NeverType, ValType,
 };
+
+/// Defines the signature of an asynchronous host function.
+#[cfg(all(feature = "async", target_os = "linux"))]
+type AsyncHostFn<T> =
+    fn(
+        CallingFrame,
+        Vec<WasmValue>,
+        Option<&'static mut T>,
+    ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
+
+/// Defines the signature of a host function.
+#[cfg(all(feature = "async", target_os = "linux"))]
+type HostFn<T> = fn(
+    CallingFrame,
+    Vec<WasmValue>,
+    Option<&'static mut T>,
+) -> Result<Vec<WasmValue>, HostFuncError>;
+
+#[cfg(all(feature = "async", target_os = "linux"))]
+extern "C" fn wrap_sync_wasi_fn<T: 'static>(
+    key_ptr: *mut std::ffi::c_void,
+    data: *mut std::ffi::c_void,
+    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
+    params: *const ffi::WasmEdge_Value,
+    param_len: u32,
+    returns: *mut ffi::WasmEdge_Value,
+    return_len: u32,
+) -> ffi::WasmEdge_Result {
+    let frame = CallingFrame::create(call_frame_ctx);
+
+    // recover the async host function
+    let real_func: HostFn<T> = unsafe { std::mem::transmute(key_ptr) };
+
+    // recover the context data
+    let data = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<NeverType>() {
+        None
+    } else {
+        let data: &'static mut T = unsafe { &mut *(data as *mut T) };
+        Some(data)
+    };
+
+    // input arguments
+    let input = {
+        let raw_input = unsafe {
+            std::slice::from_raw_parts(
+                params,
+                param_len
+                    .try_into()
+                    .expect("len of params should not greater than usize"),
+            )
+        };
+        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
+    };
+
+    // returns
+    let return_len = return_len
+        .try_into()
+        .expect("len of returns should not greater than usize");
+    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
+
+    match real_func(frame, input, data) {
+        Ok(returns) => {
+            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}", return_len, returns.len());
+            for (idx, wasm_value) in returns.into_iter().enumerate() {
+                raw_returns[idx] = wasm_value.as_raw();
+            }
+            ffi::WasmEdge_Result { Code: 0 }
+        }
+        Err(err) => match err {
+            HostFuncError::User(code) => unsafe {
+                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
+            },
+            HostFuncError::Runtime(code) => unsafe {
+                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
+            },
+        },
+    }
+}
+
+#[cfg(all(feature = "async", target_os = "linux"))]
+extern "C" fn wrap_async_wasi_fn<T: 'static>(
+    key_ptr: *mut std::ffi::c_void,
+    data: *mut std::ffi::c_void,
+    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
+    params: *const ffi::WasmEdge_Value,
+    param_len: u32,
+    returns: *mut ffi::WasmEdge_Value,
+    return_len: u32,
+) -> ffi::WasmEdge_Result {
+    let frame = CallingFrame::create(call_frame_ctx);
+
+    // recover the async host function
+    let real_func: AsyncHostFn<T> = unsafe { std::mem::transmute(key_ptr) };
+
+    // recover the context data
+    let data = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<NeverType>() {
+        None
+    } else {
+        let data: &'static mut T = unsafe { &mut *(data as *mut T) };
+        Some(data)
+    };
+
+    // arguments
+    let input = {
+        let raw_input = unsafe {
+            std::slice::from_raw_parts(
+                params,
+                param_len
+                    .try_into()
+                    .expect("len of params should not greater than usize"),
+            )
+        };
+        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
+    };
+
+    // returns
+    let return_len = return_len
+        .try_into()
+        .expect("len of returns should not greater than usize");
+    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
+
+    let async_cx = AsyncCx::new();
+    let mut future = Pin::from(real_func(frame, input, data));
+    let result = match unsafe { async_cx.block_on(future.as_mut()) } {
+        Ok(Ok(ret)) => Ok(ret),
+        Ok(Err(err)) => Err(err),
+        Err(_err) => Err(HostFuncError::User(0x87)),
+    };
+
+    // parse result
+    match result {
+        Ok(returns) => {
+            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}", return_len, returns.len());
+            for (idx, wasm_value) in returns.into_iter().enumerate() {
+                raw_returns[idx] = wasm_value.as_raw();
+            }
+            ffi::WasmEdge_Result { Code: 0 }
+        }
+        Err(err) => match err {
+            HostFuncError::User(code) => unsafe {
+                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
+            },
+            HostFuncError::Runtime(code) => unsafe {
+                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
+            },
+        },
+    }
+}
 
 /// A [AsyncWasiModule] is a module instance for the WASI specification and used in the `async` scenario.
 #[cfg(all(feature = "async", target_os = "linux"))]
@@ -33,7 +180,7 @@ pub struct AsyncWasiModule {
     pub(crate) inner: Arc<InnerInstance>,
     pub(crate) registered: bool,
     name: String,
-    wasi_ctx: Arc<Mutex<WasiCtx>>,
+    // wasi_ctx: Arc<Mutex<WasiCtx>>,
     funcs: Vec<Function>,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
@@ -56,9 +203,9 @@ impl AsyncWasiModule {
         args: Option<Vec<&str>>,
         envs: Option<Vec<(&str, &str)>>,
         preopens: Option<Vec<(PathBuf, PathBuf)>>,
+        wasi_ctx: &mut WasiCtx,
     ) -> WasmEdgeResult<Self> {
         // create wasi context
-        let mut wasi_ctx = WasiCtx::new();
         if let Some(args) = args {
             wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
         }
@@ -84,7 +231,6 @@ impl AsyncWasiModule {
             inner: std::sync::Arc::new(InnerInstance(ctx)),
             registered: false,
             name: name.to_string(),
-            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
             funcs: Vec::new(),
         };
 
@@ -93,23 +239,17 @@ impl AsyncWasiModule {
             match wasi_func {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create_wasi_func(
-                        &func_ty,
-                        real_fn,
-                        Some(&mut async_wasi_module.wasi_ctx.lock()),
-                        0,
-                    )?;
-                    async_wasi_module.add_wasi_func(name, func);
+                    async_wasi_module.add_wasi_func(name, &func_ty, real_fn, Some(wasi_ctx), 0)?;
                 }
                 WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create_async_wasi_func(
+                    async_wasi_module.add_async_wasi_func(
+                        name,
                         &func_ty,
                         real_async_fn,
-                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        Some(wasi_ctx),
                         0,
                     )?;
-                    async_wasi_module.add_wasi_func(name, func);
                 }
             }
         }
@@ -117,17 +257,76 @@ impl AsyncWasiModule {
         Ok(async_wasi_module)
     }
 
-    fn add_wasi_func(&mut self, name: impl AsRef<str>, func: Function) {
+    fn add_wasi_func<T>(
+        &mut self,
+        name: impl AsRef<str>,
+        ty: &FuncType,
+        real_fn: HostFn<T>,
+        ctx_data: Option<&mut T>,
+        cost: u64,
+    ) -> WasmEdgeResult<()> {
         let func_name: WasmEdgeString = name.into();
-        unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(
-                self.inner.0,
-                func_name.as_raw(),
-                func.inner.lock().0,
-            );
+
+        let data = match ctx_data {
+            Some(d) => d as *mut T as *mut std::ffi::c_void,
+            None => std::ptr::null_mut(),
+        };
+
+        let func_ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(wrap_sync_wasi_fn::<T>),
+                real_fn as *mut _,
+                data,
+                cost,
+            )
+        };
+
+        if func_ctx.is_null() {
+            return Err(Box::new(WasmEdgeError::Func(FuncError::Create)));
         }
 
-        func.inner.lock().0 = std::ptr::null_mut();
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func_ctx);
+        }
+
+        Ok(())
+    }
+
+    fn add_async_wasi_func<T>(
+        &mut self,
+        name: impl AsRef<str>,
+        ty: &FuncType,
+        real_fn: AsyncHostFn<T>,
+        ctx_data: Option<&mut T>,
+        cost: u64,
+    ) -> WasmEdgeResult<()> {
+        let data = match ctx_data {
+            Some(d) => d as *mut T as *mut std::ffi::c_void,
+            None => std::ptr::null_mut(),
+        };
+
+        let func_ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(wrap_async_wasi_fn::<T>),
+                real_fn as *mut _,
+                data,
+                cost,
+            )
+        };
+
+        if func_ctx.is_null() {
+            return Err(Box::new(WasmEdgeError::Func(FuncError::Create)));
+        }
+
+        let func_name: WasmEdgeString = name.into();
+
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddFunction(self.inner.0, func_name.as_raw(), func_ctx);
+        }
+
+        Ok(())
     }
 
     pub fn init_wasi(
@@ -135,57 +334,45 @@ impl AsyncWasiModule {
         args: Option<Vec<&str>>,
         envs: Option<Vec<(&str, &str)>>,
         preopens: Option<Vec<(PathBuf, PathBuf)>>,
+        wasi_ctx: &mut WasiCtx,
     ) -> WasmEdgeResult<()> {
         // create wasi context
-        let mut wasi_ctx = WasiCtx::new();
+        let mut new_wasi_ctx = WasiCtx::new();
         if let Some(args) = args {
-            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
+            new_wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
         }
         if let Some(envs) = envs {
-            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+            new_wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
         }
         if let Some(preopens) = preopens {
             for (host_dir, guest_dir) in preopens {
-                wasi_ctx.push_preopen(host_dir, guest_dir)
+                new_wasi_ctx.push_preopen(host_dir, guest_dir)
             }
         }
-
-        self.wasi_ctx = Arc::new(Mutex::new(wasi_ctx));
 
         // add sync/async host functions to the module
         for wasi_func in wasi_impls() {
             match wasi_func {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create_wasi_func(
-                        &func_ty,
-                        real_fn,
-                        Some(&mut self.wasi_ctx.lock()),
-                        0,
-                    )?;
-                    self.add_wasi_func(name, func);
+                    self.add_wasi_func(name, &func_ty, real_fn, Some(&mut new_wasi_ctx), 0)?;
                 }
                 WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
                     let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-                    let func = Function::create_async_wasi_func(
+                    self.add_async_wasi_func(
+                        name,
                         &func_ty,
                         real_async_fn,
-                        Some(&mut self.wasi_ctx.lock()),
+                        Some(&mut new_wasi_ctx),
                         0,
                     )?;
-                    self.add_wasi_func(name, func);
                 }
             }
         }
 
-        Ok(())
-    }
+        *wasi_ctx = new_wasi_ctx;
 
-    /// Returns the WASI exit code.
-    ///
-    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
-    pub fn exit_code(&self) -> u32 {
-        self.wasi_ctx.lock().exit_code
+        Ok(())
     }
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
