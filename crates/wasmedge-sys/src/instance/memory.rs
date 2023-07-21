@@ -25,7 +25,7 @@ impl Memory {
     ///
     /// # Errors
     ///
-    /// * If fail to create the memory instance, then [WasmEdgeError::Mem(MemError::Create)](crate::error::MemError) is returned.
+    /// * If fail to create the memory instance, then [WasmEdgeError::Mem(MemError::Create)](wasmedge_types::error::MemError) is returned.
     ///
     /// # Example
     ///

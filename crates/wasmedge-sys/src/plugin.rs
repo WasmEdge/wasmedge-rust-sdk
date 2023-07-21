@@ -40,7 +40,7 @@ impl PluginManager {
     ///
     /// # Error
     ///
-    /// * If the path contains invalid characters, then an [WasmEdgeError::FoundNulByte](crate::error::WasmEdgeError::FoundNulByte) error is returned.
+    /// * If the path contains invalid characters, then an [WasmEdgeError::FoundNulByte](wasmedge_types::error::WasmEdgeError::FoundNulByte) error is returned.
     pub fn load_plugins(path: impl AsRef<std::path::Path>) -> WasmEdgeResult<()> {
         let c_path = utils::path_to_cstring(path.as_ref())?;
         unsafe { ffi::WasmEdge_PluginLoadFromPath(c_path.as_ptr()) }

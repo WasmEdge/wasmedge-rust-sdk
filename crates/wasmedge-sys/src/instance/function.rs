@@ -336,7 +336,7 @@ impl Function {
     ///
     /// # Error
     ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
     /// # Example
     ///
@@ -460,7 +460,7 @@ impl Function {
     ///
     /// # Error
     ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
     pub fn create_async_func<T: Send + Sync>(
@@ -525,7 +525,7 @@ impl Function {
     ///
     /// # Error
     ///
-    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
     pub unsafe fn create_with_custom_wrapper(
         ty: &FuncType,
