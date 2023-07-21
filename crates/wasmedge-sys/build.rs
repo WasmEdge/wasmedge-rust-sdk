@@ -4,7 +4,7 @@ use std::{env, process::Command};
 
 const WASMEDGE_H: &str = "wasmedge.h";
 #[cfg(all(feature = "standalone", target_family = "unix",))]
-const WASMEDGE_RELEASE_VERSION: &str = "0.13.1";
+const WASMEDGE_RELEASE_VERSION: &str = "0.13.2";
 
 macro_rules! env_path {
     ($env_var:literal) => {
