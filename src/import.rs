@@ -38,7 +38,7 @@ impl ImportObjectBuilder {
     ///
     /// * `real_func` - The native function.
     ///
-    /// * `data` - The additional data object to set to this host function context.
+    /// * `data` - The host context data used in this function.
     ///
     /// # error
     ///
@@ -81,7 +81,7 @@ impl ImportObjectBuilder {
     ///
     /// * `real_func` - The native function.
     ///
-    /// * `data` - The additional data object to set to this host function context.
+    /// * `data` - The host context data used in this function.
     ///
     /// # error
     ///
@@ -115,6 +115,8 @@ impl ImportObjectBuilder {
     /// * `name` - The exported name of the [host function](crate::Func) to add.
     ///
     /// * `real_func` - The native function.
+    ///
+    /// * `data` - The host context data used in this function.
     ///
     /// # error
     ///
