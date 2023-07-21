@@ -266,9 +266,11 @@ impl AsyncWasiSocket {
     }
 
     pub async fn accept(&mut self) -> io::Result<Self> {
-        let mut new_state = WasiSocketState::default();
-        new_state.nonblocking = self.state.nonblocking;
-        new_state.so_conn_state = ConnectState::Connected;
+        let mut new_state = WasiSocketState {
+            nonblocking: self.state.nonblocking,
+            so_conn_state: ConnectState::Connected,
+            ..Default::default()
+        };
 
         if self.state.nonblocking {
             let (cs, _) = self.inner.accept()?;

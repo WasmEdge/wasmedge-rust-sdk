@@ -111,6 +111,7 @@ async fn wait_fd(
     }
 }
 
+#[allow(clippy::needless_pass_by_ref_mut)]
 async fn poll_only_fd<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -171,11 +172,10 @@ async fn poll_only_fd<M: Memory>(
             }
 
             drop(wait);
-            for fd in connected_fds {
-                if let Some(fd) = fd {
-                    if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
-                        socket.state.so_conn_state = ConnectState::Connected;
-                    }
+
+            for fd in connected_fds.into_iter().flatten() {
+                if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
+                    socket.state.so_conn_state = ConnectState::Connected;
                 }
             }
         }
@@ -185,6 +185,7 @@ async fn poll_only_fd<M: Memory>(
     Ok(())
 }
 
+#[allow(clippy::needless_pass_by_ref_mut)]
 async fn poll_fd_timeout<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -257,11 +258,10 @@ async fn poll_fd_timeout<M: Memory>(
         }
 
         drop(wait);
-        for fd in connected_fds {
-            if let Some(fd) = fd {
-                if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
-                    socket.state.so_conn_state = ConnectState::Connected;
-                }
+
+        for fd in connected_fds.into_iter().flatten() {
+            if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
+                socket.state.so_conn_state = ConnectState::Connected;
             }
         }
     }
