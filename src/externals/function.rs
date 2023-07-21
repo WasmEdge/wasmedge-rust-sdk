@@ -44,7 +44,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<Box<T>>,
+        data: Option<&mut T>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
@@ -76,7 +76,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<Box<T>>,
+        data: Option<&mut T>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
