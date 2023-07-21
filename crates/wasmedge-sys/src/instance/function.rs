@@ -330,7 +330,7 @@ impl Function {
     ///
     /// * `real_fn` - The pointer to the target function.
     ///
-    /// * `data` - The additional data object to set to this host function context.
+    /// * `data` - The host context data used in this function.
     ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
@@ -401,7 +401,7 @@ impl Function {
     ///
     /// * `real_fn` - The pointer to the target function.
     ///
-    /// * `data` - The pointer to the data.
+    /// * `data` - The pointer to the host context data used in this function.
     ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
@@ -455,6 +455,8 @@ impl Function {
     /// * `ty` - The types of the arguments and returns of the target function.
     ///
     /// * `real_fn` - The pointer to the target function.
+    ///
+    /// * `data` - The host context data used in this function.
     ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
@@ -519,7 +521,7 @@ impl Function {
     ///
     /// * `real_fn` - The pointer to the target function.
     ///
-    /// * `data` - The pointer to the data.
+    /// * `data` - The pointer to the host context data used in this function.
     ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
