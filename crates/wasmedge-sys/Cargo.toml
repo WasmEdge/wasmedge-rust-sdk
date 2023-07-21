@@ -26,7 +26,7 @@ parking_lot = "0.12.1"
 rand = "0.8.4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-async-wasi = {path = "../async-wasi", version = "0.0.1", optional = true}
+async-wasi = {path = "../async-wasi", version = "0.0.2", optional = true}
 
 [build-dependencies]
 bindgen = {version = "0.65", default-features = false, features = ["runtime"]}

@@ -268,7 +268,7 @@ impl AsyncWasiSocket {
     pub async fn accept(&mut self) -> io::Result<Self> {
         let mut new_state = WasiSocketState {
             nonblocking: self.state.nonblocking,
-            so_conn_state: ConnectState::Connect,
+            so_conn_state: ConnectState::Connected,
             ..Default::default()
         };
 
@@ -306,12 +306,16 @@ impl AsyncWasiSocket {
 
     pub async fn connect(&mut self, addr: net::SocketAddr) -> io::Result<()> {
         let address = SockAddr::from(addr);
-        self.state.so_conn_state = ConnectState::Connect;
+        self.state.so_conn_state = ConnectState::Connected;
         self.state.peer_addr = Some(addr);
 
         match (self.state.nonblocking, self.state.so_send_timeout) {
             (true, None) => {
-                self.inner.connect(&address)?;
+                let r = self.inner.connect(&address);
+                if r.is_err() {
+                    self.state.so_conn_state = ConnectState::Connecting;
+                }
+                r?;
                 Ok(())
             }
             (false, None) => {
@@ -591,6 +595,12 @@ impl AsyncWasiSocket {
 
     pub fn get_so_accept_conn(&self) -> io::Result<bool> {
         self.inner.get_ref()?.is_listener()
+    }
+
+    pub fn sync_conn_state(&mut self) {
+        if self.state.so_conn_state == ConnectState::Connecting {
+            self.state.so_conn_state = ConnectState::Connected;
+        }
     }
 
     pub fn set_so_reuseaddr(&mut self, reuseaddr: bool) -> io::Result<()> {

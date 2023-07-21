@@ -37,11 +37,12 @@ pub enum SocketType {
     Stream,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectState {
     Empty,
     Listening,
-    Connect,
+    Connected,
+    Connecting,
 }
 
 impl Default for ConnectState {
