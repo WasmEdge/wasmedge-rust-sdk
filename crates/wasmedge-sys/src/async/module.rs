@@ -27,7 +27,7 @@ use wasmedge_types::{
 
 /// Defines the signature of an asynchronous host function.
 #[cfg(all(feature = "async", target_os = "linux"))]
-type AsyncHostFn<T> =
+pub type AsyncHostFn<T> =
     fn(
         CallingFrame,
         Vec<WasmValue>,
@@ -36,7 +36,7 @@ type AsyncHostFn<T> =
 
 /// Defines the signature of a host function.
 #[cfg(all(feature = "async", target_os = "linux"))]
-type HostFn<T> = fn(
+pub type HostFn<T> = fn(
     CallingFrame,
     Vec<WasmValue>,
     Option<&'static mut T>,
