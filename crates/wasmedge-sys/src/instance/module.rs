@@ -414,7 +414,7 @@ impl ImportModule {
     ///
     /// * `name` - The name of the import module instance.
     ///
-    /// * `host_data` - The host data to be stored in the module instance.
+    /// * `host_data` - The host context data used in this function.
     ///
     /// # Error
     ///

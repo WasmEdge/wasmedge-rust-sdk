@@ -242,7 +242,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
         }
     }
 
-    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
+    /// Adds a [host function](crate::Func) to the [crate::ImportObject] to create.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
     ///

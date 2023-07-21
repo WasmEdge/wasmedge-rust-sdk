@@ -29,7 +29,7 @@ impl Func {
     ///
     /// * `real_func` - The native function that will be wrapped as a host function.
     ///
-    /// * `data` - The additional data object to set to this host function context.
+    /// * `data` - The host context data used in this function.
     ///
     /// # Error
     ///
@@ -63,6 +63,8 @@ impl Func {
     /// # Arguments
     ///
     /// * `real_func` - The native function to be wrapped.
+    ///
+    /// * `data` - The host context data used in this function.
     ///
     /// # Error
     ///
@@ -102,6 +104,8 @@ impl Func {
     /// # Arguments
     ///
     /// * `real_func` - The native function to be wrapped.
+    ///
+    /// * `data` - The host context data used in this function.
     ///
     /// # Error
     ///
