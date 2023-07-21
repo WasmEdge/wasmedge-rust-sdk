@@ -1,3 +1,4 @@
+use wasmedge_macro::sys_host_function;
 use wasmedge_sys::{CallingFrame, Executor, FuncType, Function, WasmValue};
 use wasmedge_types::{error::HostFuncError, ValType};
 
@@ -9,15 +10,15 @@ struct Data<T, S> {
     _s: Vec<S>,
 }
 
+#[sys_host_function]
 fn real_add<T: core::fmt::Debug>(
     _frame: CallingFrame,
     input: Vec<WasmValue>,
-    data: *mut std::ffi::c_void,
+    data: &mut Data<i32, &str>,
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     println!("Rust: Entering Rust function real_add");
 
-    let host_data = unsafe { Box::from_raw(data as *mut T) };
-    println!("host_data: {:?}", host_data);
+    println!("data: {data:?}");
 
     if input.len() != 2 {
         return Err(HostFuncError::User(1));
@@ -43,7 +44,7 @@ fn real_add<T: core::fmt::Debug>(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let data: Data<i32, &str> = Data {
+    let mut data: Data<i32, &str> = Data {
         _x: 12,
         _y: "hello".to_string(),
         _v: vec![1, 2, 3],
@@ -55,12 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(result.is_ok());
     let func_ty = result.unwrap();
     // create a host function
-    let result = Function::create_sync_func(
-        &func_ty,
-        Box::new(real_add::<Data<i32, &str>>),
-        Some(Box::new(data)),
-        0,
-    );
+    let result = Function::create_sync_func(&func_ty, Box::new(real_add), Some(&mut data), 0);
     assert!(result.is_ok());
     let host_func = result.unwrap();
 
