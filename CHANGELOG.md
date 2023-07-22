@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2023-07-21
+
+### ⛰️  Features
+
+- Support closures in `Func` and `ImportObjectBuilder` ([#20](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/20))
+  - [BREAKING] Update `Func::new` method
+  - [BREAKING] Update `Func::wrap_func` method
+  - [BREAKING] Update `Func::wrap_async_func` method
+  - [BREAKING] Update `ImportObjectBuilder::with_func` method
+  - [BREAKING] Update `ImportObjectBuilder::with_func_by_type` method
+  - [BREAKING] Update `ImportObjectBuilder::with_async_func` method
+
+- Support `host_data` in `ImportObjectBuilder::with_async_func` and `ImportObjectBuilder::build` methods ([#21](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/21))
+
+- Support standalone static libraries ([#22](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/22) [#24](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/24))
+
+### 🚜 Refactor
+
+- [BREAKING] Rename `Func::wrap` to `Func::wrap_func` ([#20](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/20))
+- [BREAKING] Rename `Func::wrap_async` to `Func::wrap_async_func` ([#20](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/20))
+- [BREAKING] Rename `ImportObjectBuilder::with_func_async` to `ImportObjectBuilder::with_async_func` ([#20](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/20))
+- Remove the `host_data` field in `ImportObjectBuilder` ([#21](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/21))
+  - [BREAKING] Update `ImportObjectBuilder::with_async_func` method
+- Remove the generic type in `ImportObject` ([#21](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/21))
+  - [BREAKING] Update `VmBuilder::build` method
+  - [BREAKING] Remove the generic type in `Vm`
+
+### 📚 Documentation
+
+- Update README and rustdoc ([#28](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/28))
+
 ## [0.9.0] - 2023-06-30
 
 ### ⛰️  Features
