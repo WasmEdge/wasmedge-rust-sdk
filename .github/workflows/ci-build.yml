@@ -4,7 +4,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
 
 jobs:
   build_ubuntu:
@@ -70,12 +76,10 @@ jobs:
 
       - name: Test Rust SDK
         run: |
-          cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1
 
       - name: Test Rust SDK with async feature
         run: |
-          cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
 
   build_fedora:
@@ -83,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.70.0, 1.69, 1.68]
+        rust: [1.71, 1.70.0, 1.69]
     container:
       image: fedora:latest
 
@@ -143,7 +147,6 @@ jobs:
           export WASMEDGE_BUILD_DIR="$(pwd)/WasmEdge/build"
           export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
           export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
-          cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1
 
       - name: Test Rust SDK with async feature
@@ -152,7 +155,6 @@ jobs:
           export WASMEDGE_BUILD_DIR="$(pwd)/WasmEdge/build"
           export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
           export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
-          cargo +nightly -Z sparse-registry update
           cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
 
   build_macos:
@@ -161,7 +163,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-11, macos-12]
-        rust: [1.70.0, 1.69, 1.68]
+        rust: [1.71, 1.70.0, 1.69]
 
     steps:
       - name: Checkout sources
@@ -209,7 +211,6 @@ jobs:
 
       - name: Test Rust Bindings
         run: |
-          cargo +nightly -Z sparse-registry update
           cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --nocapture --test-threads=1
 
   build_windows:
@@ -217,7 +218,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        rust: [1.70.0, 1.69, 1.68]
+        rust: [1.71, 1.70.0, 1.69]
     env:
       WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
       WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build
@@ -287,5 +288,4 @@ jobs:
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
           $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\wasmedge-rust-sdk\wasmedge-rust-sdk\WasmEdge\build\lib\api"
-          cargo +nightly -Z sparse-registry update
           cargo test --workspace --exclude async-wasi --features aot,ffi --locked -- --nocapture --test-threads=1
