@@ -262,13 +262,15 @@ impl ImportObject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(feature = "async"))]
+    use crate::VmBuilder;
     use crate::{
         config::{CommonConfigOptions, ConfigBuilder},
         error::{GlobalError, HostFuncError, WasmEdgeError},
         params,
         types::Val,
         CallingFrame, Executor, Global, GlobalType, Memory, MemoryType, Mutability, NeverType,
-        RefType, Statistics, Store, Table, TableType, ValType, VmBuilder, WasmVal, WasmValue,
+        RefType, Statistics, Store, Table, TableType, ValType, WasmVal, WasmValue,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -285,6 +287,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     #[allow(clippy::assertions_on_result_states)]
     fn test_import_builder_with_data() {
         // define host data

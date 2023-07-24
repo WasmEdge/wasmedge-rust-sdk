@@ -499,6 +499,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     fn test_func_wrap_closure() -> Result<(), Box<dyn std::error::Error>> {
         // define a closure
         let real_add = |_: CallingFrame,
@@ -557,6 +558,8 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::wasi::WasiContext;
+
         // define an async closure
         let c = |_frame: CallingFrame,
                  _args: Vec<WasmValue>,
@@ -600,10 +603,15 @@ mod tests {
         assert!(result.is_ok());
         let import = result.unwrap();
 
+        let mut wasi_ctx = WasiContext::default();
+
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().build(Some(&mut wasi_ctx));
         assert!(result.is_ok());
         let vm = result.unwrap();
+
+        // ! drop wasi_ctx
+        drop(wasi_ctx);
 
         // register an import module into vm
         let result = vm.register_import_module(import);
