@@ -168,7 +168,7 @@ impl VmBuilder {
     ///
     /// If fail to create, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn build(mut self, wasi_ctx: Option<&mut WasiContext>) -> WasmEdgeResult<Vm> {
+    pub fn build(mut self, wasi_ctx: Option<WasiContext>) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
@@ -198,7 +198,9 @@ impl VmBuilder {
                     Some(ctx) => {
                         // create an AsyncWasiModule instance
                         let wasi_module =
-                            sys::r#async::module::AsyncWasiModule::create(&mut ctx.inner)?;
+                            sys::r#async::module::AsyncWasiModule::create_from_wasi_context(
+                                ctx.inner,
+                            )?;
 
                         // register the AsyncWasiModule instance
                         vm.executor.inner.register_import_object(
