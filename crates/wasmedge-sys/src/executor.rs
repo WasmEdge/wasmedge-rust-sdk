@@ -370,6 +370,7 @@ mod tests {
             use crate::r#async::AsyncWasiModule;
             use crate::{Loader, Validator};
             use wasmedge_macro::sys_async_host_function;
+            use async_wasi::WasiCtx;
         }
     }
     use crate::{
@@ -579,147 +580,154 @@ mod tests {
         handle.join().unwrap();
     }
 
-    // #[cfg(all(feature = "async", target_os = "linux"))]
-    // #[tokio::test]
-    // async fn test_executor_register_async_wasi() -> Result<(), Box<dyn std::error::Error>> {
-    //     // create a Config
-    //     let mut config = Config::create()?;
-    //     config.wasi(true);
-    //     assert!(config.wasi_enabled());
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[tokio::test]
+    async fn test_executor_register_async_wasi() -> Result<(), Box<dyn std::error::Error>> {
+        // create a Config
+        let mut config = Config::create()?;
+        config.wasi(true);
+        assert!(config.wasi_enabled());
 
-    //     // create an Executor
-    //     let result = Executor::create(None, None);
-    //     assert!(result.is_ok());
-    //     let mut executor = result.unwrap();
-    //     assert!(!executor.inner.0.is_null());
+        // create an Executor
+        let result = Executor::create(None, None);
+        assert!(result.is_ok());
+        let mut executor = result.unwrap();
+        assert!(!executor.inner.0.is_null());
 
-    //     // create a Store
-    //     let result = Store::create();
-    //     assert!(result.is_ok());
-    //     let mut store = result.unwrap();
+        // create a Store
+        let result = Store::create();
+        assert!(result.is_ok());
+        let mut store = result.unwrap();
 
-    //     // create an AsyncWasiModule
-    //     let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
-    //     assert!(result.is_ok());
-    //     let async_wasi_module = result.unwrap();
+        // create wasi context instance
+        let mut wasi_ctx = WasiCtx::new();
+        wasi_ctx.push_arg("abc".to_string());
+        wasi_ctx.push_env("ENV=1".to_string());
 
-    //     // register async_wasi module into the store
-    //     let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
-    //     let result = executor.register_import_object(&mut store, &wasi_import);
-    //     assert!(result.is_ok());
+        // create an AsyncWasiModule
+        let result = AsyncWasiModule::create(&mut wasi_ctx);
+        assert!(result.is_ok());
+        let async_wasi_module = result.unwrap();
 
-    // let wasm_file = std::env::current_dir()
-    //     .unwrap()
-    //     .ancestors()
-    //     .nth(2)
-    //     .unwrap()
-    //     .join("examples/wasmedge-sys/async_hello.wasm");
-    // let module = Loader::create(None)?.from_file(&wasm_file)?;
-    // Validator::create(None)?.validate(&module)?;
-    // let instance = executor.register_active_module(&mut store, &module)?;
-    // let fn_start = instance.get_func("_start")?;
+        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
+        let result = executor.register_import_object(&mut store, &wasi_import);
+        assert!(result.is_ok());
 
-    //     async fn tick() {
-    //         let mut i = 0;
-    //         loop {
-    //             println!("[tick] i={i}");
-    //             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    //             i += 1;
-    //         }
-    //     }
-    //     tokio::spawn(tick());
+        // register async_wasi module into the store
+        let wasm_file = std::env::current_dir()
+            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/async_hello.wasm");
+        let module = Loader::create(None)?.from_file(&wasm_file)?;
+        Validator::create(None)?.validate(&module)?;
+        let instance = executor.register_active_module(&mut store, &module)?;
+        let fn_start = instance.get_func("_start")?;
 
-    //     dbg!("call async host func");
+        async fn tick() {
+            let mut i = 0;
+            loop {
+                println!("[tick] i={i}");
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                i += 1;
+            }
+        }
+        tokio::spawn(tick());
 
-    //     let async_state = AsyncState::new();
-    //     let _ = executor
-    //         .call_func_async(&async_state, &fn_start, [])
-    //         .await?;
+        dbg!("call async host func");
 
-    //     dbg!("call async host func done");
+        let async_state = AsyncState::new();
+        let _ = executor
+            .call_func_async(&async_state, &fn_start, [])
+            .await?;
 
-    //     Ok(())
-    // }
+        dbg!("call async host func done");
 
-    // #[cfg(all(feature = "async", target_os = "linux"))]
-    // #[tokio::test]
-    // async fn test_executor_run_async_host_func() -> Result<(), Box<dyn std::error::Error>> {
-    //     fn async_hello(
-    //         _frame: CallingFrame,
-    //         _inputs: Vec<WasmValue>,
-    //         _: *mut std::os::raw::c_void,
-    //     ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
-    //     {
-    //         Box::new(async move {
-    //             let val = std::env::var("ENV").expect("failed to get environment variable: ENV");
-    //             println!("[wasm-app] ENV={val}");
+        Ok(())
+    }
 
-    //             for _ in 0..10 {
-    //                 println!("[async hello] say hello");
-    //                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    //             }
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[tokio::test]
+    async fn test_executor_run_async_host_func() -> Result<(), Box<dyn std::error::Error>> {
+        fn async_hello(
+            _frame: CallingFrame,
+            _inputs: Vec<WasmValue>,
+            _: *mut std::os::raw::c_void,
+        ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
+        {
+            Box::new(async move {
+                for _ in 0..10 {
+                    println!("[async hello] say hello");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
 
-    //             println!("[async hello] Done!");
+                println!("[async hello] Done!");
 
-    //             Ok(vec![])
-    //         })
-    //     }
+                Ok(vec![])
+            })
+        }
 
-    //     // create a Config
-    //     let mut config = Config::create()?;
-    //     config.wasi(true);
-    //     assert!(config.wasi_enabled());
+        // create a Config
+        let mut config = Config::create()?;
+        config.wasi(true);
+        assert!(config.wasi_enabled());
 
-    //     // create an Executor
-    //     let result = Executor::create(None, None);
-    //     assert!(result.is_ok());
-    //     let mut executor = result.unwrap();
-    //     assert!(!executor.inner.0.is_null());
+        // create an Executor
+        let result = Executor::create(None, None);
+        assert!(result.is_ok());
+        let mut executor = result.unwrap();
+        assert!(!executor.inner.0.is_null());
 
-    //     // create a Store
-    //     let result = Store::create();
-    //     assert!(result.is_ok());
-    //     let mut store = result.unwrap();
+        // create a Store
+        let result = Store::create();
+        assert!(result.is_ok());
+        let mut store = result.unwrap();
 
-    //     // create an AsyncWasiModule
-    //     let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
-    //     assert!(result.is_ok());
-    //     let async_wasi_module = result.unwrap();
+        // create wasi context instance
+        let mut wasi_ctx = WasiCtx::default();
 
-    //     // register async_wasi module into the store
-    //     let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
-    //     let result = executor.register_import_object(&mut store, &wasi_import);
-    //     assert!(result.is_ok());
+        // create an AsyncWasiModule
+        let result = AsyncWasiModule::create(&mut wasi_ctx);
+        assert!(result.is_ok());
+        let async_wasi_module = result.unwrap();
 
-    //     let ty = FuncType::create([], [])?;
-    //     let async_hello_func =
-    //         Function::create_async_func::<NeverType>(&ty, Box::new(async_hello), None, 0)?;
-    //     let mut import = ImportModule::create::<NeverType>("extern", None)?;
-    //     import.add_func("async_hello", async_hello_func);
+        // register async_wasi module into the store
+        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
+        let result = executor.register_import_object(&mut store, &wasi_import);
+        assert!(result.is_ok());
 
-    //     let extern_import = ImportObject::Import(import);
-    //     executor.register_import_object(&mut store, &extern_import)?;
+        let ty = FuncType::create([], [])?;
+        let async_hello_func =
+            Function::create_async_func::<NeverType>(&ty, Box::new(async_hello), None, 0)?;
+        let mut import = ImportModule::create::<NeverType>("extern", None)?;
+        import.add_func("async_hello", async_hello_func);
 
-    //     let extern_instance = store.module("extern")?;
-    //     let async_hello = extern_instance.get_func("async_hello")?;
+        let extern_import = ImportObject::Import(import);
+        executor.register_import_object(&mut store, &extern_import)?;
 
-    //     async fn tick() {
-    //         let mut i = 0;
-    //         loop {
-    //             println!("[tick] i={i}");
-    //             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    //             i += 1;
-    //         }
-    //     }
-    //     tokio::spawn(tick());
+        let extern_instance = store.module("extern")?;
+        let async_hello = extern_instance.get_func("async_hello")?;
 
-    //     let async_state = AsyncState::new();
-    //     let _ = executor
-    //         .call_func_async(&async_state, &async_hello, [])
-    //         .await?;
+        async fn tick() {
+            let mut i = 0;
+            loop {
+                println!("[tick] i={i}");
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                i += 1;
+            }
+        }
+        tokio::spawn(tick());
 
-    //     Ok(())
-    // }
+        let async_state = AsyncState::new();
+        let _ = executor
+            .call_func_async(&async_state, &async_hello, [])
+            .await?;
+
+        dbg!(&wasi_ctx);
+
+        Ok(())
+    }
 
     #[sys_host_function]
     fn real_add(
