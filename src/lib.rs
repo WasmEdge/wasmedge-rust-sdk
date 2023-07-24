@@ -130,19 +130,11 @@ pub type NeverType = wasmedge_types::NeverType;
 #[doc(hidden)]
 pub type CallingFrame = wasmedge_sys::CallingFrame;
 
-/// Defines the signature of a host function.
-#[cfg(all(feature = "async", target_os = "linux"))]
-pub type HostFn<T> = wasmedge_sys::r#async::module::HostFn<T>;
-
 /// Defines the types used in the `async` scenarios.
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async {
     /// The state of an asynchronous task.
     pub type AsyncState = wasmedge_sys::r#async::fiber::AsyncState;
-    /// Defines the signature of an asynchronous host function.
-    pub type AsyncHostFn<T> = wasmedge_sys::r#async::module::AsyncHostFn<T>;
-    /// Type of wasi context that is used to configure the wasi environment.
-    pub type WasiCtx = wasmedge_sys::WasiCtx;
 }
 
 /// The object that is used to perform a [host function](crate::Func) is required to implement this trait.

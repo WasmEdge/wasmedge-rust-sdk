@@ -603,15 +603,13 @@ mod tests {
         assert!(result.is_ok());
         let import = result.unwrap();
 
-        let mut wasi_ctx = WasiContext::default();
+        // create a default WasiContext instance
+        let wasi_ctx = WasiContext::default();
 
         // create a Vm context
-        let result = VmBuilder::new().build(Some(&mut wasi_ctx));
+        let result = VmBuilder::new().build(Some(wasi_ctx));
         assert!(result.is_ok());
         let vm = result.unwrap();
-
-        // ! drop wasi_ctx
-        drop(wasi_ctx);
 
         // register an import module into vm
         let result = vm.register_import_module(import);
