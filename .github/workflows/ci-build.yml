@@ -73,7 +73,7 @@ jobs:
         run: |
           rustup target add wasm32-wasi
           rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
-          rustc rustc hello.rs --target=wasm32-wasi -o hello.wasm
+          rustc hello.rs --target=wasm32-wasi -o hello.wasm
 
       - name: Test Rust SDK
         run: |
@@ -141,7 +141,7 @@ jobs:
         run: |
           rustup target add wasm32-wasi
           rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
-          rustc rustc hello.rs --target=wasm32-wasi -o hello.wasm
+          rustc hello.rs --target=wasm32-wasi -o hello.wasm
 
       - name: Test Rust SDK
         run: |
