@@ -1,16 +1,20 @@
 //! Defines wasi module instance types, including WasiInstance, WasiNnInstance, wasi-crypto instances.
 
-use crate::{
-    AsInstance, Func, FuncType, Global, GlobalType, Memory, MemoryType, Table, TableType,
-    WasmEdgeResult,
-};
-use wasmedge_sys::{self as sys, AsImport, AsInstance as sys_as_instance_trait};
+cfg_if::cfg_if! {
+    if #[cfg(not(feature = "async"))] {
+        use crate::{
+            AsInstance, Func, FuncType, Global, GlobalType, Memory, MemoryType, Table, TableType,
+            WasmEdgeResult,
+        };
+        use wasmedge_sys::{AsImport, AsInstance as sys_as_instance_trait};
+    }
+}
 
 /// Represents a wasi module instance.
 #[cfg(not(feature = "async"))]
 #[derive(Debug, Clone)]
 pub struct WasiInstance {
-    pub(crate) inner: sys::WasiModule,
+    pub(crate) inner: wasmedge_sys::WasiModule,
 }
 #[cfg(not(feature = "async"))]
 impl WasiInstance {
@@ -173,134 +177,47 @@ impl AsInstance for WasiInstance {
 /// Represents a wasi module instance.
 #[cfg(all(feature = "async", target_os = "linux"))]
 #[derive(Debug, Clone)]
-pub struct WasiInstance {
-    pub(crate) inner: sys::AsyncWasiModule,
+pub(crate) struct WasiInstance(pub(crate) wasmedge_sys::r#async::AsyncWasiModule);
+
+#[cfg(all(feature = "async", target_os = "linux"))]
+#[derive(Debug)]
+pub struct WasiContext {
+    pub(crate) inner: async_wasi::WasiCtx,
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
-impl WasiInstance {
-    /// Initializes the WASI host module with the given parameters.
-    ///
-    /// # Arguments
-    ///
-    /// * `args` - The commandline arguments. Note that the first argument is the program name.
-    ///
-    /// * `envs` - The environment variables.
-    ///
-    /// * `preopens` - The directories to pre-open.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let wasi_module = vm.wasi_module_mut().ok_or("failed to get wasi module")?;
-    /// wasi_module.initialize(
-    ///     None,
-    ///     Some(vec![("ENV", "VAL")]),
-    ///     Some(vec![(
-    ///         std::path::PathBuf::from("."),
-    ///         std::path::PathBuf::from("."),
-    ///     )]),
-    /// )?;
-    /// ```
-    ///
-    pub fn initialize(
-        &mut self,
+impl WasiContext {
+    pub fn new(
         args: Option<Vec<&str>>,
         envs: Option<Vec<(&str, &str)>>,
-        preopens: Option<Vec<(std::path::PathBuf, std::path::PathBuf)>>,
-    ) -> WasmEdgeResult<()> {
-        self.inner.init_wasi(args, envs, preopens)
+        preopens: Option<Vec<(&str, &str)>>,
+    ) -> Self {
+        let mut inner = async_wasi::WasiCtx::new();
+
+        if let Some(args) = args {
+            inner.push_args(args.iter().map(|x| x.to_string()).collect());
+        }
+        if let Some(envs) = envs {
+            inner.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+        }
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                inner.push_preopen(
+                    std::path::PathBuf::from(host_dir),
+                    std::path::PathBuf::from(guest_dir),
+                )
+            }
+        }
+
+        Self { inner }
     }
 
-    /// Returns the WASI exit code.
-    ///
-    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
     pub fn exit_code(&self) -> u32 {
-        self.inner.exit_code()
+        self.inner.exit_code
     }
 }
 #[cfg(all(feature = "async", target_os = "linux"))]
-impl AsInstance for WasiInstance {
-    fn name(&self) -> &str {
-        self.inner.name()
-    }
-
-    fn func_count(&self) -> usize {
-        self.inner.func_len() as usize
-    }
-
-    fn func_names(&self) -> Option<Vec<String>> {
-        self.inner.func_names()
-    }
-
-    fn func(&self, name: impl AsRef<str>) -> WasmEdgeResult<Func> {
-        let inner_func = self.inner.get_func(name.as_ref())?;
-        let ty: FuncType = inner_func.ty()?.into();
-
-        Ok(Func {
-            inner: inner_func,
-            name: Some(name.as_ref().into()),
-            mod_name: None,
-            ty,
-        })
-    }
-
-    fn global_count(&self) -> usize {
-        self.inner.global_len() as usize
-    }
-
-    fn global_names(&self) -> Option<Vec<String>> {
-        self.inner.global_names()
-    }
-
-    fn global(&self, name: impl AsRef<str>) -> WasmEdgeResult<Global> {
-        let inner_global = self.inner.get_global(name.as_ref())?;
-        let ty: GlobalType = inner_global.ty()?.into();
-
-        Ok(Global {
-            inner: inner_global,
-            name: Some(name.as_ref().into()),
-            mod_name: None,
-            ty,
-        })
-    }
-
-    fn memory_count(&self) -> usize {
-        self.inner.mem_len() as usize
-    }
-
-    fn memory_names(&self) -> Option<Vec<String>> {
-        self.inner.mem_names()
-    }
-
-    fn memory(&self, name: impl AsRef<str>) -> WasmEdgeResult<Memory> {
-        let inner_memory = self.inner.get_memory(name.as_ref())?;
-        let ty: MemoryType = inner_memory.ty()?.into();
-
-        Ok(Memory {
-            inner: inner_memory,
-            name: Some(name.as_ref().into()),
-            mod_name: None,
-            ty,
-        })
-    }
-
-    fn table_count(&self) -> usize {
-        self.inner.table_len() as usize
-    }
-
-    fn table_names(&self) -> Option<Vec<String>> {
-        self.inner.table_names()
-    }
-
-    fn table(&self, name: impl AsRef<str>) -> WasmEdgeResult<Table> {
-        let inner_table = self.inner.get_table(name.as_ref())?;
-        let ty: TableType = inner_table.ty()?.into();
-
-        Ok(Table {
-            inner: inner_table,
-            name: Some(name.as_ref().into()),
-            mod_name: None,
-            ty,
-        })
+impl Default for WasiContext {
+    fn default() -> Self {
+        Self::new(None, None, None)
     }
 }
