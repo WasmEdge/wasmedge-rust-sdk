@@ -370,7 +370,6 @@ mod tests {
             use crate::r#async::AsyncWasiModule;
             use crate::{Loader, Validator};
             use wasmedge_macro::sys_async_host_function;
-            use async_wasi::WasiCtx;
         }
     }
     use crate::{
@@ -599,13 +598,8 @@ mod tests {
         assert!(result.is_ok());
         let mut store = result.unwrap();
 
-        // create wasi context instance
-        let mut wasi_ctx = WasiCtx::new();
-        wasi_ctx.push_arg("abc".to_string());
-        wasi_ctx.push_env("ENV=1".to_string());
-
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(&mut wasi_ctx);
+        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 
@@ -684,11 +678,8 @@ mod tests {
         assert!(result.is_ok());
         let mut store = result.unwrap();
 
-        // create wasi context instance
-        let mut wasi_ctx = WasiCtx::default();
-
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(&mut wasi_ctx);
+        let result = AsyncWasiModule::create(None, None, None);
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 
@@ -723,8 +714,6 @@ mod tests {
         let _ = executor
             .call_func_async(&async_state, &async_hello, [])
             .await?;
-
-        dbg!(&wasi_ctx);
 
         Ok(())
     }
