@@ -19,6 +19,7 @@ path-absolutize = "3.0.13"
 serde = {version = "1", features = ["derive"], optional = true}
 socket2 = {version = "^0.4.9", features = ["all"]}
 tokio = {version = "1", features = ["full"], optional = true}
+parking_lot.workspace = true
 
 [dev-dependencies]
 serde_json = {version = "1"}
