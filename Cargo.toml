@@ -8,7 +8,7 @@ license = "Apache-2.0"
 name = "wasmedge-sdk"
 readme = "README.md"
 repository = "https://github.com/WasmEdge/WasmEdge/blob/master/bindings/rust/wasmedge-sdk"
-version = "0.10.0"
+version = "0.10.1"
 
 [dependencies]
 anyhow = "1.0"
@@ -37,3 +37,4 @@ wasmedge_process = ["wasmedge-sys/wasmedge_process"]
 tokio = {version = "1", features = ["full"]}
 
 [workspace]
+members = ["crates/wasmedge-sys", "crates/wasmedge-types", "crates/wasmedge-macro", "crates/async-wasi"]
