@@ -37,3 +37,4 @@ wasmedge_process = ["wasmedge-sys/wasmedge_process"]
 tokio = {version = "1", features = ["full"]}
 
 [workspace]
+members = ["crates/wasmedge-sys", "crates/wasmedge-types", "crates/wasmedge-macro", "crates/async-wasi"]
