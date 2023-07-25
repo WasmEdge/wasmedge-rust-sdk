@@ -424,7 +424,10 @@ mod tests {
     fn test_module_clone() {
         let path = std::env::current_dir()
             .unwrap()
-            .join("examples/data/import.wat");
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -453,7 +456,10 @@ mod tests {
     fn test_module_import() {
         let path = std::env::current_dir()
             .unwrap()
-            .join("examples/data/import.wat");
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -606,7 +612,10 @@ mod tests {
     fn test_module_export() {
         let path = std::env::current_dir()
             .unwrap()
-            .join("examples/data/import.wat");
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -757,7 +766,10 @@ mod tests {
     fn test_module_send() {
         let path = std::env::current_dir()
             .unwrap()
-            .join("examples/data/import.wat");
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -912,7 +924,10 @@ mod tests {
     fn test_module_sync() {
         let path = std::env::current_dir()
             .unwrap()
-            .join("examples/data/import.wat");
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());

@@ -875,7 +875,7 @@ mod tests {
         // register a wasm module from a specified wasm file
         let file = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+            .join("examples/wasmedge-sys/data/fibonacci.wat");
 
         // run `fib` function from the wasm file
         let result = vm.run_func_from_file(file, "fib", params!(10));
@@ -1187,7 +1187,7 @@ mod tests {
             // register a wasm module from a specified wasm file
             let file = std::env::current_dir()
                 .unwrap()
-                .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             let result = vm.register_module_from_file("extern", file);
             assert!(result.is_ok());
             let vm = result.unwrap();
