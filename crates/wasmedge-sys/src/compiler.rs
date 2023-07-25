@@ -441,7 +441,10 @@ mod tests {
         // compile a file for universal WASM output format
         let in_path = std::env::current_dir()
             .unwrap()
-            .join("tests/data/fibonacci.wat");
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/fibonacci.wat");
         #[cfg(target_os = "macos")]
         let out_path = std::path::PathBuf::from("fibonacci_aot.dylib");
         #[cfg(target_os = "linux")]

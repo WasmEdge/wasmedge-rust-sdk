@@ -201,7 +201,12 @@ mod tests {
         let result = Loader::create(Some(&config));
         assert!(result.is_ok());
         let loader = result.unwrap();
-        let path = std::env::current_dir().unwrap().join("tests/data/test.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/test.wat");
         let result = loader.from_file(path);
         assert!(result.is_ok());
         let module = result.unwrap();
@@ -227,7 +232,12 @@ mod tests {
         let result = Loader::create(Some(&config));
         assert!(result.is_ok());
         let loader = result.unwrap();
-        let path = std::env::current_dir().unwrap().join("tests/data/test.wat");
+        let path = std::env::current_dir()
+            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/data/test.wat");
         let result = loader.from_file(path);
         assert!(result.is_ok());
         let module = result.unwrap();
