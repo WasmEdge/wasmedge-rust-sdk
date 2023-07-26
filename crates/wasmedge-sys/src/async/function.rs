@@ -18,7 +18,6 @@ pub(crate) struct WasiFunction {
     pub(crate) registered: bool,
 }
 impl WasiFunction {
-    #[cfg(all(feature = "async", target_os = "linux"))]
     pub(crate) fn create_wasi_func<T>(
         ty: &FuncType,
         real_fn: HostFn<T>,
@@ -49,7 +48,6 @@ impl WasiFunction {
         }
     }
 
-    #[cfg(all(feature = "async", target_os = "linux"))]
     pub(crate) fn create_async_wasi_func<T>(
         ty: &FuncType,
         real_fn: AsyncHostFn<T>,
@@ -90,7 +88,6 @@ impl Clone for WasiFunction {
 }
 
 /// Defines the signature of an asynchronous host function.
-#[cfg(all(feature = "async", target_os = "linux"))]
 pub(crate) type AsyncHostFn<T> =
     fn(
         CallingFrame,
@@ -99,14 +96,12 @@ pub(crate) type AsyncHostFn<T> =
     ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
 
 /// Defines the signature of a host function.
-#[cfg(all(feature = "async", target_os = "linux"))]
 pub(crate) type HostFn<T> = fn(
     CallingFrame,
     Vec<WasmValue>,
     Option<&'static mut T>,
 ) -> Result<Vec<WasmValue>, HostFuncError>;
 
-#[cfg(all(feature = "async", target_os = "linux"))]
 extern "C" fn wrap_sync_wasi_fn<T: 'static>(
     key_ptr: *mut std::ffi::c_void,
     data: *mut std::ffi::c_void,
@@ -167,7 +162,6 @@ extern "C" fn wrap_sync_wasi_fn<T: 'static>(
     }
 }
 
-#[cfg(all(feature = "async", target_os = "linux"))]
 extern "C" fn wrap_async_wasi_fn<T: 'static>(
     key_ptr: *mut std::ffi::c_void,
     data: *mut std::ffi::c_void,
