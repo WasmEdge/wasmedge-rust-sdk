@@ -2434,7 +2434,13 @@ mod tests {
         let result = executor.register_import_object(&mut store, &wasi_import);
         assert!(result.is_ok());
 
-        let module = Loader::create(None)?.from_file("examples/hello.wasm")?;
+        let wasm_file = std::env::current_dir()
+            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/async_hello.wasm");
+        let module = Loader::create(None)?.from_file(&wasm_file)?;
         Validator::create(None)?.validate(&module)?;
         let instance = executor.register_active_module(&mut store, &module)?;
         let fn_start = instance.get_func("_start")?;
