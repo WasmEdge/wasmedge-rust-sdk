@@ -427,7 +427,7 @@ impl ImportModule {
                     ffi::WasmEdge_ModuleInstanceCreateWithData(
                         raw_name.as_raw(),
                         p as *mut std::ffi::c_void,
-                        Some(host_data_finalizer::<T>),
+                        None,
                     )
                 }
             }
@@ -1037,13 +1037,6 @@ impl ImportObject {
             ImportObject::AsyncWasi(async_wasi) => async_wasi.inner.0,
         }
     }
-}
-
-pub(crate) unsafe extern "C" fn host_data_finalizer<T: Sized + Send>(
-    raw: *mut ::std::os::raw::c_void,
-) {
-    let host_data: Box<T> = Box::from_raw(raw as *mut T);
-    drop(host_data);
 }
 
 #[cfg(test)]
