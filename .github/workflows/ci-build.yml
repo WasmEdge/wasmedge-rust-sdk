@@ -69,7 +69,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Build Async-Hello for Testing
-        working-directory: crates/wasmedge-sys/examples
+        working-directory: examples/wasmedge-sys
         run: |
           rustup target add wasm32-wasi
           rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
@@ -136,7 +136,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Build Async-Hello for Testing
-        working-directory: crates/wasmedge-sys/examples
+        working-directory: examples/wasmedge-sys
         run: |
           rustup target add wasm32-wasi
           rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm

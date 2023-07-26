@@ -203,7 +203,10 @@ mod tests {
             // load .wasm file
             let path = std::env::current_dir()
                 .unwrap()
-                .join("examples/data/fibonacci.wat");
+                .ancestors()
+                .nth(2)
+                .unwrap()
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
@@ -211,7 +214,10 @@ mod tests {
 
             let path = std::env::current_dir()
                 .unwrap()
-                .join("examples/data/fibonacci.wat");
+                .ancestors()
+                .nth(2)
+                .unwrap()
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
 

@@ -260,7 +260,7 @@ mod tests {
         // load wasm module
         let file = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+            .join("examples/wasmedge-sys/data/fibonacci.wat");
 
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
@@ -304,7 +304,7 @@ mod tests {
         // load wasm module
         let file = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+            .join("examples/wasmedge-sys/data/fibonacci.wat");
 
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
@@ -382,7 +382,7 @@ mod tests {
         // add a wasm module from a file
         let file = std::env::current_dir()
             .unwrap()
-            .join("crates/wasmedge-sys/examples/data/fibonacci.wat");
+            .join("examples/wasmedge-sys/data/fibonacci.wat");
         let result = Module::from_file(Some(&config), file);
         assert!(result.is_ok());
         let module = result.unwrap();
