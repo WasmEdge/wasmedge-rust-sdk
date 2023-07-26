@@ -2,10 +2,7 @@
 
 use super::ffi;
 use crate::{
-    instance::{
-        module::{host_data_finalizer, InnerInstance},
-        Function, Global, Memory, Table,
-    },
+    instance::{module::InnerInstance, Function, Global, Memory, Table},
     types::WasmEdgeString,
     utils, AsImport, Instance, WasmEdgeResult,
 };
@@ -585,6 +582,13 @@ impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
         }
         global.inner.lock().0 = std::ptr::null_mut();
     }
+}
+
+pub(crate) unsafe extern "C" fn host_data_finalizer<T: Sized + Send>(
+    raw: *mut ::std::os::raw::c_void,
+) {
+    let host_data: Box<T> = Box::from_raw(raw as *mut T);
+    drop(host_data);
 }
 
 #[cfg(test)]
