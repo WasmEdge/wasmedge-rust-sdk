@@ -558,7 +558,7 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::wasi::WasiContext;
+        use crate::r#async::WasiContext;
 
         // define an async closure
         let c = |_frame: CallingFrame,

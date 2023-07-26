@@ -1,14 +1,15 @@
 //! Defines WasmEdge Vm struct.
 
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::r#async::{AsyncState, WasiContext, WasiInstance};
+#[cfg(not(feature = "async"))]
+use crate::wasi::WasiInstance;
 use crate::{
     config::Config,
     error::{VmError, WasmEdgeError},
-    wasi::WasiInstance,
     Executor, HostRegistration, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
     WasmValue,
 };
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::{r#async::AsyncState, wasi::WasiContext};
 use std::{collections::HashMap, path::Path};
 use wasmedge_sys as sys;
 
@@ -864,7 +865,7 @@ impl Vm {
 
 #[derive(Debug, Clone)]
 enum HostRegistrationInstance {
-    Wasi(crate::wasi::WasiInstance),
+    Wasi(WasiInstance),
 }
 
 #[cfg(not(feature = "async"))]

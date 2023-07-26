@@ -60,6 +60,8 @@
 //! This project is licensed under the terms of the [Apache 2.0 license](https://github.com/tensorflow/rust/blob/HEAD/LICENSE).
 //!
 
+#[cfg(all(feature = "async", target_os = "linux"))]
+pub mod r#async;
 #[doc(hidden)]
 pub mod caller;
 #[doc(hidden)]
@@ -129,13 +131,6 @@ pub type NeverType = wasmedge_types::NeverType;
 
 #[doc(hidden)]
 pub type CallingFrame = wasmedge_sys::CallingFrame;
-
-/// Defines the types used in the `async` scenarios.
-#[cfg(all(feature = "async", target_os = "linux"))]
-pub mod r#async {
-    /// The state of an asynchronous task.
-    pub type AsyncState = wasmedge_sys::r#async::fiber::AsyncState;
-}
 
 /// The object that is used to perform a [host function](crate::Func) is required to implement this trait.
 pub trait Engine {
