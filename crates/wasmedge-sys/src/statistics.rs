@@ -153,7 +153,7 @@ mod tests {
         handle.join().unwrap();
     }
 
-    #[warn(unused_assignments)]
+    #[allow(unused_assignments)]
     #[test]
     fn test_executor_with_statistics() {
         // create a Config context
