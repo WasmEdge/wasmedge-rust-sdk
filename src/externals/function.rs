@@ -607,7 +607,7 @@ mod tests {
         let wasi_ctx = WasiContext::default();
 
         // create a Vm context
-        let result = VmBuilder::new().build(Some(wasi_ctx));
+        let result = VmBuilder::new().with_wasi_context(wasi_ctx).build();
         assert!(result.is_ok());
         let vm = result.unwrap();
 

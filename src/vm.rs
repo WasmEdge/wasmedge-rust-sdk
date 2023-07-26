@@ -19,6 +19,8 @@ pub struct VmBuilder {
     stat: Option<Statistics>,
     store: Option<Store>,
     plugins: Vec<(String, String)>,
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    wasi_ctx: Option<WasiContext>,
 }
 impl VmBuilder {
     /// Creates a new [VmBuilder].
@@ -162,13 +164,20 @@ impl VmBuilder {
         Ok(vm)
     }
 
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    /// Sets the [WasiContext] for the [Vm] to build.
+    pub fn with_wasi_context(mut self, wasi_ctx: WasiContext) -> Self {
+        self.wasi_ctx = Some(wasi_ctx);
+        self
+    }
+
     /// Creates a new [Vm].
     ///
     /// # Error
     ///
     /// If fail to create, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn build(mut self, wasi_ctx: Option<WasiContext>) -> WasmEdgeResult<Vm> {
+    pub fn build(mut self) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
@@ -194,7 +203,7 @@ impl VmBuilder {
         // * register AsyncWasiModule
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
-                match wasi_ctx {
+                match self.wasi_ctx {
                     Some(ctx) => {
                         // create an AsyncWasiModule instance
                         let wasi_module =
