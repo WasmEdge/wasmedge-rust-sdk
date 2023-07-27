@@ -1,7 +1,8 @@
 //! Defines plugin related structs.
 
 use crate::{
-    instance::Instance, io::WasmValTypeList, FuncType, Global, Memory, Table, WasmEdgeResult,
+    error::HostFuncError, instance::Instance, io::WasmValTypeList, CallingFrame, FuncType, Global,
+    Memory, Table, WasmEdgeResult, WasmValue,
 };
 use wasmedge_sys::{self as sys, AsImport};
 pub mod ffi {
@@ -9,8 +10,6 @@ pub mod ffi {
         WasmEdge_ModuleDescriptor, WasmEdge_ModuleInstanceContext, WasmEdge_PluginDescriptor,
     };
 }
-
-use crate::{error::HostFuncError, CallingFrame, WasmValue};
 
 /// Defines the API to manage plugins.
 #[derive(Debug)]

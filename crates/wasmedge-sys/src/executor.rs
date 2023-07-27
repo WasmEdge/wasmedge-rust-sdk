@@ -5,7 +5,8 @@ use super::ffi;
 use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
-    Function, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult, WasmValue,
+    Function, ImportModule, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
+    WasmValue,
 };
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -73,13 +74,6 @@ impl Executor {
         import: &ImportObject,
     ) -> WasmEdgeResult<()> {
         match import {
-            ImportObject::Import(import) => unsafe {
-                check(ffi::WasmEdge_ExecutorRegisterImport(
-                    self.inner.0,
-                    store.inner.0,
-                    import.inner.0 as *const _,
-                ))?;
-            },
             #[cfg(not(feature = "async"))]
             ImportObject::Wasi(import) => unsafe {
                 check(ffi::WasmEdge_ExecutorRegisterImport(
@@ -96,6 +90,36 @@ impl Executor {
                     import.inner.0 as *const _,
                 ))?;
             },
+        }
+
+        Ok(())
+    }
+
+    /// Registers and instantiates a [import module](crate::ImportModule) into a [store](crate::Store).
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - The target [store](crate::Store), into which the given [import object](crate::ImportObject) is registered.
+    ///
+    /// * `import` - The WasmEdge [import module](crate::ImportModule) to be registered.
+    ///
+    /// # Error
+    ///
+    /// If fail to register the given [import module](crate::ImportModule), then an error is returned.
+    pub fn register_import_module<T>(
+        &mut self,
+        store: &Store,
+        import: &ImportModule<T>,
+    ) -> WasmEdgeResult<()>
+    where
+        T: ?Sized + Send + Sync + Clone,
+    {
+        unsafe {
+            check(ffi::WasmEdge_ExecutorRegisterImport(
+                self.inner.0,
+                store.inner.0,
+                import.inner.0 as *const _,
+            ))?;
         }
 
         Ok(())
@@ -449,7 +473,7 @@ mod tests {
 
         // create an ImportObj module
         let host_name = "extern";
-        let result = ImportModule::create::<NeverType>(host_name, None);
+        let result = ImportModule::<NeverType>::create(host_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -496,9 +520,7 @@ mod tests {
         // add the global into import_obj module
         import.add_global("global_i32", host_global);
 
-        let import = ImportObject::Import(import);
-
-        let result = executor.register_import_object(&mut store, &import);
+        let result = executor.register_import_module(&mut store, &import);
         assert!(result.is_ok());
 
         {
@@ -691,11 +713,10 @@ mod tests {
         let ty = FuncType::create([], [])?;
         let async_hello_func =
             Function::create_async_func::<NeverType>(&ty, Box::new(async_hello), None, 0)?;
-        let mut import = ImportModule::create::<NeverType>("extern", None)?;
+        let mut import = ImportModule::<NeverType>::create("extern", None)?;
         import.add_func("async_hello", async_hello_func);
 
-        let extern_import = ImportObject::Import(import);
-        executor.register_import_object(&mut store, &extern_import)?;
+        executor.register_import_module(&mut store, &import)?;
 
         let extern_instance = store.module("extern")?;
         let async_hello = extern_instance.get_func("async_hello")?;

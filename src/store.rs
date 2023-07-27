@@ -30,14 +30,17 @@ impl Store {
     /// # Error
     ///
     /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_module(
+    pub fn register_import_module<T>(
         &mut self,
         executor: &mut Executor,
-        import: &ImportObject,
-    ) -> WasmEdgeResult<()> {
+        import: &ImportObject<T>,
+    ) -> WasmEdgeResult<()>
+    where
+        T: ?Sized + Send + Sync + Clone,
+    {
         executor
             .inner
-            .register_import_object(&self.inner, import.inner_ref())
+            .register_import_module(&self.inner, &import.0)
     }
 
     /// Registers and instantiates a WasmEdge [compiled module](crate::Module) into this [store](crate::Store) as a named [module instance](crate::Instance), and returns the module instance.

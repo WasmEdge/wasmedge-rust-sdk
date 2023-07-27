@@ -195,16 +195,19 @@ impl ImportObjectBuilder {
     ///
     /// * `name` - The name of the [ImportObject] to create.
     ///
-    /// * `host_data` - The host data to be stored in the module instance.
+    /// * `host_data` - The host context data to be stored in the module instance.
     ///
     /// # Error
     ///
     /// If fail to create the [ImportObject], then an error is returned.
-    pub fn build<T: Send + Sync>(
+    pub fn build<T>(
         self,
         name: impl AsRef<str>,
         host_data: Option<Box<T>>,
-    ) -> WasmEdgeResult<ImportObject> {
+    ) -> WasmEdgeResult<ImportObject<T>>
+    where
+        T: ?Sized + Send + Sync + Clone,
+    {
         let mut inner = sys::ImportModule::create(name.as_ref(), host_data)?;
 
         // add func
@@ -227,7 +230,7 @@ impl ImportObjectBuilder {
             inner.add_table(name, table);
         }
 
-        Ok(ImportObject(sys::ImportObject::Import(inner)))
+        Ok(ImportObject(inner))
     }
 }
 
@@ -235,27 +238,17 @@ impl ImportObjectBuilder {
 ///
 /// An [ImportObject] instance is created with [ImportObjectBuilder](crate::ImportObjectBuilder).
 #[derive(Debug, Clone)]
-pub struct ImportObject(pub(crate) sys::ImportObject);
-impl ImportObject {
+pub struct ImportObject<T: ?Sized + Send + Sync + Clone>(pub(crate) sys::ImportModule<T>);
+impl<T: ?Sized + Send + Sync + Clone> ImportObject<T> {
     /// Returns the name of the import object.
     pub fn name(&self) -> &str {
-        match &self.0 {
-            sys::ImportObject::Import(import) => import.name(),
-            #[cfg(not(feature = "async"))]
-            sys::ImportObject::Wasi(wasi) => wasi.name(),
-            #[cfg(all(feature = "async", target_os = "linux"))]
-            sys::ImportObject::AsyncWasi(async_wasi) => async_wasi.name(),
-        }
-    }
-
-    pub(crate) fn inner_ref(&self) -> &sys::ImportObject {
-        &self.0
+        self.0.name()
     }
 
     /// Returns the raw pointer to the inner `WasmEdge_ModuleInstanceContext`.
     #[cfg(feature = "ffi")]
-    pub fn as_raw_ptr(&self) -> *const sys::ffi::WasmEdge_ModuleInstanceContext {
-        self.0.as_raw_ptr()
+    pub fn as_ptr(&self) -> *const sys::ffi::WasmEdge_ModuleInstanceContext {
+        self.0.as_ptr()
     }
 }
 
@@ -291,7 +284,7 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_import_builder_with_data() {
         // define host data
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         struct Circle {
             radius: i32,
         }
@@ -307,12 +300,11 @@ mod tests {
         // create a Vm context
         let result = VmBuilder::new().build();
         assert!(result.is_ok());
-        let vm = result.unwrap();
+        let mut vm = result.unwrap();
 
         // register an import module into vm
-        let result = vm.register_import_module(import);
+        let result = vm.register_import_module(&import);
         assert!(result.is_ok());
-        let mut vm = result.unwrap();
 
         // get active module instance
         let result = vm.named_module_mut("extern");

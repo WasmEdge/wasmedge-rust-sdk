@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use crate::{
         AsImport, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
-        ImportObject, Loader, Store, Validator, WasmValue,
+        Loader, Store, Validator, WasmValue,
     };
     use std::{
         io::Read,
@@ -430,8 +430,7 @@ mod tests {
         let mut store = Store::create()?;
 
         let import = create_spec_test_module();
-        let import_obj = ImportObject::Import(import);
-        executor.register_import_object(&mut store, &import_obj)?;
+        executor.register_import_module(&mut store, &import)?;
 
         // set the AOT compiler options
         let result = Compiler::create(Some(&config));
@@ -486,9 +485,9 @@ mod tests {
     }
 
     #[cfg(feature = "aot")]
-    fn create_spec_test_module() -> ImportModule {
+    fn create_spec_test_module() -> ImportModule<NeverType> {
         // create an ImportObj module
-        let result = ImportModule::create::<NeverType>("spectest", None);
+        let result = ImportModule::<NeverType>::create("spectest", None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 

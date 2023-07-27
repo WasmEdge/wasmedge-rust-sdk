@@ -542,12 +542,11 @@ mod tests {
         // create a Vm context
         let result = VmBuilder::new().build();
         assert!(result.is_ok());
-        let vm = result.unwrap();
+        let mut vm = result.unwrap();
 
         // register an import module into vm
-        let result = vm.register_import_module(import);
+        let result = vm.register_import_module(&import);
         assert!(result.is_ok());
-        let vm = result.unwrap();
 
         let returns = vm.run_func(Some("extern"), "add", params![2, 3])?;
         assert_eq!(returns[0].to_i32(), 5);
@@ -609,12 +608,11 @@ mod tests {
         // create a Vm context
         let result = VmBuilder::new().with_wasi_context(wasi_ctx).build();
         assert!(result.is_ok());
-        let vm = result.unwrap();
+        let mut vm = result.unwrap();
 
         // register an import module into vm
-        let result = vm.register_import_module(import);
+        let result = vm.register_import_module(&import);
         assert!(result.is_ok());
-        let vm = result.unwrap();
 
         async fn tick() {
             let mut i = 0;

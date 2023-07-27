@@ -128,8 +128,8 @@ mod tests {
     use crate::{
         instance::{Function, Global, GlobalType, MemType, Memory, Table, TableType},
         types::WasmValue,
-        AsImport, CallingFrame, Config, Engine, Executor, FuncType, ImportModule, ImportObject,
-        Loader, Validator,
+        AsImport, CallingFrame, Config, Engine, Executor, FuncType, ImportModule, Loader,
+        Validator,
     };
     use std::{
         sync::{Arc, Mutex},
@@ -154,7 +154,7 @@ mod tests {
         assert!(store.module_names().is_none());
 
         // create ImportObject instance
-        let result = ImportModule::create::<NeverType>(module_name, None);
+        let result = ImportModule::<NeverType>::create(module_name, None);
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
@@ -203,8 +203,7 @@ mod tests {
         assert!(result.is_ok());
         let mut executor = result.unwrap();
 
-        let import = ImportObject::Import(import);
-        let result = executor.register_import_object(&mut store, &import);
+        let result = executor.register_import_module(&mut store, &import);
         assert!(result.is_ok());
 
         // check the module list after instantiation
@@ -240,7 +239,7 @@ mod tests {
         let store_cloned = Arc::clone(&store);
         let handle = thread::spawn(move || {
             // create ImportObject instance
-            let result = ImportModule::create::<NeverType>("extern_module", None);
+            let result = ImportModule::<NeverType>::create("extern_module", None);
             assert!(result.is_ok());
             let mut import = result.unwrap();
 
@@ -266,8 +265,7 @@ mod tests {
             assert!(result.is_ok());
             let mut store = result.unwrap();
 
-            let import = ImportObject::Import(import);
-            let result = executor.register_import_object(&mut store, &import);
+            let result = executor.register_import_module(&mut store, &import);
             assert!(result.is_ok());
 
             // get module instance

@@ -110,9 +110,7 @@ unsafe impl Sync for InnerStat {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        Config, Engine, Executor, ImportObject, Loader, Statistics, Store, Validator, WasmValue,
-    };
+    use crate::{Config, Engine, Executor, Loader, Statistics, Store, Validator, WasmValue};
     use std::{
         sync::{Arc, Mutex},
         thread,
@@ -190,8 +188,7 @@ mod tests {
         let mut store = result.unwrap();
 
         // register the import_obj module into the store context
-        let import = ImportObject::Import(import);
-        let result = executor.register_import_object(&mut store, &import);
+        let result = executor.register_import_module(&mut store, &import);
         assert!(result.is_ok());
 
         // load module from a wasm file
@@ -454,9 +451,9 @@ mod tests {
         use wasmedge_macro::sys_host_function;
         use wasmedge_types::{error::HostFuncError, NeverType, ValType};
 
-        pub(crate) fn create_extern_module(name: impl AsRef<str>) -> ImportModule {
+        pub(crate) fn create_extern_module(name: impl AsRef<str>) -> ImportModule<NeverType> {
             // create an import module
-            let result = ImportModule::create::<NeverType>(name, None);
+            let result = ImportModule::<NeverType>::create(name, None);
             assert!(result.is_ok());
             let mut import = result.unwrap();
 
