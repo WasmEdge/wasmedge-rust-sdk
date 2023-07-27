@@ -124,7 +124,6 @@ impl VmBuilder {
             store,
             named_instances: HashMap::new(),
             active_instance: None,
-            imports: Vec::new(),
             builtin_host_instances: HashMap::new(),
             plugin_host_instances: Vec::new(),
         };
@@ -196,7 +195,6 @@ impl VmBuilder {
             store,
             named_instances: HashMap::new(),
             active_instance: None,
-            imports: Vec::new(),
             builtin_host_instances: HashMap::new(),
             plugin_host_instances: Vec::new(),
         };
@@ -327,7 +325,6 @@ pub struct Vm {
     store: Store,
     named_instances: HashMap<String, Instance>,
     active_instance: Option<Instance>,
-    imports: Vec<ImportObject>,
     builtin_host_instances: HashMap<HostRegistration, HostRegistrationInstance>,
     plugin_host_instances: Vec<Instance>,
 }
@@ -422,22 +419,18 @@ impl Vm {
     /// # Error
     ///
     /// If fail to register, then an error is returned.
-    pub fn register_import_module(mut self, import: ImportObject) -> WasmEdgeResult<Self> {
-        match &import.0 {
-            sys::ImportObject::Import(_) => {
-                self.store
-                    .register_import_module(&mut self.executor, &import)?;
+    pub fn register_import_module<T>(&mut self, import: &ImportObject<T>) -> WasmEdgeResult<()>
+    where
+        T: ?Sized + Send + Sync + Clone,
+    {
+        self.store
+            .register_import_module(&mut self.executor, import)?;
 
-                let import_instance = self.store.named_instance(import.name())?;
-                self.named_instances
-                    .insert(import.name().into(), import_instance);
-            }
-            _ => panic!("unsupported ImportObject type"),
-        }
+        let import_instance = self.store.named_instance(import.name())?;
+        self.named_instances
+            .insert(import.name().into(), import_instance);
 
-        self.imports.push(import);
-
-        Ok(self)
+        Ok(())
     }
 
     /// Auto detect all plugins in WASMEDGE_PLUGIN_PATH
@@ -1326,12 +1319,11 @@ mod tests {
         // create a Vm context
         let result = VmBuilder::new().build();
         assert!(result.is_ok());
-        let vm = result.unwrap();
+        let mut vm = result.unwrap();
 
         // register an import module into vm
-        let result = vm.register_import_module(import);
+        let result = vm.register_import_module(&import);
         assert!(result.is_ok());
-        let vm = result.unwrap();
 
         assert!(vm.named_instance_count() >= 1);
         assert!(vm.instance_names().iter().any(|x| x == "extern-module"));
