@@ -225,6 +225,8 @@ pub enum StoreError {
 pub enum VmError {
     #[error("Fail to create Vm context")]
     Create,
+    #[error("Fail to create Vm context. It is required to provide a `WasiContext` instance for creating a Vm when the `wasi` config option is enabled.")]
+    CreateWithWasiContext,
     #[error("Fail to get the type of the target function ({0})")]
     NotFoundFuncType(String),
     #[error("Fail to get module instance ({0})")]

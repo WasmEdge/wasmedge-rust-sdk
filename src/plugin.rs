@@ -268,7 +268,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut D>,
+        data: Option<Box<D>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,

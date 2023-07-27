@@ -7,11 +7,14 @@ use common::error::Errno;
 use env::{wasi_types::__wasi_fd_t, VFD};
 use std::path::PathBuf;
 
-#[derive(Debug)]
+use parking_lot::RwLock;
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
 pub struct WasiCtx {
-    args: Vec<String>,
+    pub args: Vec<String>,
     envs: Vec<String>,
-    vfs: ObjectPool<VFD>,
+    vfs: Arc<RwLock<ObjectPool<VFD>>>,
     closed: Option<__wasi_fd_t>,
     vfs_preopen_limit: usize,
     #[cfg(feature = "serialize")]
@@ -36,7 +39,7 @@ impl WasiCtx {
         WasiCtx {
             args: vec![],
             envs: vec![],
-            vfs,
+            vfs: Arc::new(RwLock::new(vfs)),
             vfs_preopen_limit: 2,
             closed: None,
             #[cfg(feature = "serialize")]
@@ -48,6 +51,7 @@ impl WasiCtx {
     pub fn push_preopen(&mut self, host_path: PathBuf, guest_path: PathBuf) {
         let preopen = env::vfs::WasiPreOpenDir::new(host_path, guest_path);
         self.vfs
+            .write()
             .push(VFD::Inode(env::vfs::INode::PreOpenDir(preopen)));
         self.vfs_preopen_limit += 1;
     }
@@ -80,10 +84,12 @@ impl WasiCtx {
             Err(Errno::__WASI_ERRNO_BADF)
         } else {
             self.remove_closed();
-            let vfd = self
-                .vfs
-                .get_mut(fd as usize)
-                .ok_or(Errno::__WASI_ERRNO_BADF)?;
+
+            let vfd = unsafe {
+                (*self.vfs.data_ptr())
+                    .get_mut(fd as usize)
+                    .ok_or(Errno::__WASI_ERRNO_BADF)?
+            };
             if let VFD::Closed = vfd {
                 let _ = self.closed.insert(fd);
                 return Err(Errno::__WASI_ERRNO_BADF);
@@ -96,7 +102,11 @@ impl WasiCtx {
         if fd < 0 {
             Err(Errno::__WASI_ERRNO_BADF)
         } else {
-            let vfd = self.vfs.get(fd as usize).ok_or(Errno::__WASI_ERRNO_BADF)?;
+            let vfd = unsafe {
+                (*self.vfs.data_ptr())
+                    .get(fd as usize)
+                    .ok_or(Errno::__WASI_ERRNO_BADF)?
+            };
             if let VFD::Closed = vfd {
                 return Err(Errno::__WASI_ERRNO_BADF);
             }
@@ -105,7 +115,7 @@ impl WasiCtx {
     }
 
     pub fn insert_vfd(&mut self, vfd: VFD) -> Result<__wasi_fd_t, Errno> {
-        let i = self.vfs.push(vfd);
+        let i = self.vfs.write().push(vfd);
 
         Ok(i.0 as __wasi_fd_t)
     }
@@ -115,7 +125,7 @@ impl WasiCtx {
             return Err(Errno::__WASI_ERRNO_NOTSUP);
         }
 
-        self.vfs.remove(fd as usize);
+        self.vfs.write().remove(fd as usize);
 
         Ok(())
     }
@@ -132,11 +142,16 @@ impl WasiCtx {
             return Err(Errno::__WASI_ERRNO_NOTSUP);
         };
 
-        let _ = self.vfs.get(to).ok_or(Errno::__WASI_ERRNO_BADF)?;
+        let _ = self.vfs.read().get(to).ok_or(Errno::__WASI_ERRNO_BADF)?;
 
-        let from_entry = self.vfs.remove(from).ok_or(Errno::__WASI_ERRNO_BADF)?;
+        let from_entry = self
+            .vfs
+            .write()
+            .remove(from)
+            .ok_or(Errno::__WASI_ERRNO_BADF)?;
 
-        let to_entry = self.vfs.get_mut(to).ok_or(Errno::__WASI_ERRNO_BADF)?;
+        let mut vfs = self.vfs.write();
+        let to_entry = vfs.get_mut(to).ok_or(Errno::__WASI_ERRNO_BADF)?;
 
         *to_entry = from_entry;
 
@@ -222,6 +237,7 @@ mod vfs_test {
 
         let v = ctx
             .vfs
+            .read()
             .iter()
             .take(7)
             .map(|f| f.is_some())
@@ -245,8 +261,9 @@ pub mod serialize {
         VFD,
     };
     use crate::object_pool::SerialObjectPool;
+    use parking_lot::RwLock;
     use serde::{Deserialize, Serialize};
-    use std::{net::SocketAddr, path::PathBuf, time::SystemTime};
+    use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::SystemTime};
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub enum PollFdState {
@@ -303,7 +320,7 @@ pub mod serialize {
 
     impl From<&super::WasiCtx> for SerialWasiCtx {
         fn from(ctx: &super::WasiCtx) -> Self {
-            let vfs = SerialObjectPool::from_ref(&ctx.vfs, |fd| SerialVFD::from(fd));
+            let vfs = SerialObjectPool::from_ref(&ctx.vfs.read(), |fd| SerialVFD::from(fd));
             Self {
                 args: ctx.args.clone(),
                 envs: ctx.envs.clone(),
@@ -331,7 +348,7 @@ pub mod serialize {
             super::WasiCtx {
                 args,
                 envs,
-                vfs,
+                vfs: Arc::new(RwLock::new(vfs)),
                 vfs_preopen_limit,
                 closed: None,
                 io_state,

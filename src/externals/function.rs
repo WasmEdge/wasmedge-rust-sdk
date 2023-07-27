@@ -44,7 +44,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
@@ -78,7 +78,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<&mut T>,
+        data: Option<Box<T>>,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -499,6 +499,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "async"))]
     fn test_func_wrap_closure() -> Result<(), Box<dyn std::error::Error>> {
         // define a closure
         let real_add = |_: CallingFrame,
@@ -557,6 +558,8 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::r#async::WasiContext;
+
         // define an async closure
         let c = |_frame: CallingFrame,
                  _args: Vec<WasmValue>,
@@ -600,8 +603,11 @@ mod tests {
         assert!(result.is_ok());
         let import = result.unwrap();
 
+        // create a default WasiContext instance
+        let wasi_ctx = WasiContext::default();
+
         // create a Vm context
-        let result = VmBuilder::new().build();
+        let result = VmBuilder::new().with_wasi_context(wasi_ctx).build();
         assert!(result.is_ok());
         let vm = result.unwrap();
 

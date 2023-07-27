@@ -2,7 +2,7 @@
 
 use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::{AsyncState, FiberFuture};
+use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
     Function, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult, WasmValue,
@@ -365,8 +365,13 @@ unsafe impl Sync for InnerExecutor {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use crate::{instance::module::AsyncWasiModule, Loader, Validator};
+    cfg_if::cfg_if! {
+        if #[cfg(all(feature = "async", target_os = "linux"))] {
+            use crate::r#async::AsyncWasiModule;
+            use crate::{Loader, Validator};
+            use wasmedge_macro::sys_async_host_function;
+        }
+    }
     use crate::{
         AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
         MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
@@ -375,8 +380,6 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use wasmedge_macro::sys_async_host_function;
     use wasmedge_macro::sys_host_function;
     use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
 
@@ -596,15 +599,15 @@ mod tests {
         let mut store = result.unwrap();
 
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
+        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 
-        // register async_wasi module into the store
         let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
         let result = executor.register_import_object(&mut store, &wasi_import);
         assert!(result.is_ok());
 
+        // register async_wasi module into the store
         let wasm_file = std::env::current_dir()
             .unwrap()
             .ancestors()
@@ -676,7 +679,7 @@ mod tests {
         let mut store = result.unwrap();
 
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
+        let result = AsyncWasiModule::create(None, None, None);
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 

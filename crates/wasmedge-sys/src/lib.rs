@@ -61,9 +61,6 @@ pub mod ast_module;
 #[cfg(all(feature = "async", target_os = "linux"))]
 pub mod r#async;
 #[doc(hidden)]
-#[cfg(all(feature = "async", target_os = "linux"))]
-pub mod async_wasi;
-#[doc(hidden)]
 #[cfg(feature = "aot")]
 pub mod compiler;
 #[doc(hidden)]
@@ -101,9 +98,6 @@ pub use frame::CallingFrame;
 #[cfg(not(feature = "async"))]
 #[doc(inline)]
 pub use instance::module::WasiModule;
-#[cfg(all(feature = "async", target_os = "linux"))]
-#[doc(inline)]
-pub use instance::{function::AsyncHostFn, module::AsyncWasiModule};
 #[doc(inline)]
 pub use instance::{
     function::{FuncRef, FuncType, Function},

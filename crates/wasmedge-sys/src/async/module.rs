@@ -1,9 +1,9 @@
+use super::function::{AsyncHostFn, HostFn, WasiFunction};
 use crate::{
-    instance::function::{AsyncHostFn, HostFn},
-    CallingFrame, Memory, WasmValue,
+    ffi, instance::module::InnerInstance, types::WasmEdgeString, CallingFrame, Memory,
+    WasmEdgeResult, WasmValue,
 };
-use async_wasi as wasi;
-use wasi::snapshots::{
+use async_wasi::snapshots::{
     common::{
         error::Errno,
         memory::WasmPtr,
@@ -11,100 +11,206 @@ use wasi::snapshots::{
     },
     preview_1 as p, WasiCtx,
 };
+use parking_lot::Mutex;
+use std::{path::PathBuf, sync::Arc};
 use wasmedge_macro::{sys_async_wasi_host_function, sys_wasi_host_function};
-use wasmedge_types::{error::HostFuncError, ValType};
+use wasmedge_types::{
+    error::{HostFuncError, InstanceError, WasmEdgeError},
+    ValType,
+};
 
-fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
-    let code = if let Err(e) = r { e.0 } else { 0 };
-    vec![WasmValue::from_i32(code as i32)]
+/// A [AsyncWasiModule] is a module instance for the WASI specification and used in the `async` scenario.
+#[derive(Debug, Clone)]
+pub struct AsyncWasiModule {
+    pub(crate) inner: Arc<InnerInstance>,
+    pub(crate) registered: bool,
+    name: String,
+    wasi_ctx: Arc<Mutex<WasiCtx>>,
 }
-
-impl async_wasi::snapshots::common::memory::Memory for Memory {
-    fn get_data<T: Sized>(&self, offset: WasmPtr<T>) -> Result<&T, Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self
-                .data_pointer(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-            Ok(ptr.cast::<T>().as_ref().unwrap())
-        }
-    }
-
-    fn get_slice<T: Sized>(&self, offset: WasmPtr<T>, len: usize) -> Result<&[T], Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self
-                .data_pointer(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const T;
-            Ok(std::slice::from_raw_parts(ptr, len))
-        }
-    }
-
-    fn get_iovec<'a>(
-        &self,
-        iovec_ptr: WasmPtr<__wasi_ciovec_t>,
-        iovec_len: __wasi_size_t,
-    ) -> Result<Vec<std::io::IoSlice<'a>>, Errno> {
-        unsafe {
-            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
-            let mut result = Vec::with_capacity(iovec.len());
-            for i in iovec {
-                let ptr = self
-                    .data_pointer(i.buf, i.buf_len)
-                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-                let s = std::io::IoSlice::new(std::slice::from_raw_parts(ptr, i.buf_len as usize));
-                result.push(s);
+impl Drop for AsyncWasiModule {
+    fn drop(&mut self) {
+        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
+            // free the module instance
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
-            Ok(result)
         }
     }
+}
+impl AsyncWasiModule {
+    /// Creates a [AsyncWasiModule] instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `args` - The commandline arguments. The first argument is the program name.
+    ///
+    /// * `envs` - The environment variables.
+    ///
+    /// * `preopens` - The directories to pre-open.
+    ///
+    /// # Error
+    ///
+    /// If fail to create a [AsyncWasiModule] instance, then an error is returned.
+    pub fn create(
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<(&str, &str)>>,
+        preopens: Option<Vec<(PathBuf, PathBuf)>>,
+    ) -> WasmEdgeResult<Self> {
+        // create wasi context
+        let mut wasi_ctx = WasiCtx::new();
 
-    fn mut_data<T: Sized>(&mut self, offset: WasmPtr<T>) -> Result<&mut T, Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self
-                .data_pointer_mut(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-            Ok(ptr.cast::<T>().as_mut().unwrap())
+        // push args, envs and preopens
+        if let Some(args) = args {
+            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
         }
-    }
-
-    fn mut_slice<T: Sized>(&mut self, offset: WasmPtr<T>, len: usize) -> Result<&mut [T], Errno> {
-        unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self
-                .data_pointer_mut(offset.0 as u32, r as u32)
-                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut T;
-            Ok(std::slice::from_raw_parts_mut(ptr, len))
+        if let Some(envs) = envs {
+            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
         }
-    }
-
-    fn mut_iovec(
-        &mut self,
-        iovec_ptr: WasmPtr<async_wasi::snapshots::env::wasi_types::__wasi_iovec_t>,
-        iovec_len: async_wasi::snapshots::env::wasi_types::__wasi_size_t,
-    ) -> Result<Vec<std::io::IoSliceMut<'_>>, Errno> {
-        unsafe {
-            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
-            let mut result = Vec::with_capacity(iovec.len());
-            for i in iovec {
-                let ptr = self
-                    .data_pointer_mut(i.buf, i.buf_len)
-                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
-                let s = std::io::IoSliceMut::new(std::slice::from_raw_parts_mut(
-                    ptr,
-                    i.buf_len as usize,
-                ));
-                result.push(s);
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                wasi_ctx.push_preopen(host_dir, guest_dir)
             }
-            Ok(result)
         }
+
+        // create wasi module
+        let name = "wasi_snapshot_preview1";
+        let raw_name = WasmEdgeString::from(name);
+        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
+        if ctx.is_null() {
+            return Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::CreateImportModule,
+            )));
+        }
+        let mut async_wasi_module = Self {
+            inner: std::sync::Arc::new(InnerInstance(ctx)),
+            registered: false,
+            name: name.to_string(),
+            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
+        };
+
+        // add sync/async host functions to the module
+        for wasi_func in wasi_impls() {
+            match wasi_func {
+                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+
+                    let func = WasiFunction::create_wasi_func(
+                        &func_ty,
+                        real_fn,
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        0,
+                    )?;
+
+                    async_wasi_module.add_wasi_func(&name, func);
+                }
+                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+
+                    let func = WasiFunction::create_async_wasi_func(
+                        &func_ty,
+                        real_async_fn,
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        0,
+                    )?;
+
+                    async_wasi_module.add_wasi_func(&name, func);
+                }
+            }
+        }
+
+        Ok(async_wasi_module)
     }
 
-    fn write_data<T: Sized>(&mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno> {
-        let p = self.mut_data(offset)?;
-        *p = data;
-        Ok(())
+    /// Creates a [AsyncWasiModule] instance with the given wasi context.
+    ///
+    /// # Arguments
+    ///
+    /// * `wasi_ctx` - The [WasiCtx](async_wasi::snapshots::WasiCtx) instance.
+    ///
+    /// # Error
+    ///
+    /// If fail to create [AsyncWasiModule] instance, then an error is returned.
+    pub fn create_from_wasi_context(wasi_ctx: WasiCtx) -> WasmEdgeResult<Self> {
+        // create wasi module
+        let name = "wasi_snapshot_preview1";
+        let raw_name = WasmEdgeString::from(name);
+        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
+        if ctx.is_null() {
+            return Err(Box::new(WasmEdgeError::Instance(
+                InstanceError::CreateImportModule,
+            )));
+        }
+        let mut async_wasi_module = Self {
+            inner: std::sync::Arc::new(InnerInstance(ctx)),
+            registered: false,
+            name: name.to_string(),
+            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
+        };
+
+        // add sync/async host functions to the module
+        for wasi_func in wasi_impls() {
+            match wasi_func {
+                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+
+                    let func = WasiFunction::create_wasi_func(
+                        &func_ty,
+                        real_fn,
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        0,
+                    )?;
+
+                    async_wasi_module.add_wasi_func(&name, func);
+                }
+                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
+                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+
+                    let func = WasiFunction::create_async_wasi_func(
+                        &func_ty,
+                        real_async_fn,
+                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        0,
+                    )?;
+
+                    async_wasi_module.add_wasi_func(&name, func);
+                }
+            }
+        }
+
+        Ok(async_wasi_module)
+    }
+
+    /// Returns the name of the module instance.
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    /// Imports a [WasiFunction](crate::r#async::function::WasiFunction) instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the host function instance to import.
+    ///
+    /// * `func` - The [WasiFunction](crate::r#async::function::WasiFunction) instance to import.
+    fn add_wasi_func(&mut self, name: impl AsRef<str>, func: WasiFunction) {
+        let func_name: WasmEdgeString = name.into();
+
+        unsafe {
+            ffi::WasmEdge_ModuleInstanceAddFunction(
+                self.inner.0,
+                func_name.as_raw(),
+                func.inner.lock().0,
+            );
+        }
+
+        func.inner.lock().0 = std::ptr::null_mut();
+    }
+
+    /// Returns the WASI exit code.
+    ///
+    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
+    pub fn exit_code(&self) -> u32 {
+        self.wasi_ctx.lock().exit_code
     }
 }
 
@@ -2135,4 +2241,163 @@ pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
             sock_getaddrinfo
         ),
     ]
+}
+
+fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
+    let code = if let Err(e) = r { e.0 } else { 0 };
+    vec![WasmValue::from_i32(code as i32)]
+}
+
+impl async_wasi::snapshots::common::memory::Memory for Memory {
+    fn get_data<T: Sized>(&self, offset: WasmPtr<T>) -> Result<&T, Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>();
+            let ptr = self
+                .data_pointer(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+            Ok(ptr.cast::<T>().as_ref().unwrap())
+        }
+    }
+
+    fn get_slice<T: Sized>(&self, offset: WasmPtr<T>, len: usize) -> Result<&[T], Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>() * len;
+            let ptr = self
+                .data_pointer(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *const T;
+            Ok(std::slice::from_raw_parts(ptr, len))
+        }
+    }
+
+    fn get_iovec<'a>(
+        &self,
+        iovec_ptr: WasmPtr<__wasi_ciovec_t>,
+        iovec_len: __wasi_size_t,
+    ) -> Result<Vec<std::io::IoSlice<'a>>, Errno> {
+        unsafe {
+            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
+            let mut result = Vec::with_capacity(iovec.len());
+            for i in iovec {
+                let ptr = self
+                    .data_pointer(i.buf, i.buf_len)
+                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+                let s = std::io::IoSlice::new(std::slice::from_raw_parts(ptr, i.buf_len as usize));
+                result.push(s);
+            }
+            Ok(result)
+        }
+    }
+
+    fn mut_data<T: Sized>(&mut self, offset: WasmPtr<T>) -> Result<&mut T, Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>();
+            let ptr = self
+                .data_pointer_mut(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+            Ok(ptr.cast::<T>().as_mut().unwrap())
+        }
+    }
+
+    fn mut_slice<T: Sized>(&mut self, offset: WasmPtr<T>, len: usize) -> Result<&mut [T], Errno> {
+        unsafe {
+            let r = std::mem::size_of::<T>() * len;
+            let ptr = self
+                .data_pointer_mut(offset.0 as u32, r as u32)
+                .map_err(|_| Errno::__WASI_ERRNO_FAULT)? as *mut T;
+            Ok(std::slice::from_raw_parts_mut(ptr, len))
+        }
+    }
+
+    fn mut_iovec(
+        &mut self,
+        iovec_ptr: WasmPtr<async_wasi::snapshots::env::wasi_types::__wasi_iovec_t>,
+        iovec_len: async_wasi::snapshots::env::wasi_types::__wasi_size_t,
+    ) -> Result<Vec<std::io::IoSliceMut<'_>>, Errno> {
+        unsafe {
+            let iovec = self.get_slice(iovec_ptr, iovec_len as usize)?.to_vec();
+            let mut result = Vec::with_capacity(iovec.len());
+            for i in iovec {
+                let ptr = self
+                    .data_pointer_mut(i.buf, i.buf_len)
+                    .map_err(|_| Errno::__WASI_ERRNO_FAULT)?;
+                let s = std::io::IoSliceMut::new(std::slice::from_raw_parts_mut(
+                    ptr,
+                    i.buf_len as usize,
+                ));
+                result.push(s);
+            }
+            Ok(result)
+        }
+    }
+
+    fn write_data<T: Sized>(&mut self, offset: WasmPtr<T>, data: T) -> Result<(), Errno> {
+        let p = self.mut_data(offset)?;
+        *p = data;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        r#async::fiber::AsyncState, Config, Executor, ImportObject, Loader, Store, Validator,
+    };
+
+    #[tokio::test]
+    async fn test_async_wasi_module() -> Result<(), Box<dyn std::error::Error>> {
+        // create a Config
+        let mut config = Config::create()?;
+        config.wasi(true);
+        assert!(config.wasi_enabled());
+
+        // create an Executor
+        let result = Executor::create(None, None);
+        assert!(result.is_ok());
+        let mut executor = result.unwrap();
+        assert!(!executor.inner.0.is_null());
+
+        // create a Store
+        let result = Store::create();
+        assert!(result.is_ok());
+        let mut store = result.unwrap();
+
+        // create an AsyncWasiModule
+        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
+        assert!(result.is_ok());
+        let async_wasi_module = result.unwrap();
+
+        // register async_wasi module into the store
+        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
+        let result = executor.register_import_object(&mut store, &wasi_import);
+        assert!(result.is_ok());
+
+        let wasm_file = std::env::current_dir()
+            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap()
+            .join("examples/wasmedge-sys/async_hello.wasm");
+        let module = Loader::create(None)?.from_file(&wasm_file)?;
+        Validator::create(None)?.validate(&module)?;
+        let instance = executor.register_active_module(&mut store, &module)?;
+        let fn_start = instance.get_func("_start")?;
+
+        async fn tick() {
+            let mut i = 0;
+            loop {
+                println!("[tick] i={i}");
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                i += 1;
+            }
+        }
+        tokio::spawn(tick());
+
+        let async_state = AsyncState::new();
+        let _ = executor
+            .call_func_async(&async_state, &fn_start, [])
+            .await?;
+
+        Ok(())
+    }
 }

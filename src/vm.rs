@@ -1,11 +1,12 @@
 //! Defines WasmEdge Vm struct.
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncState;
+use crate::r#async::{AsyncState, WasiContext, WasiInstance};
+#[cfg(not(feature = "async"))]
+use crate::wasi::WasiInstance;
 use crate::{
     config::Config,
     error::{VmError, WasmEdgeError},
-    wasi::WasiInstance,
     Executor, HostRegistration, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
     WasmValue,
 };
@@ -19,6 +20,8 @@ pub struct VmBuilder {
     stat: Option<Statistics>,
     store: Option<Store>,
     plugins: Vec<(String, String)>,
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    wasi_ctx: Option<WasiContext>,
 }
 impl VmBuilder {
     /// Creates a new [VmBuilder].
@@ -162,6 +165,13 @@ impl VmBuilder {
         Ok(vm)
     }
 
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    /// Sets the [WasiContext] for the [Vm] to build.
+    pub fn with_wasi_context(mut self, wasi_ctx: WasiContext) -> Self {
+        self.wasi_ctx = Some(wasi_ctx);
+        self
+    }
+
     /// Creates a new [Vm].
     ///
     /// # Error
@@ -191,21 +201,31 @@ impl VmBuilder {
             plugin_host_instances: Vec::new(),
         };
 
-        // * built-in host instances
+        // * register AsyncWasiModule
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
-                if let Ok(wasi_module) = sys::AsyncWasiModule::create(None, None, None) {
-                    vm.executor.inner.register_import_object(
-                        &vm.store.inner,
-                        &sys::ImportObject::AsyncWasi(wasi_module.clone()),
-                    )?;
+                match self.wasi_ctx {
+                    Some(ctx) => {
+                        // create an AsyncWasiModule instance
+                        let wasi_module =
+                            sys::r#async::module::AsyncWasiModule::create_from_wasi_context(
+                                ctx.inner,
+                            )?;
 
-                    vm.builtin_host_instances.insert(
-                        HostRegistration::Wasi,
-                        HostRegistrationInstance::Wasi(WasiInstance { inner: wasi_module }),
-                    );
-                } else {
-                    panic!("failed to create AsyncWasiModule which is only available on Linux")
+                        // register the AsyncWasiModule instance
+                        vm.executor.inner.register_import_object(
+                            &vm.store.inner,
+                            &sys::ImportObject::AsyncWasi(wasi_module.clone()),
+                        )?;
+
+                        vm.builtin_host_instances.insert(
+                            HostRegistration::Wasi,
+                            HostRegistrationInstance::Wasi(WasiInstance(wasi_module)),
+                        );
+                    }
+                    None => {
+                        return Err(Box::new(WasmEdgeError::Vm(VmError::CreateWithWasiContext)));
+                    }
                 }
             }
         }
@@ -746,7 +766,7 @@ impl Vm {
     ///
     /// To retrieve  the [wasi module instance], a [config](crate::config::Config) with the enabled [wasi](crate::config::HostRegistrationConfigOptions::wasi) option should be given when create this vm.
     ///
-
+    #[cfg(not(feature = "async"))]
     pub fn wasi_module(&self) -> Option<&WasiInstance> {
         match self.builtin_host_instances.get(&HostRegistration::Wasi) {
             Some(HostRegistrationInstance::Wasi(wasi_instance)) => Some(wasi_instance),
@@ -758,7 +778,7 @@ impl Vm {
     ///
     /// To retrieve the [wasi module instance], a [config](crate::config::Config) with the enabled [wasi](crate::config::HostRegistrationConfigOptions::wasi) option should be given when create this vm.
     ///
-
+    #[cfg(not(feature = "async"))]
     pub fn wasi_module_mut(&mut self) -> Option<&mut WasiInstance> {
         match self.builtin_host_instances.get_mut(&HostRegistration::Wasi) {
             Some(HostRegistrationInstance::Wasi(wasi_instance)) => Some(wasi_instance),
@@ -845,7 +865,7 @@ impl Vm {
 
 #[derive(Debug, Clone)]
 enum HostRegistrationInstance {
-    Wasi(crate::wasi::WasiInstance),
+    Wasi(WasiInstance),
 }
 
 #[cfg(not(feature = "async"))]
