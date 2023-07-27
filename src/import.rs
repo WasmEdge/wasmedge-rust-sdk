@@ -204,7 +204,10 @@ impl ImportObjectBuilder {
         self,
         name: impl AsRef<str>,
         host_data: Option<Box<T>>,
-    ) -> WasmEdgeResult<ImportObject<T>> where T: ?Sized + Send + Sync + Clone {
+    ) -> WasmEdgeResult<ImportObject<T>>
+    where
+        T: ?Sized + Send + Sync + Clone,
+    {
         let mut inner = sys::ImportModule::create(name.as_ref(), host_data)?;
 
         // add func
