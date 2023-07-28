@@ -503,7 +503,7 @@ impl PluginModule {
             Some(data) => unsafe {
                 ffi::WasmEdge_ModuleInstanceCreateWithData(
                     raw_name.as_raw(),
-                    Box::into_raw(data) as *mut T as *mut c_void,
+                    Box::into_raw(data) as *mut c_void,
                     Some(host_data_finalizer::<T>),
                 )
             },
