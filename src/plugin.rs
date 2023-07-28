@@ -222,14 +222,14 @@ impl PluginVersion {
 /// [Create a simple math plugin](https://github.com/second-state/wasmedge-rustsdk-examples/tree/main/simple-plugin)
 ///
 #[derive(Debug, Default)]
-pub struct PluginModuleBuilder<T: Send + Sync + Clone> {
+pub struct PluginModuleBuilder<T: ?Sized + Send + Sync + Clone> {
     funcs: Vec<(String, sys::Function)>,
     globals: Vec<(String, sys::Global)>,
     memories: Vec<(String, sys::Memory)>,
     tables: Vec<(String, sys::Table)>,
     host_data: Option<Box<T>>,
 }
-impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
+impl<T: ?Sized + Send + Sync + Clone> PluginModuleBuilder<T> {
     /// Creates a new [PluginModuleBuilder].
     pub fn new() -> Self {
         Self {
@@ -385,7 +385,7 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
     /// # Error
     ///
     /// If fail to create the [PluginModule], then an error is returned.
-    pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<PluginModule<T>> {
+    pub fn build(self, name: impl AsRef<str>) -> WasmEdgeResult<PluginModule> {
         let mut inner = sys::plugin::PluginModule::create(name.as_ref(), self.host_data)?;
 
         // add func
@@ -416,8 +416,8 @@ impl<T: Send + Sync + Clone> PluginModuleBuilder<T> {
 ///
 /// An [PluginModule] instance is created with [PluginModuleBuilder](crate::plugin::PluginModuleBuilder).
 #[derive(Debug, Clone)]
-pub struct PluginModule<T: Send + Sync + Clone>(pub(crate) sys::plugin::PluginModule<T>);
-impl<T: Send + Sync + Clone> PluginModule<T> {
+pub struct PluginModule(pub(crate) sys::plugin::PluginModule);
+impl PluginModule {
     /// Returns the name of the plugin module instance.
     pub fn name(&self) -> &str {
         self.0.name()
