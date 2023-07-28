@@ -32,6 +32,12 @@ async-wasi = {workspace = true, optional = true}
 [build-dependencies]
 bindgen = {version = "0.65", default-features = false, features = ["runtime"]}
 cmake = "0.1"
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
+flate2 = "1"
+tar = "0.4"
+sha256 = "1"
+lazy_static = "1.4.0"
+phf = { version = "0.11", features = ["macros"] }
 
 [dev-dependencies]
 anyhow = "1"
