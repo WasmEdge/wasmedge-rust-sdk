@@ -762,7 +762,7 @@ pub trait AsImport {
 
 /// Defines three types of module instances that can be imported into a WasmEdge [Store](crate::Store) instance.
 #[derive(Debug, Clone)]
-pub enum ImportObject {
+pub enum WasiInstance {
     /// Defines the import module instance of WasiModule type.
     #[cfg(not(feature = "async"))]
     Wasi(WasiModule),
@@ -770,14 +770,14 @@ pub enum ImportObject {
     #[cfg(all(feature = "async", target_os = "linux"))]
     AsyncWasi(AsyncWasiModule),
 }
-impl ImportObject {
+impl WasiInstance {
     /// Returns the name of the import object.
     pub fn name(&self) -> &str {
         match self {
             #[cfg(not(feature = "async"))]
-            ImportObject::Wasi(wasi) => wasi.name(),
+            WasiInstance::Wasi(wasi) => wasi.name(),
             #[cfg(all(feature = "async", target_os = "linux"))]
-            ImportObject::AsyncWasi(async_wasi) => async_wasi.name(),
+            WasiInstance::AsyncWasi(async_wasi) => async_wasi.name(),
         }
     }
 
@@ -786,9 +786,9 @@ impl ImportObject {
     pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
         match self {
             #[cfg(not(feature = "async"))]
-            ImportObject::Wasi(wasi) => wasi.inner.0,
+            WasiInstance::Wasi(wasi) => wasi.inner.0,
             #[cfg(all(feature = "async", target_os = "linux"))]
-            ImportObject::AsyncWasi(async_wasi) => async_wasi.inner.0,
+            WasiInstance::AsyncWasi(async_wasi) => async_wasi.inner.0,
         }
     }
 }

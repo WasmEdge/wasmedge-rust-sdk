@@ -103,7 +103,7 @@ pub use instance::{
     function::{FuncRef, FuncType, Function},
     global::{Global, GlobalType},
     memory::{MemType, Memory},
-    module::{AsImport, AsInstance, ImportModule, ImportObject, Instance},
+    module::{AsImport, AsInstance, ImportModule, Instance, WasiInstance},
     table::{Table, TableType},
 };
 #[doc(inline)]
