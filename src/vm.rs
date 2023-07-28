@@ -759,7 +759,6 @@ impl Vm {
     ///
     /// To retrieve  the [wasi module instance], a [config](crate::config::Config) with the enabled [wasi](crate::config::HostRegistrationConfigOptions::wasi) option should be given when create this vm.
     ///
-    #[cfg(not(feature = "async"))]
     pub fn wasi_module(&self) -> Option<&WasiInstance> {
         match self.builtin_host_instances.get(&HostRegistration::Wasi) {
             Some(HostRegistrationInstance::Wasi(wasi_instance)) => Some(wasi_instance),
@@ -771,7 +770,6 @@ impl Vm {
     ///
     /// To retrieve the [wasi module instance], a [config](crate::config::Config) with the enabled [wasi](crate::config::HostRegistrationConfigOptions::wasi) option should be given when create this vm.
     ///
-    #[cfg(not(feature = "async"))]
     pub fn wasi_module_mut(&mut self) -> Option<&mut WasiInstance> {
         match self.builtin_host_instances.get_mut(&HostRegistration::Wasi) {
             Some(HostRegistrationInstance::Wasi(wasi_instance)) => Some(wasi_instance),
