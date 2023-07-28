@@ -5,7 +5,7 @@ use super::ffi;
 use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
-    Function, ImportModule, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
+    Function, ImportModule, Instance, Module, Statistics, Store, WasiInstance, WasmEdgeResult,
     WasmValue,
 };
 use parking_lot::Mutex;
@@ -57,25 +57,25 @@ impl Executor {
         }
     }
 
-    /// Registers and instantiates a WasmEdge [import object](crate::ImportObject) into a [store](crate::Store).
+    /// Registers and instantiates the given [WASI instance](crate::WasiInstance) into a [store](crate::Store).
     ///
     /// # Arguments
     ///
     /// * `store` - The target [store](crate::Store), into which the given [import object](crate::ImportObject) is registered.
     ///
-    /// * `import` - The WasmEdge [import object](crate::ImportObject) to be registered.
+    /// * `instance` - The [WASI instance](crate::WasiInstance) to be registered.
     ///
     /// # Error
     ///
-    /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_object(
+    /// If fail to register the given [WASI instance](crate::WasiInstance), then an error is returned.
+    pub fn register_wasi_instance(
         &mut self,
         store: &Store,
-        import: &ImportObject,
+        instance: &WasiInstance,
     ) -> WasmEdgeResult<()> {
-        match import {
+        match instance {
             #[cfg(not(feature = "async"))]
-            ImportObject::Wasi(import) => unsafe {
+            WasiInstance::Wasi(import) => unsafe {
                 check(ffi::WasmEdge_ExecutorRegisterImport(
                     self.inner.0,
                     store.inner.0,
@@ -83,7 +83,7 @@ impl Executor {
                 ))?;
             },
             #[cfg(all(feature = "async", target_os = "linux"))]
-            ImportObject::AsyncWasi(import) => unsafe {
+            WasiInstance::AsyncWasi(import) => unsafe {
                 check(ffi::WasmEdge_ExecutorRegisterImport(
                     self.inner.0,
                     store.inner.0,
@@ -625,8 +625,8 @@ mod tests {
         assert!(result.is_ok());
         let async_wasi_module = result.unwrap();
 
-        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
-        let result = executor.register_import_object(&mut store, &wasi_import);
+        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
+        let result = executor.register_wasi_instance(&mut store, &wasi_import);
         assert!(result.is_ok());
 
         // register async_wasi module into the store
@@ -706,8 +706,8 @@ mod tests {
         let async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
-        let result = executor.register_import_object(&mut store, &wasi_import);
+        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
+        let result = executor.register_wasi_instance(&mut store, &wasi_import);
         assert!(result.is_ok());
 
         let ty = FuncType::create([], [])?;

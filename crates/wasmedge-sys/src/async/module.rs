@@ -2341,7 +2341,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
 mod tests {
     use super::*;
     use crate::{
-        r#async::fiber::AsyncState, Config, Executor, ImportObject, Loader, Store, Validator,
+        r#async::fiber::AsyncState, Config, Executor, Loader, Store, Validator, WasiInstance,
     };
 
     #[tokio::test]
@@ -2368,8 +2368,8 @@ mod tests {
         let async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = ImportObject::AsyncWasi(async_wasi_module);
-        let result = executor.register_import_object(&mut store, &wasi_import);
+        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
+        let result = executor.register_wasi_instance(&mut store, &wasi_import);
         assert!(result.is_ok());
 
         let wasm_file = std::env::current_dir()

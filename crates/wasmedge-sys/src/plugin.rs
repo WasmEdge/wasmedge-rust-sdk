@@ -461,14 +461,13 @@ impl PluginDescriptor {
 
 /// Represents a Plugin module instance.
 #[derive(Debug, Clone)]
-pub struct PluginModule<T: Send + Sync + Clone> {
+pub struct PluginModule {
     pub(crate) inner: Arc<InnerInstance>,
     pub(crate) registered: bool,
     name: String,
-    _host_data: Option<Box<T>>,
     funcs: Vec<Function>,
 }
-impl<T: Send + Sync + Clone> Drop for PluginModule<T> {
+impl Drop for PluginModule {
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             unsafe {
@@ -480,28 +479,31 @@ impl<T: Send + Sync + Clone> Drop for PluginModule<T> {
         }
     }
 }
-impl<T: Send + Sync + Clone> PluginModule<T> {
+impl PluginModule {
     /// Creates a module instance which is used to import host functions, tables, memories, and globals into a wasm module.
     ///
     /// # Argument
     ///
     /// * `name` - The name of the import module instance.
     ///
-    /// * `host_data` - The host data to be stored in the module instance.
+    /// * `host_data` - The host context data to be used in the module instance.
     ///
     /// * `finalizer` - the function to drop the host data. This argument is only available when `host_data` is set.
     ///
     /// # Error
     ///
     /// If fail to create the import module instance, then an error is returned.
-    pub fn create(name: impl AsRef<str>, mut host_data: Option<Box<T>>) -> WasmEdgeResult<Self> {
+    pub fn create<T>(name: impl AsRef<str>, host_data: Option<Box<T>>) -> WasmEdgeResult<Self>
+    where
+        T: ?Sized + Send + Sync + Clone,
+    {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
-        let ctx = match host_data.as_mut() {
+        let ctx = match host_data {
             Some(data) => unsafe {
                 ffi::WasmEdge_ModuleInstanceCreateWithData(
                     raw_name.as_raw(),
-                    data.as_mut() as *mut T as *mut c_void,
+                    Box::into_raw(data) as *mut c_void,
                     Some(host_data_finalizer::<T>),
                 )
             },
@@ -516,7 +518,6 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
                 inner: std::sync::Arc::new(InnerInstance(ctx)),
                 registered: false,
                 name: name.as_ref().to_string(),
-                _host_data: host_data,
                 funcs: Vec::new(),
             }),
         }
@@ -528,7 +529,7 @@ impl<T: Send + Sync + Clone> PluginModule<T> {
         self.inner.0 as *const _
     }
 }
-impl<T: Send + Sync + Clone> AsImport for PluginModule<T> {
+impl AsImport for PluginModule {
     fn name(&self) -> &str {
         self.name.as_str()
     }

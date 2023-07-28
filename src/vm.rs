@@ -132,9 +132,9 @@ impl VmBuilder {
         if let Some(cfg) = vm.config.as_ref() {
             if cfg.wasi_enabled() {
                 if let Ok(wasi_module) = sys::WasiModule::create(None, None, None) {
-                    vm.executor.inner.register_import_object(
+                    vm.executor.inner.register_wasi_instance(
                         &vm.store.inner,
-                        &sys::ImportObject::Wasi(wasi_module.clone()),
+                        &sys::WasiInstance::Wasi(wasi_module.clone()),
                     )?;
 
                     vm.builtin_host_instances.insert(
@@ -211,9 +211,9 @@ impl VmBuilder {
                             )?;
 
                         // register the AsyncWasiModule instance
-                        vm.executor.inner.register_import_object(
+                        vm.executor.inner.register_wasi_instance(
                             &vm.store.inner,
-                            &sys::ImportObject::AsyncWasi(wasi_module.clone()),
+                            &sys::WasiInstance::AsyncWasi(wasi_module.clone()),
                         )?;
 
                         vm.builtin_host_instances.insert(
@@ -874,8 +874,8 @@ mod tests {
         io::WasmVal,
         params,
         types::Val,
-        wat2wasm, AsInstance, CallingFrame, Global, GlobalType, ImportObjectBuilder, Memory,
-        MemoryType, Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
+        wat2wasm, CallingFrame, Global, GlobalType, ImportObjectBuilder, Memory, MemoryType,
+        Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
     };
 
     #[test]
