@@ -86,6 +86,7 @@ pub mod types;
 pub mod utils;
 #[doc(hidden)]
 pub mod vm;
+#[cfg(not(feature = "async"))]
 pub mod wasi;
 
 pub use caller::Caller;

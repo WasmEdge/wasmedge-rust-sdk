@@ -874,8 +874,8 @@ mod tests {
         io::WasmVal,
         params,
         types::Val,
-        wat2wasm, AsInstance, CallingFrame, Global, GlobalType, ImportObjectBuilder, Memory,
-        MemoryType, Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
+        wat2wasm, CallingFrame, Global, GlobalType, ImportObjectBuilder, Memory, MemoryType,
+        Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
     };
 
     #[test]
