@@ -61,7 +61,7 @@ impl Executor {
     ///
     /// # Arguments
     ///
-    /// * `store` - The target [store](crate::Store), into which the given [import object](crate::ImportObject) is registered.
+    /// * `store` - The target [store](crate::Store), into which the given [wasi instance] is registered.
     ///
     /// * `instance` - The [WASI instance](crate::WasiInstance) to be registered.
     ///
@@ -99,7 +99,7 @@ impl Executor {
     ///
     /// # Arguments
     ///
-    /// * `store` - The target [store](crate::Store), into which the given [import object](crate::ImportObject) is registered.
+    /// * `store` - The target [store](crate::Store), into which the given [import module](crate::ImportModule) is registered.
     ///
     /// * `import` - The WasmEdge [import module](crate::ImportModule) to be registered.
     ///
@@ -166,7 +166,7 @@ impl Executor {
 
     /// Registers and instantiates a WasmEdge [module](crate::Module) into a [store](crate::Store) as an anonymous module.
     ///
-    /// Notice that when a new module is instantiated into the [store](crate::Store), the old instantiated module is removed; in addition, ensure that the [imports](crate::ImportObject) the module depends are already registered into the [store](crate::Store).
+    /// Notice that when a new module is instantiated into the [store](crate::Store), the old instantiated module is removed; in addition, ensure that the [imports](crate::ImportModule) the module depends on are already registered into the [store](crate::Store).
     ///
     ///
     /// # Arguments
