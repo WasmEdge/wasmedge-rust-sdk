@@ -3,7 +3,12 @@ pub type AsyncState = wasmedge_sys::r#async::fiber::AsyncState;
 
 /// Represents a wasi module instance.
 #[derive(Debug, Clone)]
-pub(crate) struct WasiInstance(pub(crate) wasmedge_sys::r#async::AsyncWasiModule);
+pub struct WasiInstance(pub(crate) wasmedge_sys::r#async::AsyncWasiModule);
+impl WasiInstance {
+    pub fn exit_code(&self) -> u32 {
+        self.0.exit_code()
+    }
+}
 
 #[derive(Debug)]
 pub struct WasiContext {
