@@ -22,9 +22,9 @@ pub struct WasiContext {
 }
 impl WasiContext {
     /// Creates a wasi context with the specified argumentes, environment variables, and preopened directories.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `args` - The commandline arguments. The first argument is the program name.
     ///
     /// * `envs` - The environment variables to use.
