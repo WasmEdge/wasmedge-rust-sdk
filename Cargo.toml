@@ -24,7 +24,7 @@ wasmedge-types.workspace = true
 async-wasi = {path = "crates/async-wasi", version = "=0.0.3"}
 cfg-if = "1.0.0"
 parking_lot = "0.12.1"
-wasmedge-macro = {path = "crates/wasmedge-macro", version = "0.5"}
+wasmedge-macro = {path = "crates/wasmedge-macro", version = "0.6"}
 wasmedge-types = {path = "crates/wasmedge-types", version = "0.4"}
 wat = "=1.0.67"
 
