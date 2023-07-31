@@ -19,43 +19,6 @@ pub struct Func {
     pub(crate) ty: FuncType,
 }
 impl Func {
-    /// Creates a host function of the given func type.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` - The function type.
-    ///
-    /// * `real_func` - The native function that will be wrapped as a host function.
-    ///
-    /// * `data` - The host context data used in this function.
-    ///
-    /// # Error
-    ///
-    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn new<T>(
-        ty: FuncType,
-        real_func: impl Fn(
-                CallingFrame,
-                Vec<WasmValue>,
-                *mut std::os::raw::c_void,
-            ) -> Result<Vec<WasmValue>, HostFuncError>
-            + Send
-            + Sync
-            + 'static,
-        data: Option<Box<T>>,
-    ) -> WasmEdgeResult<Self> {
-        let boxed_func = Box::new(real_func);
-        let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
-        Ok(Self {
-            inner,
-            name: None,
-            mod_name: None,
-            ty,
-        })
-    }
-
     /// Creates a host function by wrapping a native function.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
@@ -69,7 +32,7 @@ impl Func {
     /// # Error
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
-    pub fn wrap_func<Args, Rets, T>(
+    pub fn wrap<Args, Rets, T>(
         real_func: impl Fn(
                 CallingFrame,
                 Vec<WasmValue>,
@@ -88,6 +51,43 @@ impl Func {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
+        Ok(Self {
+            inner,
+            name: None,
+            mod_name: None,
+            ty,
+        })
+    }
+
+    /// Creates a host function with the given func type.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` - The function type.
+    ///
+    /// * `real_func` - The native function that will be wrapped as a host function.
+    ///
+    /// * `data` - The host context data used in this function.
+    ///
+    /// # Error
+    ///
+    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    pub fn wrap_with_type<T>(
+        ty: FuncType,
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+                *mut std::os::raw::c_void,
+            ) -> Result<Vec<WasmValue>, HostFuncError>
+            + Send
+            + Sync
+            + 'static,
+        data: Option<Box<T>>,
+    ) -> WasmEdgeResult<Self> {
+        let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
         Ok(Self {
             inner,
@@ -134,6 +134,50 @@ impl Func {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
+        let inner = sys::Function::create_async_func(&ty.clone().into(), boxed_func, data, 0)?;
+        Ok(Self {
+            inner,
+            name: None,
+            mod_name: None,
+            ty,
+        })
+    }
+
+    /// Creates an asynchronous host function by wrapping a native async function with the given function type.
+    ///
+    /// N.B. that this function can be used in thread-safe scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` - The function type.
+    ///
+    /// * `real_func` - The native function to be wrapped.
+    ///
+    /// * `data` - The host context data used in this function.
+    ///
+    /// # Error
+    ///
+    /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    pub fn wrap_async_func_with_type<T>(
+        ty: FuncType,
+        real_func: impl Fn(
+                CallingFrame,
+                Vec<WasmValue>,
+                *mut std::os::raw::c_void,
+            ) -> Box<
+                dyn std::future::Future<
+                        Output = Result<Vec<WasmValue>, crate::error::HostFuncError>,
+                    > + Send,
+            > + Send
+            + Sync
+            + 'static,
+        data: Option<Box<T>>,
+    ) -> WasmEdgeResult<Self>
+    where
+        T: Send + Sync,
+    {
+        let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_async_func(&ty.clone().into(), boxed_func, data, 0)?;
         Ok(Self {
             inner,
@@ -458,7 +502,7 @@ mod tests {
     #[test]
     fn test_func_wrap() {
         // create a host function
-        let result = Func::wrap_func::<(i32, i32), i32, NeverType>(real_add, None);
+        let result = Func::wrap::<(i32, i32), i32, NeverType>(real_add, None);
         assert!(result.is_ok());
         let func = result.unwrap();
 
