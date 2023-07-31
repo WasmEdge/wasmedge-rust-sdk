@@ -108,7 +108,7 @@ fn get_remote_archive() -> Archive {
 
 fn do_http_request(url: &str) -> impl std::io::Read {
     let builder = reqwest::blocking::Client::builder();
-    let builder = match Env("STANDALONE_PROXY").lossy() {
+    let builder = match Env("WASMEDGE_STANDALONE_PROXY").lossy() {
         Some(proxy) => {
             debug!("using proxy to download archive: {proxy}");
             let proxy = reqwest::Proxy::all(proxy).expect("failed to parse proxy");
