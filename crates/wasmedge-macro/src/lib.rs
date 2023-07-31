@@ -154,7 +154,7 @@ pub fn async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream
             panic!("The function must be async");
         }
 
-        match expand_async_host_func_new(&item_fn) {
+        match expand_async_host_func(&item_fn) {
             Ok(token_stream) => token_stream.into(),
             Err(err) => err.to_compile_error().into(),
         }
@@ -163,11 +163,11 @@ pub fn async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream
     }
 }
 
-fn expand_async_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
+fn expand_async_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     // extract T from Option<&mut T>
     let ret = match &item_fn.sig.inputs.len() {
-        2 => expand_async_host_func_with_two_args_new(item_fn),
-        // 3 => expand_async_host_func_with_three_args_new(item_fn),
+        2 => expand_async_host_func_with_two_args(item_fn),
+        3 => expand_async_host_func_with_three_args(item_fn),
         _ => panic!(
             "Invalid numbers of host function arguments: {}",
             &item_fn.sig.inputs.len()
@@ -177,7 +177,7 @@ fn expand_async_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2:
     Ok(ret)
 }
 
-fn expand_async_host_func_with_two_args_new(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+fn expand_async_host_func_with_two_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
     let fn_name_ident = &item_fn.sig.ident;
     let fn_visibility = &item_fn.vis;
     let fn_generics = &item_fn.sig.generics;
@@ -226,42 +226,42 @@ fn expand_async_host_func_with_two_args_new(item_fn: &syn::ItemFn) -> proc_macro
     )
 }
 
-fn _expand_async_host_func_with_three_args_new(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
-    let fn_name_ident = &item_fn.sig.ident;
-    let fn_visibility = &item_fn.vis;
-    let fn_generics = &item_fn.sig.generics;
+fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+    // * define the signature of wrapper function
+    // name of wrapper function
+    let wrapper_fn_name_ident = item_fn.sig.ident.clone();
+    // arguments of wrapper function
+    let wrapper_fn_inputs: syn::punctuated::Punctuated<FnArg, syn::token::Comma> = parse_quote!(
+        frame: wasmedge_sdk::CallingFrame,
+        args: Vec<wasmedge_sdk::WasmValue>,
+        data: *mut std::ffi::c_void
+    );
+    // visibility of wrapper function
+    let wrapper_visibility = item_fn.vis.clone();
 
     // get the identity of the first argument
-    let mut used_first_arg = true;
     let ident_first_arg = match &item_fn.sig.inputs[0] {
         FnArg::Typed(PatType { pat, .. }) => match &**pat {
             Pat::Ident(pat_ident) => pat_ident.ident.clone(),
-            Pat::Wild(_) => {
-                used_first_arg = false;
-                proc_macro2::Ident::new("_caller", proc_macro2::Span::call_site())
-            }
-            _ => panic!("argument pattern is not a simple ident"),
+            Pat::Wild(_) => proc_macro2::Ident::new("_caller", proc_macro2::Span::call_site()),
+            _ => panic!("The argument pattern of the first argument is not a simple ident"),
         },
-        FnArg::Receiver(_) => panic!("argument is a receiver"),
+        FnArg::Receiver(_) => panic!("The first argument is a receiver"),
     };
 
     // get the identity of the third argument
-    let mut used_third_arg = true;
     let ident_third_arg = match &item_fn.sig.inputs[2] {
         FnArg::Typed(PatType { pat, .. }) => match &**pat {
             Pat::Ident(pat_ident) => pat_ident.ident.clone(),
-            Pat::Wild(_) => {
-                used_third_arg = false;
-                proc_macro2::Ident::new("_data", proc_macro2::Span::call_site())
-            }
-            _ => panic!("The pattern of the third argument is not a simple ident"),
+            Pat::Wild(_) => proc_macro2::Ident::new("_data", proc_macro2::Span::call_site()),
+            _ => panic!("The argument pattern of the third argument is not a simple ident"),
         },
         FnArg::Receiver(_) => panic!("The third argument is a receiver"),
     };
 
     // get the type of the third argument
-    let third_arg = item_fn.sig.inputs.last().unwrap().clone();
-    let ty_ptr_third_arg = match &third_arg {
+    let data_arg = item_fn.sig.inputs.last().unwrap().clone();
+    let ty_third_arg = match &data_arg {
         FnArg::Typed(PatType { ref ty, .. }) => match **ty {
             syn::Type::Reference(syn::TypeReference { ref elem, .. }) => syn::TypePtr {
                 star_token: parse_quote!(*),
@@ -311,36 +311,18 @@ fn _expand_async_host_func_with_three_args_new(item_fn: &syn::ItemFn) -> proc_ma
         _ => panic!("Unsupported syn::FnArg type"),
     };
 
-    // replace the first argument
-    let mut fn_inputs = item_fn.sig.inputs.clone();
-    let first_arg = fn_inputs.first_mut().unwrap();
-    if used_first_arg {
-        *first_arg = parse_quote!(frame: wasmedge_sdk::CallingFrame);
-    } else {
-        *first_arg = parse_quote!(_: wasmedge_sdk::CallingFrame);
-    }
-
-    // replace the third argument
-    let third_arg = &mut fn_inputs[2];
-    if used_third_arg {
-        *third_arg = parse_quote!(data: *mut std::ffi::c_void);
-    } else {
-        *third_arg = parse_quote!(_: *mut std::ffi::c_void);
-    }
-
-    // add a new statement into the block
-    let mut fn_block = item_fn.block.clone();
-    if used_first_arg {
-        let statements = &mut fn_block.stmts;
-        statements.insert(0, parse_quote!(let #ident_first_arg = Caller::new(frame);));
-        statements.insert(
-            1,
-            parse_quote!(let #ident_third_arg = unsafe { &mut *(data as #ty_ptr_third_arg) };),
-        );
-    }
+    // func body
+    let fn_block = item_fn.block.clone();
 
     quote!(
-        #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)> {
+        #wrapper_visibility fn #wrapper_fn_name_ident (#wrapper_fn_inputs) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)> {
+
+            // create a Caller instance
+            let #ident_first_arg = Caller::new(frame);
+
+            // host context data
+            let #ident_third_arg = unsafe { &mut *(data as #ty_third_arg) };
+
             Box::new(async move {
                 #fn_block
             })
