@@ -154,7 +154,7 @@ pub fn async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream
             panic!("The function must be async");
         }
 
-        match expand_async_host_func(&item_fn) {
+        match expand_async_host_func_new(&item_fn) {
             Ok(token_stream) => token_stream.into(),
             Err(err) => err.to_compile_error().into(),
         }
@@ -163,17 +163,21 @@ pub fn async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream
     }
 }
 
-fn expand_async_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
+fn expand_async_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     // extract T from Option<&mut T>
     let ret = match &item_fn.sig.inputs.len() {
-        3 => expand_async_host_func_with_three_args(item_fn),
-        _ => panic!("Invalid numbers of host function arguments"),
+        2 => expand_async_host_func_with_two_args_new(item_fn),
+        // 3 => expand_async_host_func_with_three_args_new(item_fn),
+        _ => panic!(
+            "Invalid numbers of host function arguments: {}",
+            &item_fn.sig.inputs.len()
+        ),
     };
 
     Ok(ret)
 }
 
-fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+fn expand_async_host_func_with_two_args_new(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
     let fn_name_ident = &item_fn.sig.ident;
     let fn_visibility = &item_fn.vis;
     let fn_generics = &item_fn.sig.generics;
@@ -203,10 +207,136 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
         *first_arg = parse_quote!(_: wasmedge_sdk::CallingFrame);
     }
 
+    // append the third input argument
+    fn_inputs.push(parse_quote!(_data: *mut std::ffi::c_void));
+
+    // add a new statement into the block
     let mut fn_block = item_fn.block.clone();
     if used_first_arg {
         let statements = &mut fn_block.stmts;
         statements.insert(0, parse_quote!(let #ident_first_arg = Caller::new(frame);));
+    }
+
+    quote!(
+        #fn_visibility fn #fn_name_ident #fn_generics (#fn_inputs) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)> {
+            Box::new(async move {
+                #fn_block
+            })
+        }
+    )
+}
+
+fn _expand_async_host_func_with_three_args_new(item_fn: &syn::ItemFn) -> proc_macro2::TokenStream {
+    let fn_name_ident = &item_fn.sig.ident;
+    let fn_visibility = &item_fn.vis;
+    let fn_generics = &item_fn.sig.generics;
+
+    // get the identity of the first argument
+    let mut used_first_arg = true;
+    let ident_first_arg = match &item_fn.sig.inputs[0] {
+        FnArg::Typed(PatType { pat, .. }) => match &**pat {
+            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+            Pat::Wild(_) => {
+                used_first_arg = false;
+                proc_macro2::Ident::new("_caller", proc_macro2::Span::call_site())
+            }
+            _ => panic!("argument pattern is not a simple ident"),
+        },
+        FnArg::Receiver(_) => panic!("argument is a receiver"),
+    };
+
+    // get the identity of the third argument
+    let mut used_third_arg = true;
+    let ident_third_arg = match &item_fn.sig.inputs[2] {
+        FnArg::Typed(PatType { pat, .. }) => match &**pat {
+            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+            Pat::Wild(_) => {
+                used_third_arg = false;
+                proc_macro2::Ident::new("_data", proc_macro2::Span::call_site())
+            }
+            _ => panic!("The pattern of the third argument is not a simple ident"),
+        },
+        FnArg::Receiver(_) => panic!("The third argument is a receiver"),
+    };
+
+    // get the type of the third argument
+    let third_arg = item_fn.sig.inputs.last().unwrap().clone();
+    let ty_ptr_third_arg = match &third_arg {
+        FnArg::Typed(PatType { ref ty, .. }) => match **ty {
+            syn::Type::Reference(syn::TypeReference { ref elem, .. }) => syn::TypePtr {
+                star_token: parse_quote!(*),
+                const_token: None,
+                mutability: Some(parse_quote!(mut)),
+                elem: elem.clone(),
+            },
+            syn::Type::Path(syn::TypePath { ref path, .. }) => match path.segments.last() {
+                Some(segment) => {
+                    let id = segment.ident.to_string();
+                    match id == "Option" {
+                        true => match segment.arguments {
+                            syn::PathArguments::AngleBracketed(
+                                syn::AngleBracketedGenericArguments { ref args, .. },
+                            ) => {
+                                let last_generic_arg = args.last();
+                                match last_generic_arg {
+                                    Some(arg) => match arg {
+                                        syn::GenericArgument::Type(ty) => match ty {
+                                            syn::Type::Reference(syn::TypeReference {
+                                                ref elem,
+                                                ..
+                                            }) => syn::TypePtr {
+                                                star_token: parse_quote!(*),
+                                                const_token: None,
+                                                mutability: Some(parse_quote!(mut)),
+                                                elem: elem.clone(),
+                                            },
+                                            _ => panic!("Not found syn::Type::Reference"),
+                                        },
+                                        _ => {
+                                            panic!("Not found syn::GenericArgument::Type")
+                                        }
+                                    },
+                                    None => panic!("Not found the last GenericArgument"),
+                                }
+                            }
+                            _ => panic!("Not found syn::PathArguments::AngleBracketed"),
+                        },
+                        false => panic!("Not found segment ident: Option"),
+                    }
+                }
+                None => panic!("Not found path segments"),
+            },
+            _ => panic!("Unsupported syn::Type type"),
+        },
+        _ => panic!("Unsupported syn::FnArg type"),
+    };
+
+    // replace the first argument
+    let mut fn_inputs = item_fn.sig.inputs.clone();
+    let first_arg = fn_inputs.first_mut().unwrap();
+    if used_first_arg {
+        *first_arg = parse_quote!(frame: wasmedge_sdk::CallingFrame);
+    } else {
+        *first_arg = parse_quote!(_: wasmedge_sdk::CallingFrame);
+    }
+
+    // replace the third argument
+    let third_arg = &mut fn_inputs[2];
+    if used_third_arg {
+        *third_arg = parse_quote!(data: *mut std::ffi::c_void);
+    } else {
+        *third_arg = parse_quote!(_: *mut std::ffi::c_void);
+    }
+
+    // add a new statement into the block
+    let mut fn_block = item_fn.block.clone();
+    if used_first_arg {
+        let statements = &mut fn_block.stmts;
+        statements.insert(0, parse_quote!(let #ident_first_arg = Caller::new(frame);));
+        statements.insert(
+            1,
+            parse_quote!(let #ident_third_arg = unsafe { &mut *(data as #ty_ptr_third_arg) };),
+        );
     }
 
     quote!(
