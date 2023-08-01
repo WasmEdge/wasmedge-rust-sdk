@@ -50,11 +50,14 @@ All notable changes to this project will be documented in this file.
 - Update `VmBuilder::build` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
 - Improve the `standalone` deployment mode ([#40](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/40))
 
-
 ### 📚 Documentation
 
 - Update `README.md` ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
-- Update Rust SDK API Document ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+- Update Rust SDK API Document ([#44](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/44))
+
+### Ci
+
+- Add steps for publishing async API document in `release-wasmedge-sdk` workflow ([#44](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/44))
 
 ## [0.10.0] - 2023-07-21
 
