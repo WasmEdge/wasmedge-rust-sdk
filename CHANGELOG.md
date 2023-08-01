@@ -2,6 +2,60 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2023-07-31
+
+### ⛰️  Features
+
+- Add `Func::wrap_async_func_with_type` ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+- Add `WasiInstance::exit_code` in `async` mod ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+- Add `WasiInstance::name` in `wasi` mod ([#42](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/42))
+- Add `WasiContext` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- Add `VmBuilder::with_wasi_context` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+
+### 🚜 Refactor
+
+- [BREAKING] Update `Func::new`
+  - Rename `Func::new` to `Func::wrap_with_type` ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+  - Change the type of the `data` argument to `Option<Box<T>>` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- [BREAKING] Update `Func::wrap_func`
+  - Rename `Func::wrap_func` to `Func::wrap` ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+  - The type of the `data` argument is changed to `Option<Box<T>>` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- [BREAKING] Update async `WasiInstance`
+  - Move `WasiInstance` for `async` scenarios from `wasi` mod to `async` mod ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+  - Remove the implementation of `AsInstance` trait for `WasiInstance` defined in `async` mod ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+  - Remove `WasiInstance::initialize` defined in `async` mod ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- [BREAKING] Update `WasiInstance`
+  - Remove the implementation of `AsInstance` trait for `WasiInstance` defined in `wasi` mod ([#42](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/42))
+- [BREAKING] Move `AsyncState` into `async` mod ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- [BREAKING] Remove `HostFn<T>` and `AsyncHostFn<T>` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- [BREAKING] Update `ImportObjectBuilder`
+  - Add `?Size` and `Clone` trait bounds on generic type of `ImportObjectBuilder::build` ([#41](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/41))
+  - Change the type of the `data` argument of `ImportObjectBuilder::with_func` to `Option<Box<D>>` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+  - Change the type of the `data` argument of `ImportObjectBuilder::with_func_by_type` to `Option<Box<D>>` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- [BREAKING] Update `ImportObject`
+  - Add generic type to `ImportObject` ([#41](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/41))
+  - Rename `as_raw_ptr` to `as_ptr` ([#41](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/41))
+- [BREAKING] Update `PluginModuleBuilder`
+  - Change the type of the `data` argument of `PluginModuleBuilder::with_func` to `Option<Box<D>>` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+  - Add `?Sized` trait bound on the generic type of `PluginModuleBuilder<T>` ([#42](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/42))
+  - Update `PluginModuleBuilder::build` ([#42](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/42))
+- [BREAKING] Update `PluginModule` ([#42](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/42))
+- [BREAKING] Add generic type to `Store::register_import_module` ([#41](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/41))
+- [BREAKING] Update `async_host_function` proc-macro ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+- Update `Vm`
+  - Remove `imports` field from `Vm` ([#41](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/41))
+  - [BREAKING] Update the signature of `Vm::register_import_module` ([#41](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/41))
+  - Update `Vm::build` for async scenarios ([#42](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/42))
+  - Enable `Vm::wasi_module` and `Vm::wasi_module_mut` for async scenarios ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+- Update `VmBuilder::build` ([#39](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/39))
+- Improve the `standalone` deployment mode ([#40](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/40))
+
+
+### 📚 Documentation
+
+- Update `README.md` ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+- Update Rust SDK API Document ([#43](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/43))
+
 ## [0.10.0] - 2023-07-21
 
 ### ⛰️  Features
