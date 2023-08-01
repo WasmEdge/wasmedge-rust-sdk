@@ -755,7 +755,7 @@ impl Vm {
         &mut self.store
     }
 
-    /// Returns a reference to the [wasi module instance](crate::wasi::WasiInstance) from this vm.
+    /// Returns a reference to the [wasi module instance] from this vm.
     ///
     /// To retrieve  the [wasi module instance], a [config](crate::config::Config) with the enabled [wasi](crate::config::HostRegistrationConfigOptions::wasi) option should be given when create this vm.
     ///
@@ -766,7 +766,7 @@ impl Vm {
         }
     }
 
-    /// Returns a mutable reference to the [wasi module instance](crate::wasi::WasiInstance) from this vm.
+    /// Returns a mutable reference to the [wasi module instance] from this vm.
     ///
     /// To retrieve the [wasi module instance], a [config](crate::config::Config) with the enabled [wasi](crate::config::HostRegistrationConfigOptions::wasi) option should be given when create this vm.
     ///

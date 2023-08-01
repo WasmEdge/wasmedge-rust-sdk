@@ -1,4 +1,4 @@
-//! Defines wasi module instance types, including WasiInstance, WasiNnInstance, wasi-crypto instances.
+//! Defines wasi module instance.
 
 use crate::WasmEdgeResult;
 

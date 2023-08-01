@@ -12,8 +12,8 @@
 //!
 //! **Notice:** This project is still under active development and not guaranteed to have a stable API.
 //!
-//! - [Documentation](https://wasmedge.org/docs/)
 //! - [WasmEdge website](https://wasmedge.org/)
+//! - [WasmEdge Docs](https://wasmedge.org/docs/)
 //! - [WasmEdge GitHub Page](https://github.com/WasmEdge/WasmEdge)
 //! - [WasmEdge Rust SDK GitHub Page](https://github.com/WasmEdge/wasmedge-rust-sdk)
 //! - [WasmEdge Rust SDK Examples](https://github.com/second-state/wasmedge-rustsdk-examples)

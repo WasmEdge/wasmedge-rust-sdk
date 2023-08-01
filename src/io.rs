@@ -291,14 +291,9 @@ impl WasmVal for ExternRef {
     }
 }
 
-/// Used to pass arguments to the following methods:
-/// - [Func::run](crate::Func::run)
-/// - [FuncRef::run](crate::FuncRef::run)
-/// - [Executor::run_func](crate::Executor::run_func)
-/// - [Executor::run_func_ref](crate::Executor::run_func_ref)
-/// - [Vm::run_func](crate::Vm::run_func)
+/// Generates arguments of [WasmValue](crate::WasmValue) types.
 ///
-/// Notice that to use the macro, it is required to use `WasmVal` trait. If the version of rust used is less than v1.63, please place `#![feature(explicit_generic_args_with_impl_trait)]` on the root of the program.
+/// Notice that to use the macro, it is required to use `WasmVal` trait.
 #[macro_export]
 macro_rules! params {
     ( $( $x:expr ),* ) => {

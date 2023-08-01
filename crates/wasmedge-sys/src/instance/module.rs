@@ -718,7 +718,7 @@ impl WasiModule {
     }
 }
 
-/// The object to be registered via the the [Executor::register_import_object](crate::Executor::register_import_object) function is required to implement this trait.
+/// The module to be registered via the the [Executor::register_import_module](crate::Executor::register_import_module) function is required to implement this trait.
 pub trait AsImport {
     /// Returns the name of the module instance.
     fn name(&self) -> &str;

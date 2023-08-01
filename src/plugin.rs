@@ -5,6 +5,8 @@ use crate::{
     Memory, Table, WasmEdgeResult, WasmValue,
 };
 use wasmedge_sys::{self as sys, AsImport};
+
+/// Defines low-level types used in Plugin development.
 pub mod ffi {
     pub use wasmedge_sys::ffi::{
         WasmEdge_ModuleDescriptor, WasmEdge_ModuleInstanceContext, WasmEdge_PluginDescriptor,

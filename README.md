@@ -4,15 +4,15 @@ WasmEdge Rust SDK provides idiomatic [Rust](https://www.rust-lang.org/) language
 
 **Notice:** This project is still under active development and not guaranteed to have a stable API.
 
-- [Documentation](https://wasmedge.org/docs/)
 - [WasmEdge website](https://wasmedge.org/)
+- [WasmEdge Docs](https://wasmedge.org/docs/)
 - [WasmEdge GitHub Page](https://github.com/WasmEdge/WasmEdge)
 - [WasmEdge Rust SDK GitHub Page](https://github.com/WasmEdge/wasmedge-rust-sdk)
 - [WasmEdge Rust SDK Examples](https://github.com/second-state/wasmedge-rustsdk-examples)
 
 ## Get Started
 
-Since this crate depends on the WasmEdge C API, it needs to be installed in your system first. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the WasmEdge library. The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
+Since this crate depends on the WasmEdge C API, it needs to be installed in your system first. Please refer to [Install and uninstall WasmEdge](https://wasmedge.org/docs/start/install) to install the WasmEdge library. The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |

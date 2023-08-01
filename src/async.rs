@@ -1,20 +1,35 @@
+//! Defines the types used in the `async` scenarios.
+
 /// The state of an asynchronous task.
 pub type AsyncState = wasmedge_sys::r#async::fiber::AsyncState;
 
-/// Represents a wasi module instance.
+/// Represents a wasi module instance for the `async` scenarios.
 #[derive(Debug, Clone)]
 pub struct WasiInstance(pub(crate) wasmedge_sys::r#async::AsyncWasiModule);
 impl WasiInstance {
+    /// Returns the WASI exit code.
+    ///
+    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
     pub fn exit_code(&self) -> u32 {
         self.0.exit_code()
     }
 }
 
+/// Represents a wasi context for the `async` scenarios.
 #[derive(Debug)]
 pub struct WasiContext {
     pub(crate) inner: async_wasi::WasiCtx,
 }
 impl WasiContext {
+    /// Creates a wasi context with the specified argumentes, environment variables, and preopened directories.
+    ///
+    /// # Arguments
+    ///
+    /// * `args` - The commandline arguments. The first argument is the program name.
+    ///
+    /// * `envs` - The environment variables to use.
+    ///
+    /// * `preopens` - The directories to pre-open. The first element of the pair is the host directory, while the second is the guest directory.
     pub fn new(
         args: Option<Vec<&str>>,
         envs: Option<Vec<(&str, &str)>>,
@@ -40,6 +55,9 @@ impl WasiContext {
         Self { inner }
     }
 
+    /// Returns the WASI exit code.
+    ///
+    /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
     pub fn exit_code(&self) -> u32 {
         self.inner.exit_code
     }
