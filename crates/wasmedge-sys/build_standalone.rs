@@ -88,11 +88,15 @@ pub fn get_standalone_libwasmedge() -> std::path::PathBuf {
 fn get_remote_archive() -> Archive {
     let os = Env("CARGO_CFG_TARGET_OS").expect_lossy("failed to read CARGO_CFG_TARGET_OS");
     let arch = Env("CARGO_CFG_TARGET_ARCH").expect_lossy("failed to read CARGO_CFG_TARGET_ARCH");
-    let target = if cfg!(feature = "static") {
-        format!("{os}/{arch}/static")
-    } else {
-        format!("{os}/{arch}")
-    };
+    let libc = Env("CARGO_CFG_TARGET_ENV").expect_lossy("failed to read CARGO_CFG_TARGET_ENV");
+
+    let mut target = format!("{os}/{arch}");
+    if os == "linux" && !libc.is_empty() {
+        target = target + "/" + &libc;
+    }
+    if cfg!(feature = "static") {
+        target += "/static";
+    }
 
     debug!("building archive url for target {target}");
     let (sha, slug) = REMOTE_ARCHIVES
