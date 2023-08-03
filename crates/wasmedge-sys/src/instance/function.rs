@@ -442,7 +442,7 @@ impl Function {
     pub async fn call_async<E: Engine + Send + Sync>(
         &self,
         async_state: &AsyncState,
-        engine: &mut E,
+        engine: &E,
         args: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         FiberFuture::on_fiber(async_state, || engine.run_func(self, args))

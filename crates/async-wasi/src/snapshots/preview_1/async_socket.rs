@@ -151,7 +151,7 @@ pub async fn sock_accept<M: Memory>(
 
 pub async fn sock_connect<M: Memory>(
     ctx: &mut WasiCtx,
-    mem: &mut M,
+    mem: &M,
     fd: __wasi_fd_t,
     addr_ptr: WasmPtr<__wasi_address_t>,
     port: u32,

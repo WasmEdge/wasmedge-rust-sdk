@@ -1,10 +1,13 @@
 use crate::debug;
 
-pub struct Env<'a>(pub &'a str);
+pub struct Env<S: AsRef<str>>(pub S);
 
-impl Env<'_> {
+impl<S: AsRef<str>> Env<S> {
     pub fn read<T: From<std::ffi::OsString>>(&self) -> Option<T> {
-        std::env::var_os(self.0).map(T::from)
+        if self.0.as_ref() != "OUT_DIR" && !self.0.as_ref().starts_with("CARGO_") {
+            println!("cargo:rerun-if-env-changed={}", self.0.as_ref());
+        }
+        std::env::var_os(self.0.as_ref()).map(T::from)
     }
 
     pub fn expect<T: TryFrom<std::ffi::OsString>>(&self, msg: &str) -> T
@@ -31,9 +34,8 @@ pub trait AsPath {
     fn as_path(&self) -> Option<std::path::PathBuf>;
 }
 
-impl AsPath for Env<'_> {
+impl<S: AsRef<str>> AsPath for Env<S> {
     fn as_path(&self) -> Option<std::path::PathBuf> {
-        println!("cargo:rerun-if-env-changed={}", self.0);
         self.read()
     }
 }

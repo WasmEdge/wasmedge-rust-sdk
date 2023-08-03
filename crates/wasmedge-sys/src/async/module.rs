@@ -1297,7 +1297,7 @@ pub async fn sock_connect(
 ) -> Result<Vec<WasmValue>, HostFuncError> {
     let data = data.unwrap();
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1305,7 +1305,7 @@ pub async fn sock_connect(
         let port = p3.to_i32() as u32;
 
         Ok(to_wasm_return(
-            p::async_socket::sock_connect(data, &mut mem, fd, WasmPtr::from(addr_ptr), port).await,
+            p::async_socket::sock_connect(data, &mem, fd, WasmPtr::from(addr_ptr), port).await,
         ))
     } else {
         Err(HostFuncError::Runtime(0x83))
