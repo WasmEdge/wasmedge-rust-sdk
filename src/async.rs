@@ -55,6 +55,44 @@ impl WasiContext {
         Self { inner }
     }
 
+    /// Creates a wasi context with the specified argumentes, environment variables, and preopened directories.
+    ///
+    /// # Arguments
+    ///
+    /// * `args` - The commandline arguments. The first argument is the program name.
+    ///
+    /// * `envs` - The environment variables to use.
+    ///
+    /// * `preopens` - The directories to pre-open. The first element of the pair is the host directory, while the second is the guest directory.
+    pub fn generate<S: Into<String>>(
+        args: Option<Vec<S>>,
+        envs: Option<Vec<(S, S)>>,
+        preopens: Option<Vec<(S, S)>>,
+    ) -> Self {
+        let mut inner = async_wasi::WasiCtx::new();
+
+        if let Some(args) = args {
+            inner.push_args(args.into_iter().map(|x| x.into()).collect());
+        }
+        if let Some(envs) = envs {
+            inner.push_envs(
+                envs.into_iter()
+                    .map(|(k, v)| format!("{}={}", k.into(), v.into()))
+                    .collect(),
+            );
+        }
+        if let Some(preopens) = preopens {
+            for (host_dir, guest_dir) in preopens {
+                inner.push_preopen(
+                    std::path::PathBuf::from(host_dir.into()),
+                    std::path::PathBuf::from(guest_dir.into()),
+                )
+            }
+        }
+
+        Self { inner }
+    }
+
     /// Returns the WASI exit code.
     ///
     /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
