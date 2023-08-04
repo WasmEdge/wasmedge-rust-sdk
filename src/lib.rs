@@ -24,6 +24,7 @@
 //!
 //! | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
 //! | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+//! | 0.11.1        | 0.13.3        | 0.16.1        | 0.4.3         | 0.6.1         | 0.0.3     |
 //! | 0.11.0        | 0.13.3        | 0.16.0        | 0.4.3         | 0.6.0         | 0.0.3     |
 //! | 0.10.1        | 0.13.3        | 0.15.1        | 0.4.2         | 0.5.0         | 0.0.2     |
 //! | 0.10.0        | 0.13.2        | 0.15.0        | 0.4.2         | 0.5.0         | 0.0.2     |
@@ -39,12 +40,27 @@
 //! | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             | -         |
 //! | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             | -         |
 //!
-//! WasmEdge Rust SDK can automatically search the following paths for the WasmEdge library:
 //!
-//! - `$HOME/.wasmedge` (Linux/macOS)
-//! - `/usr/local` (Linux/macOS)
+//! WasmEdge Rust SDK will automatically search for the WasmEdge library in your system. Alternatively you can set the `WASMEDGE_DIR` environment variable to the path of the WasmEdge library (or the `WASMEDGE_INCLUDE_DIR` and `WASMEDGE_LIB_DIR` variables for more fine-grained control). If you want to use a local `cmake` build of WasmEdge you can set the `WASMEDGE_BUILD_DIR` instead.
 //!
-//! If you have installed the WasmEdge library in a different path, you can set the `WASMEDGE_INCLUDE_DIR` and `WASMEDGE_LIB_DIR` environment variables to the path of the WasmEdge library.
+//! WasmEdge Rust SDK will search for the WasmEdge library in the following paths in order:
+//!
+//! - `$WASMEDGE_[INCLUDE|LIB]_DIR`
+//! - `$WASMEDGE_DIR`
+//! - `$WASMEDGE_BUILD_DIR`
+//! - `$HOME/.wasmedge`
+//! - `/usr/local`
+//! - `$HOME/.local`
+//!
+//! When the `standalone` feature is enabled the correct library will be downloaded during build time and the previous locations are ignored. You can specify a proxy for the download process using the `WASMEDGE_STANDALONE_PROXY`, `WASMEDGE_STANDALONE_PROXY_USER` and `WASMEDGE_STANDALONE_PROXY_PASS` environment variables. You can set the `WASMEDGE_STANDALONE_ARCHIVE` environment variable to use a local archive instead of downloading one.
+//! The following architectures are supported for automatic downloads:
+//!   | os    | libc    | architecture        | linking type    |
+//!   | :---: | :-----: | :-----------------: | :-------------: |
+//!   | macos |         | `x86_64`, `aarch64` | dynamic         |
+//!   | linux | `glibc` | `x86_64`, `aarch64` | static, dynamic |
+//!   | linux | `musl`  | `x86_64`, `aarch64` | static          |
+//!
+//! This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 //!
 //! **Notice:** The minimum supported Rust version is 1.68.
 //!
