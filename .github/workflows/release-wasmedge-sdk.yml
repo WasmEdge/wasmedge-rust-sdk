@@ -77,16 +77,16 @@ jobs:
           publish_dir: wasmedge-rust-sdk/target/doc
           force_orphan: true
 
-      - name: Build Async API document
-        working-directory: wasmedge-rust-sdk
-        run: |
-          cargo doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target/async-wasmedge
+      # - name: Build Async API document
+      #   working-directory: wasmedge-rust-sdk
+      #   run: |
+      #     cargo doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target/async-wasmedge
 
-      - name: Deploy Async API document
-        if: github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: wasmedge-rust-sdk/target/async-wasmedge/doc
-          force_orphan: true
+      # - name: Deploy Async API document
+      #   if: github.ref == 'refs/heads/main'
+      #   uses: peaceiris/actions-gh-pages@v3
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_branch: gh-pages
+      #     publish_dir: wasmedge-rust-sdk/target/async-wasmedge/doc
+      #     force_orphan: true
