@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1] - 2023-08-04
+
+### ⛰️  Features
+
+- New API `WasiContext::generate`. This API provides more flexible argument types than the existed `WasiContext::new` ([#49](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/49))
+
+### 🚜 Refactor
+
+- Improve `host_function` and `async_host_function` proc-macros ([#49](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/49))
+- Improve build script ([#48](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/48))
+  - Options to specify the type of linking required for the different dependencies using environment variables.
+  - Adds an option to use an external `rust-bindgen` using environment variables.
+  - Adds support for `musl libc`
+
+### 📚 Documentation
+
+- Update `README.md` ([#50](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/50))
+- Update Rust SDK API Document ([#50](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/50))
+
+### Ci
+
+- Disable the publish of the async API document ([#50](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/50))
+
 ## [0.11.0] - 2023-07-31
 
 ### ⛰️  Features
