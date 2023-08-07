@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.11.1] - 2023-08-04
+## [0.11.2] - 2023-08-07
 
 ### ⛰️  Features
 
