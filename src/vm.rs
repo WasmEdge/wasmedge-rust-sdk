@@ -7,6 +7,7 @@ use crate::wasi::WasiInstance;
 use crate::{
     config::Config,
     error::{VmError, WasmEdgeError},
+    plugin::{PluginInstance, PluginManager},
     Executor, HostRegistration, ImportObject, Instance, Module, Statistics, Store, WasmEdgeResult,
     WasmValue,
 };
@@ -149,16 +150,12 @@ impl VmBuilder {
 
         // * load and register plugin instances
         for (pname, mname) in self.plugins.iter() {
-            match Self::create_plugin_instance(pname, mname) {
-                Some(instance) => {
-                    vm.plugin_host_instances.push(instance);
-                    vm.executor.inner.register_plugin_instance(
-                        &vm.store.inner,
-                        &vm.plugin_host_instances.last().unwrap().inner,
-                    )?;
-                }
-                None => panic!("Not found {}::{} plugin", pname, mname),
-            }
+            let plugin_instance = Self::create_plugin_instance(pname, mname)?;
+            vm.plugin_host_instances.push(plugin_instance);
+            vm.store.register_plugin_module(
+                &mut vm.executor,
+                vm.plugin_host_instances.last().unwrap(),
+            )?;
         }
 
         Ok(vm)
@@ -230,26 +227,23 @@ impl VmBuilder {
 
         // * load and register plugin instances
         for (pname, mname) in self.plugins.iter() {
-            match Self::create_plugin_instance(pname, mname) {
-                Some(instance) => {
-                    vm.plugin_host_instances.push(instance);
-                    vm.executor.inner.register_plugin_instance(
-                        &vm.store.inner,
-                        &vm.plugin_host_instances.last().unwrap().inner,
-                    )?;
-                }
-                None => panic!("Not found {}::{} plugin", pname, mname),
-            }
+            let plugin_instance = Self::create_plugin_instance(pname, mname)?;
+            vm.plugin_host_instances.push(plugin_instance);
+            vm.store.register_plugin_module(
+                &mut vm.executor,
+                vm.plugin_host_instances.last().unwrap(),
+            )?;
         }
 
         Ok(vm)
     }
 
-    fn create_plugin_instance(pname: impl AsRef<str>, mname: impl AsRef<str>) -> Option<Instance> {
-        match crate::plugin::PluginManager::find(pname.as_ref()) {
-            Some(plugin) => plugin.mod_instance(mname.as_ref()),
-            None => None,
-        }
+    fn create_plugin_instance(
+        pname: impl AsRef<str>,
+        mname: impl AsRef<str>,
+    ) -> WasmEdgeResult<PluginInstance> {
+        let plugin = PluginManager::find(pname.as_ref())?;
+        plugin.mod_instance(mname.as_ref())
     }
 }
 
@@ -326,7 +320,7 @@ pub struct Vm {
     named_instances: HashMap<String, Instance>,
     active_instance: Option<Instance>,
     builtin_host_instances: HashMap<HostRegistration, HostRegistrationInstance>,
-    plugin_host_instances: Vec<Instance>,
+    plugin_host_instances: Vec<PluginInstance>,
 }
 impl Vm {
     /// Registers a [wasm module](crate::Module) into this vm as a named or active module [instance](crate::Instance).
@@ -439,10 +433,10 @@ impl Vm {
     ///
     /// If fail to register plugin instance, then an error is returned.
     pub fn auto_detect_plugins(mut self) -> WasmEdgeResult<Self> {
-        for plugin_name in crate::plugin::PluginManager::names().iter() {
-            if let Some(plugin) = crate::plugin::PluginManager::find(plugin_name) {
+        for plugin_name in PluginManager::names().iter() {
+            if let Ok(plugin) = PluginManager::find(plugin_name) {
                 for mod_name in plugin.mod_names().iter() {
-                    if let Some(mod_instance) = plugin.mod_instance(mod_name) {
+                    if let Ok(mod_instance) = plugin.mod_instance(mod_name) {
                         self.plugin_host_instances.push(mod_instance);
                         self.executor.inner.register_plugin_instance(
                             &self.store.inner,

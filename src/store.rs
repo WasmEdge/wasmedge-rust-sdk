@@ -1,6 +1,6 @@
 //! Defines WasmEdge Store struct.
 
-use crate::{Executor, ImportObject, Instance, Module, WasmEdgeResult};
+use crate::{plugin::PluginInstance, Executor, ImportObject, Instance, Module, WasmEdgeResult};
 use wasmedge_sys as sys;
 
 /// Represents all global state that can be manipulated by WebAssembly programs. A [store](crate::Store) consists of the runtime representation of all instances of [functions](crate::Func), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global).
@@ -94,6 +94,27 @@ impl Store {
             .register_active_module(&self.inner, &module.inner)?;
 
         Ok(Instance { inner })
+    }
+
+    /// Registers a PluginInstance into this store.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The [executor](crate::Executor) that runs the host functions in this [store](crate::Store).
+    ///
+    /// * `plugin` - The WasmEdge [plugin instance](crate::plugin::PluginInstance) to be registered.
+    ///
+    /// # Error
+    ///
+    /// If fail to register the plugin instance, then an error is returned.
+    pub fn register_plugin_module(
+        &mut self,
+        executor: &mut Executor,
+        plugin: &PluginInstance,
+    ) -> WasmEdgeResult<()> {
+        executor
+            .inner
+            .register_plugin_instance(&self.inner, &plugin.inner)
     }
 
     /// Returns the number of the named [module instances](crate::Instance) in this [store](crate::Store).

@@ -8,7 +8,7 @@ use crate::{
 };
 use parking_lot::Mutex;
 use std::{ffi::CString, os::raw::c_void, sync::Arc};
-use wasmedge_types::error::{InstanceError, WasmEdgeError};
+use wasmedge_types::error::{InstanceError, PluginError, WasmEdgeError};
 
 /// Defines the APIs for loading plugins and check the basic information of the loaded plugins.
 #[derive(Debug)]
@@ -68,14 +68,20 @@ impl PluginManager {
     /// # Argument
     ///
     /// * `name` - The name of the target plugin.
-    pub fn find(name: impl AsRef<str>) -> Option<Plugin> {
+    ///
+    /// # Error
+    ///
+    /// If not found the plugin, then return [PluginError::NotFound](wasmedge_types::error::PluginError::NotFound) error.
+    pub fn find(name: impl AsRef<str>) -> WasmEdgeResult<Plugin> {
         let plugin_name: WasmEdgeString = name.as_ref().into();
 
         let ctx = unsafe { ffi::WasmEdge_PluginFind(plugin_name.as_raw()) };
 
         match ctx.is_null() {
-            true => None,
-            false => Some(Plugin {
+            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::NotFound(
+                name.as_ref().into(),
+            )))),
+            false => Ok(Plugin {
                 inner: InnerPlugin(ctx as *mut _),
             }),
         }
@@ -146,19 +152,25 @@ impl Plugin {
         names.into_iter().map(|x| x.into()).collect::<Vec<String>>()
     }
 
-    /// Returns a module instance that is generated from the module with the given name in this plugin.
+    /// Returns a plugin module instance that is generated from the module with the given name in this plugin.
     ///
     /// # Argument
     ///
     /// * `name` - The name of the target module.
-    pub fn mod_instance(&self, name: impl AsRef<str>) -> Option<Instance> {
+    ///
+    /// # Error
+    ///
+    /// If failed to return the plugin module instance, then return [PluginError::Create](wasmedge_types::error::PluginError::Create) error.
+    pub fn mod_instance(&self, name: impl AsRef<str>) -> WasmEdgeResult<Instance> {
         let mod_name: WasmEdgeString = name.as_ref().into();
 
         let ctx = unsafe { ffi::WasmEdge_PluginCreateModule(self.inner.0, mod_name.as_raw()) };
 
         match ctx.is_null() {
-            true => None,
-            false => Some(Instance {
+            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::Create(
+                name.as_ref().into(),
+            )))),
+            false => Ok(Instance {
                 inner: Arc::new(Mutex::new(InnerInstance(ctx))),
                 registered: false,
             }),
@@ -613,7 +625,7 @@ mod tests {
 
         // get `wasmedge_process` plugin
         let result = PluginManager::find("wasmedge_process");
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let plugin = result.unwrap();
         assert_eq!(plugin.name(), "wasmedge_process");
         assert_eq!(plugin.mod_count(), 1);
@@ -621,7 +633,7 @@ mod tests {
 
         // get module instance from plugin
         let result = plugin.mod_instance("wasmedge_process");
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let instance = result.unwrap();
 
         assert_eq!(instance.name().unwrap(), "wasmedge_process");
