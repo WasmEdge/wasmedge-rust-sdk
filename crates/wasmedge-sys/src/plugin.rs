@@ -68,13 +68,17 @@ impl PluginManager {
     /// # Argument
     ///
     /// * `name` - The name of the target plugin.
+    ///
+    /// # Error
+    ///
+    /// If not found the plugin, then return [PluginError::NotFound](wasmedge_types::error::PluginError::NotFound) error.
     pub fn find(name: impl AsRef<str>) -> WasmEdgeResult<Plugin> {
         let plugin_name: WasmEdgeString = name.as_ref().into();
 
         let ctx = unsafe { ffi::WasmEdge_PluginFind(plugin_name.as_raw()) };
 
         match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::Load(
+            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::NotFound(
                 name.as_ref().into(),
             )))),
             false => Ok(Plugin {
