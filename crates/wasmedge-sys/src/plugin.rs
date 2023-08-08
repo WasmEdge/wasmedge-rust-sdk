@@ -625,7 +625,7 @@ mod tests {
 
         // get `wasmedge_process` plugin
         let result = PluginManager::find("wasmedge_process");
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let plugin = result.unwrap();
         assert_eq!(plugin.name(), "wasmedge_process");
         assert_eq!(plugin.mod_count(), 1);
@@ -633,7 +633,7 @@ mod tests {
 
         // get module instance from plugin
         let result = plugin.mod_instance("wasmedge_process");
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let instance = result.unwrap();
 
         assert_eq!(instance.name().unwrap(), "wasmedge_process");
