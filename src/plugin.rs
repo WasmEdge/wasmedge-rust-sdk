@@ -108,12 +108,14 @@ impl Plugin {
     /// # Argument
     ///
     /// * `name` - The name of the target module.
-    pub fn mod_instance(&self, name: impl AsRef<str>) -> Option<Instance> {
+    pub fn mod_instance(&self, name: impl AsRef<str>) -> Option<PluginInstance> {
         self.inner
             .mod_instance(name.as_ref())
             .map(|i| Instance { inner: i })
     }
 }
+
+pub type PluginInstance = Instance;
 
 /// Defines the type of the function that creates a module instance for a plugin.
 pub type ModuleInstanceCreateFn = sys::plugin::ModuleInstanceCreateFn;
