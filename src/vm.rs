@@ -154,7 +154,7 @@ impl VmBuilder {
             vm.plugin_host_instances.push(plugin_instance);
             vm.store.register_plugin_module(
                 &mut vm.executor,
-                &vm.plugin_host_instances.last().unwrap(),
+                vm.plugin_host_instances.last().unwrap(),
             )?;
         }
 
@@ -231,7 +231,7 @@ impl VmBuilder {
             vm.plugin_host_instances.push(plugin_instance);
             vm.store.register_plugin_module(
                 &mut vm.executor,
-                &vm.plugin_host_instances.last().unwrap(),
+                vm.plugin_host_instances.last().unwrap(),
             )?;
         }
 
