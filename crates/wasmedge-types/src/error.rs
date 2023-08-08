@@ -194,8 +194,8 @@ pub enum InstanceError {
 pub enum PluginError {
     #[error("Failed to create a plugin instance named '{0}'. Make sure that the plugin instance name is correct.")]
     Create(String),
-    #[error("Failed to load the plugin named '{0}'. Make sure that the plugin name is correct.")]
-    Load(String),
+    #[error("Not found the plugin named '{0}'. Make sure that the plugin name is correct.")]
+    NotFound(String),
 }
 
 /// The error types for WasmEdge Store.
