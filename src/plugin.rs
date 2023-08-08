@@ -61,7 +61,11 @@ impl PluginManager {
     /// # Argument
     ///
     /// * `name` - The name of the target plugin.
-    pub fn find(name: impl AsRef<str>) -> Option<Plugin> {
+    ///
+    /// # Error
+    ///
+    /// If failed to return the plugin module instance, then return [PluginError::NotFound](wasmedge_types::error::PluginError::NotFound) error.
+    pub fn find(name: impl AsRef<str>) -> WasmEdgeResult<Plugin> {
         sys::plugin::PluginManager::find(name.as_ref()).map(|p| Plugin { inner: p })
     }
 
@@ -108,7 +112,11 @@ impl Plugin {
     /// # Argument
     ///
     /// * `name` - The name of the target module.
-    pub fn mod_instance(&self, name: impl AsRef<str>) -> Option<PluginInstance> {
+    ///
+    /// # Error
+    ///
+    /// If failed to return the plugin module instance, then return [PluginError::Create](wasmedge_types::error::PluginError::Create) error.
+    pub fn mod_instance(&self, name: impl AsRef<str>) -> WasmEdgeResult<PluginInstance> {
         self.inner
             .mod_instance(name.as_ref())
             .map(|i| Instance { inner: i })
