@@ -62,6 +62,8 @@ pub enum WasmEdgeError {
     Export(ExportError),
     #[error("{0}")]
     Instance(InstanceError),
+    #[error("{0}")]
+    Plugin(PluginError),
 
     // std
     #[error("Found an internal 0 byte")]
@@ -185,6 +187,15 @@ pub enum InstanceError {
     NotFoundGlobal(String),
     #[error("Not found the given mapped Fd/handler")]
     NotFoundMappedFdHandler,
+}
+
+/// The error types for WasmEdge plugin.
+#[derive(Error, Clone, Debug, PartialEq, Eq)]
+pub enum PluginError {
+    #[error("Failed to create a plugin instance named '{0}'. Make sure that the plugin instance name is correct.")]
+    Create(String),
+    #[error("Failed to load the plugin named '{0}'. Make sure that the plugin name is correct.")]
+    Load(String),
 }
 
 /// The error types for WasmEdge Store.
