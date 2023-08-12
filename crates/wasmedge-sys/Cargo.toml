@@ -13,7 +13,7 @@ repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
 version = "0.17.0"
 
 [dependencies]
-fiber-for-wasmedge = {version = "8.0.1", optional = true}
+fiber-for-wasmedge = { version = "8.0.1", optional = true }
 libc = "0.2.94"
 paste = "1.0.5"
 scoped-tls = "1"
@@ -27,12 +27,15 @@ rand = "0.8.4"
 cfg-if.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-async-wasi = {workspace = true, optional = true}
+async-wasi = { workspace = true, optional = true }
 
 [build-dependencies]
-bindgen = {version = "0.65", default-features = false, features = ["runtime"]}
+bindgen = { version = "0.65", default-features = false, features = ["runtime"] }
 cmake = "0.1"
-reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.11", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+] }
 flate2 = "1"
 tar = "0.4"
 sha256 = "1"
@@ -41,7 +44,10 @@ phf = { version = "0.11", features = ["macros"] }
 
 [dev-dependencies]
 anyhow = "1"
-tokio = {version = "1", features = ["full"]}
+tokio = { version = "1", features = ["full"] }
+
+[package.metadata.docs.rs]
+features = ["aot", "wasi_crypto", "wasi_nn", "wasmedge_process", "ffi"]
 
 [features]
 aot = []
