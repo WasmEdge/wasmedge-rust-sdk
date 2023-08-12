@@ -44,10 +44,12 @@ WasmEdge Rust SDK will search for the WasmEdge library in the following paths in
 - `$HOME/.local`
 
 When the `standalone` feature is enabled the correct library will be downloaded during build time and the previous locations are ignored. You can specify a proxy for the download process using the `WASMEDGE_STANDALONE_PROXY`, `WASMEDGE_STANDALONE_PROXY_USER` and `WASMEDGE_STANDALONE_PROXY_PASS` environment variables. You can set the `WASMEDGE_STANDALONE_ARCHIVE` environment variable to use a local archive instead of downloading one.
+
 The following architectures are supported for automatic downloads:
+
   | os    | libc    | architecture        | linking type    |
   | :---: | :-----: | :-----------------: | :-------------: |
-  | macos |         | `x86_64`, `aarch64` | dynamic         |
+  | macos | -       | `x86_64`, `aarch64` | dynamic         |
   | linux | `glibc` | `x86_64`, `aarch64` | static, dynamic |
   | linux | `musl`  | `x86_64`, `aarch64` | static          |
 
