@@ -277,8 +277,8 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn call_func_async(
         &self,
         async_state: &AsyncState,
@@ -340,6 +340,7 @@ impl Executor {
     ///
     /// If fail to run the host function reference instance, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn call_func_ref_async(
         &self,
         async_state: &AsyncState,
@@ -353,6 +354,7 @@ impl Executor {
 
     /// Provides a raw pointer to the inner Executor context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ExecutorContext {
         self.inner.0 as *const _
     }

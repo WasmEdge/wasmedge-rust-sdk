@@ -133,6 +133,7 @@ impl Compiler {
 
     /// Provides a raw pointer to the inner Compiler context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_CompilerContext {
         self.inner.0 as *const _
     }

@@ -607,6 +607,7 @@ impl Config {
     ///
     /// * `opt_level` - The optimization level of AOT compiler.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn set_aot_optimization_level(&mut self, opt_level: CompilerOptimizationLevel) {
         unsafe {
             ffi::WasmEdge_ConfigureCompilerSetOptimizationLevel(
@@ -620,6 +621,7 @@ impl Config {
     ///
     /// Notice that this function is only available when the `aot` feature is enabled.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn get_aot_optimization_level(&self) -> CompilerOptimizationLevel {
         let level = unsafe { ffi::WasmEdge_ConfigureCompilerGetOptimizationLevel(self.inner.0) };
         level.into()
@@ -633,6 +635,7 @@ impl Config {
     ///
     /// * `format` - The format of the output binary.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn set_aot_compiler_output_format(&mut self, format: CompilerOutputFormat) {
         unsafe {
             ffi::WasmEdge_ConfigureCompilerSetOutputFormat(
@@ -646,6 +649,7 @@ impl Config {
     ///
     /// Notice that this function is only available when the `aot` feature is enabled.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn get_aot_compiler_output_format(&self) -> CompilerOutputFormat {
         let value = unsafe { ffi::WasmEdge_ConfigureCompilerGetOutputFormat(self.inner.0) };
         value.into()
@@ -659,6 +663,7 @@ impl Config {
     ///
     /// * `flag` - Whether dump ir or not.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn dump_ir(&mut self, flag: bool) {
         unsafe { ffi::WasmEdge_ConfigureCompilerSetDumpIR(self.inner.0, flag) }
     }
@@ -667,6 +672,7 @@ impl Config {
     ///
     /// Notice that this function is only available when the `aot` feature is enabled.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn dump_ir_enabled(&self) -> bool {
         unsafe { ffi::WasmEdge_ConfigureCompilerIsDumpIR(self.inner.0) }
     }
@@ -679,6 +685,7 @@ impl Config {
     ///
     /// * `flag` - Whether generate the generic binary or not when perform AOT compilation.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn generic_binary(&mut self, flag: bool) {
         unsafe { ffi::WasmEdge_ConfigureCompilerSetGenericBinary(self.inner.0, flag) }
     }
@@ -687,6 +694,7 @@ impl Config {
     ///
     /// Notice that this function is only available when the `aot` feature is enabled.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn generic_binary_enabled(&self) -> bool {
         unsafe { ffi::WasmEdge_ConfigureCompilerIsGenericBinary(self.inner.0) }
     }
@@ -699,6 +707,7 @@ impl Config {
     ///
     /// * `enable` - Whether turn on the `Interruptible` option.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn interruptible(&mut self, enable: bool) {
         unsafe { ffi::WasmEdge_ConfigureCompilerSetInterruptible(self.inner.0, enable) }
     }
@@ -707,6 +716,7 @@ impl Config {
     ///
     /// Notice that this function is only available when the `aot` feature is enabled.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn interruptible_enabled(&self) -> bool {
         unsafe { ffi::WasmEdge_ConfigureCompilerIsInterruptible(self.inner.0) }
     }
@@ -757,6 +767,7 @@ impl Config {
 
     /// Provides a raw pointer to the inner Configure context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ConfigureContext {
         self.inner.0 as *const _
     }

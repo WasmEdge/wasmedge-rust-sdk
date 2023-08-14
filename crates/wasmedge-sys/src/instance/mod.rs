@@ -1,4 +1,4 @@
-//! Defines WasmEdge instance structs, including Function, Global, Memory, and Table.
+//! Defines WasmEdge instance structs, including Function, Global, Memory, Table, and etc.
 
 pub mod function;
 pub mod global;

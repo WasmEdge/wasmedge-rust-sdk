@@ -8,7 +8,7 @@
 //!
 //! For developers, it is strongly recommended that the APIs in `wasmedge-sys` are used to construct high-level libraries, while `wasmedge-sdk` is for building up business applications.
 //!
-//! * Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.66 or above** in the **stable** channel.
+//! * Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.69 or above** in the **stable** channel.
 //!
 
 //! ## Build
@@ -61,7 +61,7 @@ pub mod ffi {
 #[doc(hidden)]
 pub mod ast_module;
 #[cfg(all(feature = "async", target_os = "linux"))]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
 pub mod r#async;
 #[doc(hidden)]
 #[cfg(feature = "aot")]
@@ -71,7 +71,6 @@ pub mod config;
 #[doc(hidden)]
 pub mod executor;
 pub mod frame;
-#[doc(hidden)]
 pub mod instance;
 #[doc(hidden)]
 pub mod io;
@@ -101,7 +100,6 @@ pub use executor::Executor;
 pub use frame::CallingFrame;
 #[doc(inline)]
 #[cfg(not(feature = "async"))]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub use instance::module::WasiModule;
 #[doc(inline)]
 pub use instance::{
@@ -125,9 +123,10 @@ use wasmedge_types::{error::HostFuncError, WasmEdgeResult};
 
 /// Type of wasi context that is used to configure the wasi environment.
 #[cfg(all(feature = "async", target_os = "linux"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
 
-pub type BoxedFn = Box<
+pub(crate) type BoxedFn = Box<
     dyn Fn(
             CallingFrame,
             Vec<WasmValue>,
@@ -138,12 +137,12 @@ pub type BoxedFn = Box<
 >;
 
 lazy_static! {
-    pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
+    pub(crate) static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
         RwLock::new(HashMap::new());
 }
 
 /// Type alias for a boxed native function. This type is used in thread-safe cases.
-pub type BoxedAsyncFn = Box<
+pub(crate) type BoxedAsyncFn = Box<
     dyn Fn(
             CallingFrame,
             Vec<WasmValue>,
@@ -155,13 +154,14 @@ pub type BoxedAsyncFn = Box<
 >;
 
 lazy_static! {
-    pub static ref ASYNC_HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedAsyncFn>>>> =
+    pub(crate) static ref ASYNC_HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedAsyncFn>>>> =
         RwLock::new(HashMap::new());
 }
 
 // Stores the mapping from the address of each host function pointer to the key of the `HOST_FUNCS`.
 lazy_static! {
-    pub static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> = Mutex::new(HashMap::new());
+    pub(crate) static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> =
+        Mutex::new(HashMap::new());
 }
 
 /// The object that is used to perform a [host function](crate::Function) is required to implement this trait.

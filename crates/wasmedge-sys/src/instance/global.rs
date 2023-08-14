@@ -105,6 +105,7 @@ impl Global {
 
     /// Provides a raw pointer to the inner global context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_GlobalInstanceContext {
         self.inner.lock().0 as *const _
     }
@@ -177,6 +178,7 @@ impl GlobalType {
 
     /// Provides a raw pointer to the inner global type context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_GlobalTypeContext {
         self.inner.0 as *const _
     }

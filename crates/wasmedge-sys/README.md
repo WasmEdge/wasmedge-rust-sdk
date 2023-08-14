@@ -4,7 +4,7 @@ The [wasmedge-sys](https://crates.io/crates/wasmedge-sys) crate defines a group 
 
 For developers, it is recommended that the APIs in `wasmedge-sys` are used to construct high-level libraries, while `wasmedge-sdk` is for building up business applications.
 
-* Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.68 or above** in the **stable** channel.
+* Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.69 or above** in the **stable** channel.
 
 ## Build
 

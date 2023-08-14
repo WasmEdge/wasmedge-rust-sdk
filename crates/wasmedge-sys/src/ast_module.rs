@@ -75,6 +75,7 @@ impl Module {
 
     /// Provides a raw pointer to the inner ASTModule context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_FunctionTypeContext {
         self.inner.0 as *const _
     }
@@ -244,6 +245,7 @@ impl<'module> ImportType<'module> {
 
     /// Provides a raw pointer to the inner ImportType context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ImportTypeContext {
         self.inner.0 as *const _
     }
@@ -401,6 +403,7 @@ impl<'module> ExportType<'module> {
 
     /// Provides a raw pointer to the inner ExportType context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ExportTypeContext {
         self.inner.0 as *const _
     }

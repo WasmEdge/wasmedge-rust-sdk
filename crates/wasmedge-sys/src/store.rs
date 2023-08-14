@@ -105,6 +105,7 @@ impl Store {
 
     /// Provides a raw pointer to the inner Store context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_StoreContext {
         self.inner.0 as *const _
     }

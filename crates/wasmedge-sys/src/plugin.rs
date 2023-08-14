@@ -99,6 +99,14 @@ impl PluginManager {
         feature = "wasmedge_process",
         not(feature = "static")
     ))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(
+            target_os = "linux",
+            feature = "wasmedge_process",
+            not(feature = "static")
+        )))
+    )]
     pub fn init_wasmedge_process(allowed_cmds: Option<Vec<&str>>, allowed: bool) {
         // parse cmds
         let cstr_cmds: Vec<_> = match allowed_cmds {
@@ -179,6 +187,7 @@ impl Plugin {
 
     /// Provides a raw pointer to the inner Plugin context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_PluginContext {
         self.inner.0 as *const _
     }
@@ -326,6 +335,7 @@ impl ModuleDescriptor {
 
     /// Returns the raw pointer to the inner `WasmEdge_ModuleDescriptor`.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_ModuleDescriptor {
         &self.inner
     }
@@ -466,6 +476,7 @@ impl PluginDescriptor {
 
     /// Returns the raw pointer to the inner `WasmEdge_PluginDescriptor`.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_PluginDescriptor {
         &self.inner
     }
@@ -537,6 +548,7 @@ impl PluginModule {
 
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
         self.inner.0 as *const _
     }

@@ -313,6 +313,7 @@ impl Function {
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn create_async_func<T: Send + Sync>(
         ty: &FuncType,
         real_fn: BoxedAsyncFn,
@@ -439,6 +440,7 @@ impl Function {
     /// If fail to run the host function, then an error is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn call_async<E: Engine + Send + Sync>(
         &self,
         async_state: &AsyncState,
@@ -459,6 +461,7 @@ impl Function {
 
     /// Provides a raw pointer to the inner function context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_FunctionInstanceContext {
         self.inner.lock().0 as *const _
     }
@@ -605,6 +608,7 @@ impl FuncType {
 
     /// Provides a raw pointer to the inner function type context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_FunctionTypeContext {
         self.inner.0 as *const _
     }
