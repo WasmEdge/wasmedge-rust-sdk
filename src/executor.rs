@@ -70,6 +70,7 @@ impl Executor {
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_func_async(
         &self,
         async_state: &AsyncState,
@@ -112,6 +113,7 @@ impl Executor {
     ///
     /// If fail to run the host function reference instance, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_func_ref_async(
         &self,
         async_state: &AsyncState,

@@ -111,6 +111,7 @@ impl Func {
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn wrap_async_func<Args, Rets, T>(
         real_func: impl Fn(
                 CallingFrame,
@@ -159,6 +160,7 @@ impl Func {
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn wrap_async_func_with_type<T>(
         ty: FuncType,
         real_func: impl Fn(
@@ -252,6 +254,7 @@ impl Func {
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_async(
         &self,
         async_state: &AsyncState,
@@ -370,6 +373,7 @@ impl FuncRef {
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(feature = "async")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn run_async<T>(
         &self,
         async_state: &AsyncState,
