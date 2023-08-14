@@ -277,6 +277,7 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     #[cfg(all(feature = "async", target_os = "linux"))]
     pub async fn call_func_async(
         &self,

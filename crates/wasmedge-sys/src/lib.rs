@@ -45,6 +45,7 @@
 //! * [WasmEdge C API Documentation](https://github.com/WasmEdge/WasmEdge/blob/master/docs/c_api.md)
 
 #![deny(rust_2018_idioms, unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[macro_use]
 extern crate lazy_static;
@@ -59,8 +60,8 @@ pub mod ffi {
 }
 #[doc(hidden)]
 pub mod ast_module;
-#[doc(hidden)]
 #[cfg(all(feature = "async", target_os = "linux"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod r#async;
 #[doc(hidden)]
 #[cfg(feature = "aot")]
@@ -90,6 +91,7 @@ pub mod validator;
 pub use ast_module::{ExportType, ImportType, Module};
 #[doc(inline)]
 #[cfg(feature = "aot")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 pub use compiler::Compiler;
 #[doc(inline)]
 pub use config::Config;
@@ -97,8 +99,9 @@ pub use config::Config;
 pub use executor::Executor;
 #[doc(inline)]
 pub use frame::CallingFrame;
-#[cfg(not(feature = "async"))]
 #[doc(inline)]
+#[cfg(not(feature = "async"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub use instance::module::WasiModule;
 #[doc(inline)]
 pub use instance::{
