@@ -378,6 +378,10 @@ impl Function {
     ///
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
+    /// # Safety
+    ///
+    /// Notice that the caller should guarantee the life cycle of both the `real_fn` and the `data` object.
+    ///
     pub unsafe fn create_with_custom_wrapper(
         ty: &FuncType,
         fn_wrapper: CustomFnWrapper,
@@ -419,6 +423,18 @@ impl Function {
         }
     }
 
+    /// Runs this host function and returns the result.
+    ///
+    /// # Arguments
+    ///
+    /// * `engine` - The object implementing the [Engine](crate::Engine) trait.
+    ///
+    /// * `args` - The arguments passed to the host function.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the host function, then an error is returned.
+    ///
     pub fn call<E: Engine>(
         &self,
         engine: &E,
