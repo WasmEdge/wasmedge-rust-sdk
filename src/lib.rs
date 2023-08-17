@@ -5,6 +5,7 @@
 // If the version of rust used is less than v1.63, please uncomment the follow attribute.
 // #![feature(explicit_generic_args_with_impl_trait)]
 #![allow(clippy::vec_init_then_push)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # Overview
 //!
@@ -54,11 +55,12 @@
 //!
 //! When the `standalone` feature is enabled the correct library will be downloaded during build time and the previous locations are ignored. You can specify a proxy for the download process using the `WASMEDGE_STANDALONE_PROXY`, `WASMEDGE_STANDALONE_PROXY_USER` and `WASMEDGE_STANDALONE_PROXY_PASS` environment variables. You can set the `WASMEDGE_STANDALONE_ARCHIVE` environment variable to use a local archive instead of downloading one.
 //! The following architectures are supported for automatic downloads:
-//!   | os    | libc    | architecture        | linking type    |
-//!   | :---: | :-----: | :-----------------: | :-------------: |
-//!   | macos |         | `x86_64`, `aarch64` | dynamic         |
-//!   | linux | `glibc` | `x86_64`, `aarch64` | static, dynamic |
-//!   | linux | `musl`  | `x86_64`, `aarch64` | static          |
+//!
+//! | os    | libc    | architecture        | linking type    |
+//! | :---: | :-----: | :-----------------: | :-------------: |
+//! | macos | -       | `x86_64`, `aarch64` | dynamic         |
+//! | linux | `glibc` | `x86_64`, `aarch64` | static, dynamic |
+//! | linux | `musl`  | `x86_64`, `aarch64` | static          |
 //!
 //! This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 //!
@@ -77,12 +79,11 @@
 //! This project is licensed under the terms of the [Apache 2.0 license](https://github.com/tensorflow/rust/blob/HEAD/LICENSE).
 //!
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-pub mod r#async;
 #[doc(hidden)]
 pub mod caller;
 #[doc(hidden)]
 #[cfg(feature = "aot")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 mod compiler;
 pub mod config;
 pub mod dock;
@@ -99,16 +100,15 @@ pub mod plugin;
 mod statistics;
 mod store;
 pub mod types;
-#[doc(hidden)]
 pub mod utils;
 #[doc(hidden)]
 pub mod vm;
-#[cfg(not(feature = "async"))]
 pub mod wasi;
 
 pub use caller::Caller;
 #[doc(inline)]
 #[cfg(feature = "aot")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 pub use compiler::Compiler;
 #[doc(inline)]
 pub use executor::Executor;
@@ -128,18 +128,18 @@ pub use statistics::Statistics;
 #[doc(inline)]
 pub use store::Store;
 #[doc(inline)]
-pub use utils::Driver;
-#[doc(inline)]
 pub use vm::{Vm, VmBuilder};
 
-/// Parses in-memory bytes as either the [WebAssembly Text format](http://webassembly.github.io/spec/core/text/index.html), or a binary WebAssembly module
 pub use wasmedge_types::{
     error, wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType,
     FuncType, GlobalType, HostRegistration, MemoryType, Mutability, RefType, TableType, ValType,
     WasmEdgeResult,
 };
 
-pub use wasmedge_macro::{async_host_function, host_function};
+#[cfg(all(feature = "async", target_os = "linux"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+pub use wasmedge_macro::async_host_function;
+pub use wasmedge_macro::host_function;
 
 /// WebAssembly value type.
 pub type WasmValue = wasmedge_sys::types::WasmValue;
@@ -185,28 +185,4 @@ pub trait Engine {
         func_ref: &FuncRef,
         params: impl IntoIterator<Item = WasmValue>,
     ) -> WasmEdgeResult<Vec<WasmValue>>;
-}
-
-/// The version info of WasmEdge core
-pub struct CoreVersion {}
-impl CoreVersion {
-    /// Returns the major version value of WasmEdge core.
-    pub fn major() -> u32 {
-        wasmedge_sys::utils::version_major_value()
-    }
-
-    /// Returns the minor version value of WasmEdge core.
-    pub fn minor() -> u32 {
-        wasmedge_sys::utils::version_minor_value()
-    }
-
-    /// Returns the patch version value of WasmEdge core.
-    pub fn patch() -> u32 {
-        wasmedge_sys::utils::version_patch_value()
-    }
-
-    /// Returns the version string of WasmEdge core.
-    pub fn version_string() -> String {
-        wasmedge_sys::utils::version_string()
-    }
 }

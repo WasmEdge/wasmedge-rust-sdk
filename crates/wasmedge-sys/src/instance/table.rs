@@ -157,6 +157,7 @@ impl Table {
 
     /// Provides a raw pointer to the inner table context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_TableInstanceContext {
         self.inner.lock().0 as *const _
     }
@@ -258,6 +259,7 @@ impl TableType {
 
     /// Provides a raw pointer to the inner table type context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_TableTypeContext {
         self.inner.0 as *const _
     }

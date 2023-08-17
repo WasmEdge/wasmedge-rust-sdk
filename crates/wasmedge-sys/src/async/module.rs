@@ -217,7 +217,7 @@ impl AsyncWasiModule {
 // ============== wasi host functions ==============
 
 #[sys_wasi_host_function]
-pub fn args_get(
+fn args_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -241,7 +241,7 @@ pub fn args_get(
 }
 
 #[sys_wasi_host_function]
-pub fn args_sizes_get(
+fn args_sizes_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -265,7 +265,7 @@ pub fn args_sizes_get(
 }
 
 #[sys_wasi_host_function]
-pub fn environ_get(
+fn environ_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     ctx: Option<&mut WasiCtx>,
@@ -289,7 +289,7 @@ pub fn environ_get(
 }
 
 #[sys_wasi_host_function]
-pub fn environ_sizes_get(
+fn environ_sizes_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -313,7 +313,7 @@ pub fn environ_sizes_get(
 }
 
 #[sys_wasi_host_function]
-pub fn clock_res_get(
+fn clock_res_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -337,7 +337,7 @@ pub fn clock_res_get(
 }
 
 #[sys_wasi_host_function]
-pub fn clock_time_get(
+fn clock_time_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -364,7 +364,7 @@ pub fn clock_time_get(
 }
 
 #[sys_wasi_host_function]
-pub fn random_get(
+fn random_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -389,7 +389,7 @@ pub fn random_get(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_prestat_get(
+fn fd_prestat_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -414,7 +414,7 @@ pub fn fd_prestat_get(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_prestat_dir_name(
+fn fd_prestat_dir_name(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -441,7 +441,7 @@ pub fn fd_prestat_dir_name(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_renumber(
+fn fd_renumber(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -461,7 +461,7 @@ pub fn fd_renumber(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_advise(
+fn fd_advise(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -485,7 +485,7 @@ pub fn fd_advise(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_allocate(
+fn fd_allocate(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -508,7 +508,7 @@ pub fn fd_allocate(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_close(
+fn fd_close(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -527,7 +527,7 @@ pub fn fd_close(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_seek(
+fn fd_seek(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -556,7 +556,7 @@ pub fn fd_seek(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_sync(
+fn fd_sync(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -575,7 +575,7 @@ pub fn fd_sync(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_datasync(
+fn fd_datasync(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -594,7 +594,7 @@ pub fn fd_datasync(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_tell(
+fn fd_tell(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -619,7 +619,7 @@ pub fn fd_tell(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_fdstat_get(
+fn fd_fdstat_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -644,7 +644,7 @@ pub fn fd_fdstat_get(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_fdstat_set_flags(
+fn fd_fdstat_set_flags(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -666,7 +666,7 @@ pub fn fd_fdstat_set_flags(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_fdstat_set_rights(
+fn fd_fdstat_set_rights(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -693,7 +693,7 @@ pub fn fd_fdstat_set_rights(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_filestat_get(
+fn fd_filestat_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -718,7 +718,7 @@ pub fn fd_filestat_get(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_filestat_set_size(
+fn fd_filestat_set_size(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -743,7 +743,7 @@ pub fn fd_filestat_set_size(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_filestat_set_times(
+fn fd_filestat_set_times(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -767,7 +767,7 @@ pub fn fd_filestat_set_times(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_read(
+fn fd_read(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -796,7 +796,7 @@ pub fn fd_read(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_pread(
+fn fd_pread(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -827,7 +827,7 @@ pub fn fd_pread(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_write(
+fn fd_write(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -856,7 +856,7 @@ pub fn fd_write(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_pwrite(
+fn fd_pwrite(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -887,7 +887,7 @@ pub fn fd_pwrite(
 }
 
 #[sys_wasi_host_function]
-pub fn fd_readdir(
+fn fd_readdir(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -918,7 +918,7 @@ pub fn fd_readdir(
 }
 
 #[sys_wasi_host_function]
-pub fn path_create_directory(
+fn path_create_directory(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -945,7 +945,7 @@ pub fn path_create_directory(
 }
 
 #[sys_wasi_host_function]
-pub fn path_filestat_get(
+fn path_filestat_get(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -976,7 +976,7 @@ pub fn path_filestat_get(
 }
 
 #[sys_wasi_host_function]
-pub fn path_filestat_set_times(
+fn path_filestat_set_times(
     _frame: CallingFrame,
     _args: Vec<WasmValue>,
     _data: Option<&mut WasiCtx>,
@@ -987,7 +987,7 @@ pub fn path_filestat_set_times(
 }
 
 #[sys_wasi_host_function]
-pub fn path_link(
+fn path_link(
     _frame: CallingFrame,
     _args: Vec<WasmValue>,
     _data: Option<&mut WasiCtx>,
@@ -998,7 +998,7 @@ pub fn path_link(
 }
 
 #[sys_wasi_host_function]
-pub fn path_open(
+fn path_open(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1037,7 +1037,7 @@ pub fn path_open(
 }
 
 #[sys_wasi_host_function]
-pub fn path_readlink(
+fn path_readlink(
     _frame: CallingFrame,
     _args: Vec<WasmValue>,
     _data: Option<&mut WasiCtx>,
@@ -1048,7 +1048,7 @@ pub fn path_readlink(
 }
 
 #[sys_wasi_host_function]
-pub fn path_remove_directory(
+fn path_remove_directory(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1075,7 +1075,7 @@ pub fn path_remove_directory(
 }
 
 #[sys_wasi_host_function]
-pub fn path_rename(
+fn path_rename(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1108,7 +1108,7 @@ pub fn path_rename(
 }
 
 #[sys_wasi_host_function]
-pub fn path_symlink(
+fn path_symlink(
     _frame: CallingFrame,
     _args: Vec<WasmValue>,
     _data: Option<&mut WasiCtx>,
@@ -1119,7 +1119,7 @@ pub fn path_symlink(
 }
 
 #[sys_wasi_host_function]
-pub fn path_unlink_file(
+fn path_unlink_file(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1146,7 +1146,7 @@ pub fn path_unlink_file(
 }
 
 #[sys_wasi_host_function]
-pub fn proc_exit(
+fn proc_exit(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1165,7 +1165,7 @@ pub fn proc_exit(
 }
 
 #[sys_wasi_host_function]
-pub fn proc_raise(
+fn proc_raise(
     _frame: CallingFrame,
     _args: Vec<WasmValue>,
     _data: Option<&mut WasiCtx>,
@@ -1177,7 +1177,7 @@ pub fn proc_raise(
 
 // todo: ld asyncify yield
 #[sys_wasi_host_function]
-pub fn sched_yield(
+fn sched_yield(
     _frame: CallingFrame,
     _args: Vec<WasmValue>,
     _data: Option<&mut WasiCtx>,
@@ -1190,7 +1190,7 @@ pub fn sched_yield(
 //socket
 
 #[sys_wasi_host_function]
-pub fn sock_open(
+fn sock_open(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1217,7 +1217,7 @@ pub fn sock_open(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_bind(
+fn sock_bind(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1243,7 +1243,7 @@ pub fn sock_bind(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_listen(
+fn sock_listen(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1264,11 +1264,11 @@ pub fn sock_listen(
     }
 }
 
-pub type BoxedResultFuture =
-    Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
+// pub type BoxedResultFuture =
+//     Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
 
 #[sys_async_wasi_host_function]
-pub async fn sock_accept(
+async fn sock_accept(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1290,7 +1290,7 @@ pub async fn sock_accept(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn sock_connect(
+async fn sock_connect(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1313,7 +1313,7 @@ pub async fn sock_connect(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn sock_recv(
+async fn sock_recv(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1349,7 +1349,7 @@ pub async fn sock_recv(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn sock_recv_from(
+async fn sock_recv_from(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1389,7 +1389,7 @@ pub async fn sock_recv_from(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn sock_send(
+async fn sock_send(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1423,7 +1423,7 @@ pub async fn sock_send(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn sock_send_to(
+async fn sock_send_to(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1461,7 +1461,7 @@ pub async fn sock_send_to(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_shutdown(
+fn sock_shutdown(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1482,7 +1482,7 @@ pub fn sock_shutdown(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_getpeeraddr(
+fn sock_getpeeraddr(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1510,7 +1510,7 @@ pub fn sock_getpeeraddr(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_getlocaladdr(
+fn sock_getlocaladdr(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1538,7 +1538,7 @@ pub fn sock_getlocaladdr(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_getsockopt(
+fn sock_getsockopt(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1568,7 +1568,7 @@ pub fn sock_getsockopt(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_setsockopt(
+fn sock_setsockopt(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&mut WasiCtx>,
@@ -1598,7 +1598,7 @@ pub fn sock_setsockopt(
 }
 
 #[sys_wasi_host_function]
-pub fn sock_getaddrinfo(
+fn sock_getaddrinfo(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1635,7 +1635,7 @@ pub fn sock_getaddrinfo(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn poll_oneoff(
+async fn poll_oneoff(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1667,7 +1667,7 @@ pub async fn poll_oneoff(
 }
 
 #[sys_async_wasi_host_function]
-pub async fn sock_lookup_ip(
+async fn sock_lookup_ip(
     frame: CallingFrame,
     args: Vec<WasmValue>,
     data: Option<&'static mut WasiCtx>,
@@ -1701,12 +1701,12 @@ pub async fn sock_lookup_ip(
     }
 }
 
-pub enum WasiFunc<T: 'static> {
+enum WasiFunc<T: 'static> {
     SyncFn(String, (Vec<ValType>, Vec<ValType>), HostFn<T>),
     AsyncFn(String, (Vec<ValType>, Vec<ValType>), AsyncHostFn<T>),
 }
 
-pub fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
+fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
     macro_rules! sync_fn {
         ($name:expr, $ty:expr, $f:ident) => {
             WasiFunc::SyncFn($name.into(), $ty, $f)

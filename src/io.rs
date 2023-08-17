@@ -297,6 +297,7 @@ impl WasmVal for ExternRef {
 #[macro_export]
 macro_rules! params {
     ( $( $x:expr ),* ) => {
+        #[allow(unused_mut)]
         {
             let mut temp_vec = vec![];
             $(

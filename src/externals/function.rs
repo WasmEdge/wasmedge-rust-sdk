@@ -1,6 +1,7 @@
 //! Defines Func, SignatureBuilder, and Signature structs.
+
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncState;
+use crate::wasi::r#async::AsyncState;
 use crate::{
     error::HostFuncError, io::WasmValTypeList, CallingFrame, Executor, FuncType, ValType,
     WasmEdgeResult, WasmValue,
@@ -111,6 +112,7 @@ impl Func {
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn wrap_async_func<Args, Rets, T>(
         real_func: impl Fn(
                 CallingFrame,
@@ -159,6 +161,7 @@ impl Func {
     ///
     /// * If fail to create a Func instance, then [WasmEdgeError::Func(FuncError::Create)](crate::error::FuncError) is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn wrap_async_func_with_type<T>(
         ty: FuncType,
         real_func: impl Fn(
@@ -252,6 +255,7 @@ impl Func {
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_async(
         &self,
         async_state: &AsyncState,
@@ -370,6 +374,7 @@ impl FuncRef {
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(feature = "async")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn run_async<T>(
         &self,
         async_state: &AsyncState,
@@ -601,7 +606,7 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::r#async::WasiContext;
+        use crate::wasi::r#async::WasiContext;
 
         // define an async closure
         let c = |_frame: CallingFrame,

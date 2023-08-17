@@ -58,6 +58,7 @@ impl ConfigBuilder {
     ///
     /// - `options` specifies the [CompilerConfigOptions] settings to set.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn with_compiler_config(self, options: CompilerConfigOptions) -> Self {
         Self {
             compiler_config: Some(options),
@@ -236,30 +237,35 @@ impl Config {
 
     /// Returns the optimization level of AOT compiler.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn optimization_level(&self) -> CompilerOptimizationLevel {
         self.inner.get_aot_optimization_level()
     }
 
     /// Returns the output binary format of AOT compiler.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn out_format(&self) -> CompilerOutputFormat {
         self.inner.get_aot_compiler_output_format()
     }
 
     /// Checks if the dump IR option turns on or not.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn dump_ir_enabled(&self) -> bool {
         self.inner.dump_ir_enabled()
     }
 
     /// Checks if the generic binary option of AOT compiler turns on or not.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn generic_binary_enabled(&self) -> bool {
         self.inner.generic_binary_enabled()
     }
 
     /// Checks if the `Interruptible` option of AOT Compiler turns on or not.
     #[cfg(feature = "aot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
     pub fn interruptible_enabled(&self) -> bool {
         self.inner.interruptible_enabled()
     }
@@ -548,6 +554,7 @@ impl Default for CommonConfigOptions {
 ///  
 ///  The configuration options above are only effective to [AOT compiler](crate::Compiler).
 #[cfg(feature = "aot")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 #[derive(Debug, Clone, Copy)]
 pub struct CompilerConfigOptions {
     out_format: CompilerOutputFormat,
@@ -557,6 +564,7 @@ pub struct CompilerConfigOptions {
     interruptible: bool,
 }
 #[cfg(feature = "aot")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 impl CompilerConfigOptions {
     /// Creates a new instance of [CompilerConfigOptions].
     pub fn new() -> Self {
@@ -632,6 +640,7 @@ impl CompilerConfigOptions {
     }
 }
 #[cfg(feature = "aot")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 impl Default for CompilerConfigOptions {
     fn default() -> Self {
         Self::new()

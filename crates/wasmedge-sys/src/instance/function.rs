@@ -313,6 +313,7 @@ impl Function {
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn create_async_func<T: Send + Sync>(
         ty: &FuncType,
         real_fn: BoxedAsyncFn,
@@ -377,6 +378,10 @@ impl Function {
     ///
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
+    /// # Safety
+    ///
+    /// Notice that the caller should guarantee the life cycle of both the `real_fn` and the `data` object.
+    ///
     pub unsafe fn create_with_custom_wrapper(
         ty: &FuncType,
         fn_wrapper: CustomFnWrapper,
@@ -418,6 +423,18 @@ impl Function {
         }
     }
 
+    /// Runs this host function and returns the result.
+    ///
+    /// # Arguments
+    ///
+    /// * `engine` - The object implementing the [Engine](crate::Engine) trait.
+    ///
+    /// * `args` - The arguments passed to the host function.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the host function, then an error is returned.
+    ///
     pub fn call<E: Engine>(
         &self,
         engine: &E,
@@ -439,6 +456,7 @@ impl Function {
     /// If fail to run the host function, then an error is returned.
     ///
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn call_async<E: Engine + Send + Sync>(
         &self,
         async_state: &AsyncState,
@@ -459,6 +477,7 @@ impl Function {
 
     /// Provides a raw pointer to the inner function context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_FunctionInstanceContext {
         self.inner.lock().0 as *const _
     }
@@ -605,6 +624,7 @@ impl FuncType {
 
     /// Provides a raw pointer to the inner function type context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_FunctionTypeContext {
         self.inner.0 as *const _
     }

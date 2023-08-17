@@ -292,6 +292,7 @@ impl Instance {
 
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
         self.inner.lock().0 as *const _
     }
@@ -447,6 +448,7 @@ impl<T: ?Sized + Send + Sync + Clone> ImportModule<T> {
 
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
         self.inner.0 as *const _
     }
@@ -713,6 +715,7 @@ impl WasiModule {
 
     /// Provides a raw pointer to the inner module instance context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
         self.inner.0 as *const _
     }
@@ -765,9 +768,11 @@ pub trait AsImport {
 pub enum WasiInstance {
     /// Defines the import module instance of WasiModule type.
     #[cfg(not(feature = "async"))]
+    #[cfg_attr(docsrs, doc(cfg(not(feature = "async"))))]
     Wasi(WasiModule),
     /// Defines the import module instance of AsyncWasiModule type.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     AsyncWasi(AsyncWasiModule),
 }
 impl WasiInstance {
@@ -783,6 +788,7 @@ impl WasiInstance {
 
     /// Returns the raw pointer to the inner `WasmEdge_ModuleInstanceContext`.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
         match self {
             #[cfg(not(feature = "async"))]

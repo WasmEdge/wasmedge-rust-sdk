@@ -81,6 +81,14 @@ impl PluginManager {
         feature = "wasmedge_process",
         not(feature = "static")
     ))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(
+            target_os = "linux",
+            feature = "wasmedge_process",
+            not(feature = "static")
+        )))
+    )]
     pub fn init_wasmedge_process(allowed_cmds: Option<Vec<&str>>, allowed: bool) {
         sys::plugin::PluginManager::init_wasmedge_process(allowed_cmds, allowed);
     }
@@ -208,6 +216,7 @@ impl PluginDescriptor {
 
     /// Returns the raw pointer to the inner `WasmEdge_PluginDescriptor`.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_raw_ptr(&self) -> *const sys::ffi::WasmEdge_PluginDescriptor {
         self.inner.as_raw_ptr()
     }
@@ -308,6 +317,7 @@ impl<T: ?Sized + Send + Sync + Clone> PluginModuleBuilder<T> {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn with_async_func<Args, Rets, D>(
         mut self,
         name: impl AsRef<str>,
@@ -437,6 +447,7 @@ impl PluginModule {
 
     /// Returns the raw pointer to the inner `WasmEdge_ModuleInstanceContext`.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_raw_ptr(&self) -> *const sys::ffi::WasmEdge_ModuleInstanceContext {
         self.0.as_raw_ptr()
     }

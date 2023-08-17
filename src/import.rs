@@ -122,6 +122,7 @@ impl ImportObjectBuilder {
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub fn with_async_func<Args, Rets, D>(
         mut self,
         name: impl AsRef<str>,
@@ -247,6 +248,7 @@ impl<T: ?Sized + Send + Sync + Clone> ImportObject<T> {
 
     /// Returns the raw pointer to the inner `WasmEdge_ModuleInstanceContext`.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const sys::ffi::WasmEdge_ModuleInstanceContext {
         self.0.as_ptr()
     }

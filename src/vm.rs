@@ -1,7 +1,7 @@
 //! Defines WasmEdge Vm struct.
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::{AsyncState, WasiContext, WasiInstance};
+use crate::wasi::r#async::{AsyncState, WasiContext, WasiInstance};
 #[cfg(not(feature = "async"))]
 use crate::wasi::WasiInstance;
 use crate::{
@@ -101,13 +101,25 @@ impl VmBuilder {
         self
     }
 
+    /// Sets the [WasiContext] for the [Vm] to build.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+    pub fn with_wasi_context(mut self, wasi_ctx: WasiContext) -> Self {
+        self.wasi_ctx = Some(wasi_ctx);
+        self
+    }
+
     /// Creates a new [Vm].
     ///
     /// # Error
     ///
     /// If fail to create, then an error is returned.
+    pub fn build(self) -> WasmEdgeResult<Vm> {
+        self.build_vm()
+    }
+
     #[cfg(not(feature = "async"))]
-    pub fn build(mut self) -> WasmEdgeResult<Vm> {
+    fn build_vm(mut self) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
@@ -162,19 +174,7 @@ impl VmBuilder {
     }
 
     #[cfg(all(feature = "async", target_os = "linux"))]
-    /// Sets the [WasiContext] for the [Vm] to build.
-    pub fn with_wasi_context(mut self, wasi_ctx: WasiContext) -> Self {
-        self.wasi_ctx = Some(wasi_ctx);
-        self
-    }
-
-    /// Creates a new [Vm].
-    ///
-    /// # Error
-    ///
-    /// If fail to create, then an error is returned.
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    pub fn build(mut self) -> WasmEdgeResult<Vm> {
+    fn build_vm(mut self) -> WasmEdgeResult<Vm> {
         // executor
         let executor = Executor::new(self.config.as_ref(), self.stat.as_mut())?;
 
@@ -502,6 +502,7 @@ impl Vm {
     ///
     /// If fail to run the wasm function, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_func_async(
         &self,
         async_state: &AsyncState,
@@ -580,6 +581,7 @@ impl Vm {
     ///
     /// If fail to run, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_func_from_module_async<N, A>(
         &mut self,
         async_state: &AsyncState,
@@ -641,6 +643,7 @@ impl Vm {
     ///
     /// If fail to run, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_func_from_file_async<P, N, A>(
         &mut self,
         async_state: &AsyncState,
@@ -701,6 +704,7 @@ impl Vm {
     ///
     /// If fail to run, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn run_func_from_bytes_async<N, A>(
         &mut self,
         async_state: &AsyncState,

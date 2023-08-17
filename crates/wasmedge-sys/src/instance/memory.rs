@@ -240,6 +240,7 @@ impl Memory {
 
     /// Provides a raw pointer to the inner memory context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_MemoryInstanceContext {
         self.inner.lock().0 as *const _
     }
@@ -332,6 +333,7 @@ impl MemType {
 
     /// Provides a raw pointer to the inner memory type context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_MemoryTypeContext {
         self.inner.0 as *const _
     }

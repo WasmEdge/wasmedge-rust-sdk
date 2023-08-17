@@ -155,6 +155,7 @@ impl Loader {
 
     /// Provides a raw pointer to the inner Loader context.
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub fn as_ptr(&self) -> *const ffi::WasmEdge_LoaderContext {
         self.inner.0 as *const _
     }

@@ -66,7 +66,7 @@ jobs:
       - name: Build API document
         working-directory: wasmedge-rust-sdk
         run: |
-          cargo doc -p wasmedge-sdk --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
+          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
       - name: Deploy API document
         if: github.ref == 'refs/heads/main'
@@ -80,7 +80,7 @@ jobs:
       # - name: Build Async API document
       #   working-directory: wasmedge-rust-sdk
       #   run: |
-      #     cargo doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target/async-wasmedge
+      #     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target/async-wasmedge
 
       # - name: Deploy Async API document
       #   if: github.ref == 'refs/heads/main'
