@@ -1,4 +1,4 @@
-name: wasmedge-sdk-release
+name: Publish Async API Documents
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -24,7 +24,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          path: wasmedge-rust-sdk
 
       - name: Set up build environment
         run: |
@@ -41,7 +40,6 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Build Async API document
-        working-directory: wasmedge-rust-sdk
         run: |
           RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
@@ -51,5 +49,5 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: wasmedge-rust-sdk/target/doc
+          publish_dir: target/doc
           force_orphan: true
