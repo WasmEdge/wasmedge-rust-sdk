@@ -55,7 +55,12 @@ The following architectures are supported for automatic downloads:
 
 This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 
-**Notice:** The minimum supported Rust version is 1.68.
+**Notice:** The minimum supported Rust version is 1.69.
+
+## API Reference
+
+- [API Reference](https://docs.rs/crate/wasmedge-sdk/)
+- [Async API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/)
 
 ## Examples
 
