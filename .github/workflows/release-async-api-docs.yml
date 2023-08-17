@@ -1,0 +1,55 @@
+name: wasmedge-sdk-release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      wasmedge_version:
+        description: "Version of WasmEdge"
+        required: true
+        type: string
+
+jobs:
+  release_wasmedge_sdk:
+    name: Release wasmedge-sdk crate
+    runs-on: ubuntu-22.04
+    container:
+      image: wasmedge/wasmedge:ubuntu-build-clang
+
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          path: wasmedge-rust-sdk
+
+      - name: Set up build environment
+        run: |
+          apt update
+          apt install -y software-properties-common libboost-all-dev ninja-build
+          apt install -y llvm-15-dev liblld-15-dev
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -v ${{ inputs.wasmedge_version }} -p /usr/local
+          ldconfig
+
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Build Async API document
+        working-directory: wasmedge-rust-sdk
+        run: |
+          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
+
+      - name: Deploy Async API document
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: wasmedge-rust-sdk/target/doc
+          force_orphan: true
