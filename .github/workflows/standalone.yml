@@ -116,7 +116,7 @@ jobs:
 
   build_fedora:
     name: Fedora latest
-    runs-on: Fedora-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         rust: [1.71, 1.70.0, 1.69]

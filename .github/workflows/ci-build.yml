@@ -8,9 +8,15 @@ on:
   push:
     paths-ignore:
       - "**/*.md"
+      - ".github/workflows/publish*.yml"
+      - ".github/workflows/release*.yml"
+      - ".github/workflows/standalone.yml"
   pull_request:
     paths-ignore:
       - "**/*.md"
+      - ".github/workflows/publish*.yml"
+      - ".github/workflows/release*.yml"
+      - ".github/workflows/standalone.yml"
 
 jobs:
   build_ubuntu:
