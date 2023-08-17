@@ -35,9 +35,11 @@
 //!   | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             | -         |
 //!   | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             | -         |
 //!
+//! ## API Reference
 //!
+//! * [wasmedge-sys API Reference](https://docs.rs/crate/wasmedge-sys/)
+//! * [wasmedge-sys Async API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/)
 //!
-
 //! ## See also
 //!
 //! * [WasmEdge Runtime Official Website](https://wasmedge.org/)
