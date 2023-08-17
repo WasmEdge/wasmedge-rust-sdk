@@ -130,9 +130,8 @@ jobs:
 
       - name: Set up build environment
         run: |
-          apt update
-          apt install -y software-properties-common libboost-all-dev ninja-build
-          apt install -y llvm-15-dev liblld-15-dev
+          dnf update -y
+          dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
