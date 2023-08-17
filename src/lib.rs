@@ -79,9 +79,6 @@
 //! This project is licensed under the terms of the [Apache 2.0 license](https://github.com/tensorflow/rust/blob/HEAD/LICENSE).
 //!
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-pub mod r#async;
 #[doc(hidden)]
 pub mod caller;
 #[doc(hidden)]
@@ -106,7 +103,6 @@ pub mod types;
 pub mod utils;
 #[doc(hidden)]
 pub mod vm;
-#[cfg(not(feature = "async"))]
 pub mod wasi;
 
 pub use caller::Caller;

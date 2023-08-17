@@ -1,6 +1,7 @@
 //! Defines Func, SignatureBuilder, and Signature structs.
+
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncState;
+use crate::wasi::r#async::AsyncState;
 use crate::{
     error::HostFuncError, io::WasmValTypeList, CallingFrame, Executor, FuncType, ValType,
     WasmEdgeResult, WasmValue,
@@ -605,7 +606,7 @@ mod tests {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_func_wrap_async_closure() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::r#async::WasiContext;
+        use crate::wasi::r#async::WasiContext;
 
         // define an async closure
         let c = |_frame: CallingFrame,

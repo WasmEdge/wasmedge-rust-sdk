@@ -1,7 +1,7 @@
 //! Defines Executor struct.
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncState;
+use crate::wasi::r#async::AsyncState;
 use crate::{config::Config, Func, FuncRef, Statistics, WasmEdgeResult, WasmValue};
 use wasmedge_sys as sys;
 
