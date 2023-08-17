@@ -1,4 +1,4 @@
-name: rust-standalone-test
+name: Test standalone mode
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
