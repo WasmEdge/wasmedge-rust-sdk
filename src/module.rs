@@ -85,7 +85,7 @@ impl Module {
         self.inner.count_of_exports()
     }
 
-    /// Returns the [export types](crate::ExportType) of all exported WasmEdge instances from the [module](crate::Module).
+    /// Returns the [export types](crate::ExportType) of all exported WasmEdge instances (including funcs, tables, globals and memories) from the [module](crate::Module).
     pub fn exports(&self) -> Vec<ExportType> {
         let mut exports = Vec::new();
         for inner_export in self.inner.exports() {
@@ -98,11 +98,11 @@ impl Module {
         exports
     }
 
-    /// Gets the [export type](crate::ExportType) by the name of a specific exported WasmEdge instance.
+    /// Gets the [export type](crate::ExportType) by the name of a specific exported WasmEdge instance, such as func, table, global or memory instance.
     ///
     /// # Argument
     ///
-    /// * `name` - The name of the target exported WasmEdge instance.
+    /// * `name` - The name of the target exported WasmEdge instance, such as func, table, global or memory instance.
     pub fn get_export(&self, name: impl AsRef<str>) -> Option<ExternalInstanceType> {
         let exports = self
             .exports()
