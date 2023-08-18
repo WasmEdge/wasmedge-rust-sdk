@@ -8,12 +8,12 @@ on:
   push:
     paths-ignore:
       - "**/*.md"
+      - ".github/workflows/ci-build.yml"
 
   pull_request:
     paths-ignore:
       - "**/*.md"
-
-  workflow_dispatch:
+      - ".github/workflows/ci-build.yml"
 
 jobs:
   build_ubuntu_2204:
