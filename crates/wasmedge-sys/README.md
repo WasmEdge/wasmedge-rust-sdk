@@ -10,6 +10,11 @@ For developers, it is recommended that the APIs in `wasmedge-sys` are used to co
 
 This crate depends on the WasmEdge C API. In linux/macOS the crate can download the API at build time by enabling the `standalone` feature. Otherwise the API needs to be installed in your system first. Please refer to [Get Started](https://github.com/WasmEdge/wasmedge-rust-sdk#get-started) for more information.
 
+## API Reference
+
+* [wasmedge-sys API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/)
+* [wasmedge-sys Async API Reference](https://second-state.github.io/wasmedge-async-rust-sdk/wasmedge_sys/)
+
 ## See also
 
 * [WasmEdge Runtime Official Website](https://wasmedge.org/)

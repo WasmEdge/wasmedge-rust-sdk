@@ -1,10 +1,19 @@
-name: rust-standalone-test
+name: Test standalone mode
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-on: workflow_dispatch
+on:
+  push:
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/ci-build.yml"
+
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/ci-build.yml"
 
 jobs:
   build_ubuntu_2204:
@@ -103,4 +112,36 @@ jobs:
           export CC=clang
           export CXX=clang++
           export DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib
+          cargo test -p wasmedge-sdk --all --examples --features standalone
+
+  build_fedora:
+    name: Fedora latest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [1.71, 1.70.0, 1.69]
+    container:
+      image: fedora:latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up build environment
+        run: |
+          dnf update -y
+          dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Run in the standalone mode
+        run: |
+          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
+          export CC=clang
+          export CXX=clang++
+          export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
           cargo test -p wasmedge-sdk --all --examples --features standalone

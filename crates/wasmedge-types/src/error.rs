@@ -478,6 +478,7 @@ pub enum CoreExecutionError {
     ExpectSharedMemory,
 }
 
+/// The error type for the host function definition.
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 pub enum HostFuncError {
     #[error("User error: {0}")]
