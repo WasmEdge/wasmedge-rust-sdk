@@ -37,8 +37,8 @@
 //!
 //! ## API Reference
 //!
-//! * [wasmedge-sys API Reference](https://docs.rs/crate/wasmedge-sys/)
-//! * [wasmedge-sys Async API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/)
+//! * [wasmedge-sys API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/index.html)
+//! * [wasmedge-sys Async API Reference](https://second-state.github.io/wasmedge-async-rust-sdk/wasmedge_sys/index.html)
 //!
 //! ## See also
 //!

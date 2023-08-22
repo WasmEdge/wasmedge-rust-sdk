@@ -59,8 +59,8 @@ This crate uses `rust-bindgen` during the build process. If you would like to us
 
 ## API Reference
 
-- [API Reference](https://docs.rs/crate/wasmedge-sdk/)
-- [Async API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/)
+- [API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/index.html)
+- [Async API Reference](https://second-state.github.io/wasmedge-async-rust-sdk/wasmedge_sdk/index.html)
 
 ## Examples
 
