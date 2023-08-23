@@ -544,7 +544,7 @@ impl WasiModule {
     ///
     /// * `envs` - The environment variables in the format `ENV_VAR_NAME=VALUE`.
     ///
-    /// * `preopens` - The directories to pre-open. The required format is `DIR1:DIR2`.
+    /// * `preopens` - The directories to pre-open. The required format is `GUEST_PATH:HOST_PATH`.
     ///
     /// # Error
     ///
@@ -623,7 +623,7 @@ impl WasiModule {
     ///
     /// * `envs` - The environment variables in the format `ENV_VAR_NAME=VALUE`.
     ///
-    /// * `preopens` - The directories to pre-open. The required format is `DIR1:DIR2`.
+    /// * `preopens` - The directories to pre-open. The required format is `GUEST_PATH:HOST_PATH`.
     pub fn init_wasi(
         &mut self,
         args: Option<Vec<&str>>,
