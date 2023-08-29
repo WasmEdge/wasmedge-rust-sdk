@@ -462,8 +462,12 @@ mod tests {
             let result =
                 FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
             let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_add), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(extern_add),
+                std::ptr::null_mut(),
+                0,
+            );
             assert!(result.is_ok());
             let host_func = result.unwrap();
             import.add_func("func-add", host_func);
@@ -472,8 +476,12 @@ mod tests {
             let result =
                 FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
             let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_sub), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(extern_sub),
+                std::ptr::null_mut(),
+                0,
+            );
             assert!(result.is_ok());
             let host_func = result.unwrap();
             import.add_func("func-sub", host_func);
@@ -482,8 +490,12 @@ mod tests {
             let result =
                 FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
             let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_mul), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(extern_mul),
+                std::ptr::null_mut(),
+                0,
+            );
             assert!(result.is_ok());
             let host_func = result.unwrap();
             import.add_func("func-mul", host_func);
@@ -492,8 +504,12 @@ mod tests {
             let result =
                 FuncType::create(vec![ValType::ExternRef, ValType::I32], vec![ValType::I32]);
             let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_div), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(extern_div),
+                std::ptr::null_mut(),
+                0,
+            );
             assert!(result.is_ok());
             let host_func = result.unwrap();
             import.add_func("func-div", host_func);
@@ -502,8 +518,12 @@ mod tests {
             let result = FuncType::create([], [ValType::I32]);
             assert!(result.is_ok());
             let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_term), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(extern_term),
+                std::ptr::null_mut(),
+                0,
+            );
             let host_func = result.unwrap();
             import.add_func("func-term", host_func);
 
@@ -511,8 +531,12 @@ mod tests {
             let result = FuncType::create([], [ValType::I32]);
             assert!(result.is_ok());
             let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(extern_fail), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(extern_fail),
+                std::ptr::null_mut(),
+                0,
+            );
             let host_func = result.unwrap();
             import.add_func("func-fail", host_func);
 

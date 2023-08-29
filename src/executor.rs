@@ -290,7 +290,7 @@ mod tests {
             _v: Vec<T>,
             _s: Vec<S>,
         }
-        let data: Data<i32, &str> = Data {
+        let mut data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
@@ -298,8 +298,7 @@ mod tests {
         };
 
         // create an async host function
-        let result =
-            Func::wrap_async_func::<(), (), Data<i32, &str>>(async_hello, Some(Box::new(data)));
+        let result = Func::wrap_async_func::<(), (), Data<i32, &str>>(async_hello, &mut data as _);
         assert!(result.is_ok());
         let func = result.unwrap();
 

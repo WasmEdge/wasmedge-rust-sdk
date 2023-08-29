@@ -42,7 +42,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<Box<T>>,
+        data: *mut T,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -86,7 +86,7 @@ impl Func {
             + Send
             + Sync
             + 'static,
-        data: Option<Box<T>>,
+        data: *mut T,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner = sys::Function::create_sync_func::<T>(&ty.clone().into(), boxed_func, data, 0)?;
@@ -125,7 +125,7 @@ impl Func {
             > + Send
             + Sync
             + 'static,
-        data: Option<Box<T>>,
+        data: *mut T,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -175,7 +175,7 @@ impl Func {
             > + Send
             + Sync
             + 'static,
-        data: Option<Box<T>>,
+        data: *mut T,
     ) -> WasmEdgeResult<Self>
     where
         T: Send + Sync,
@@ -452,7 +452,7 @@ mod tests {
     fn test_func_basic() {
         // create an ImportModule
         let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, std::ptr::null_mut())
             .expect("failed to add host func")
             .build::<NeverType>("extern", None);
         assert!(result.is_ok());
@@ -507,7 +507,7 @@ mod tests {
     #[test]
     fn test_func_wrap() {
         // create a host function
-        let result = Func::wrap::<(i32, i32), i32, NeverType>(real_add, None);
+        let result = Func::wrap::<(i32, i32), i32, NeverType>(real_add, std::ptr::null_mut());
         assert!(result.is_ok());
         let func = result.unwrap();
 
@@ -637,7 +637,7 @@ mod tests {
             _v: Vec<T>,
             _s: Vec<S>,
         }
-        let data: Data<i32, &str> = Data {
+        let mut data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
@@ -646,7 +646,7 @@ mod tests {
 
         // create an ImportModule instance
         let result = ImportObjectBuilder::new()
-            .with_async_func::<(), (), Data<i32, &str>>("async_hello", c, Some(Box::new(data)))?
+            .with_async_func::<(), (), Data<i32, &str>>("async_hello", c, &mut data as _)?
             .build::<NeverType>("extern", None);
         assert!(result.is_ok());
         let import = result.unwrap();

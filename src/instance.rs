@@ -252,7 +252,7 @@ mod tests {
 
         // create an ImportModule instance
         let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, std::ptr::null_mut())
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("mem", memory)
