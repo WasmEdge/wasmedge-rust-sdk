@@ -57,6 +57,14 @@ impl<'a> FiberFuture<'a> {
 
         Ok(slot.unwrap())
     }
+
+    fn resume(&mut self, val: Result<(), ()>) -> Result<Result<(), ()>, ()> {
+        let async_cx = AsyncCx {
+            current_suspend: self.current_suspend,
+            current_poll_cx: self.current_poll_cx,
+        };
+        ASYNC_CX.set(&async_cx, || self.fiber.resume(val))
+    }
 }
 impl<'a> Future for FiberFuture<'a> {
     type Output = Result<(), ()>;
@@ -78,6 +86,19 @@ impl<'a> Future for FiberFuture<'a> {
     }
 }
 unsafe impl Send for FiberFuture<'_> {}
+
+impl Drop for FiberFuture<'_> {
+    fn drop(&mut self) {
+        if !self.fiber.done() {
+            let result = self.resume(Err(()));
+            // This resumption with an error should always complete the
+            // fiber. While it's technically possible for host code to catch
+            // the trap and re-resume, we'd ideally like to signal that to
+            // callers that they shouldn't be doing that.
+            debug_assert!(result.is_ok());
+        }
+    }
+}
 
 type FiberSuspend = Suspend<Result<(), ()>, (), Result<(), ()>>;
 

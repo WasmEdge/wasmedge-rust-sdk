@@ -353,7 +353,12 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(
+            &func_ty,
+            Box::new(real_add),
+            std::ptr::null_mut(),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = result.unwrap();
 

@@ -830,7 +830,12 @@ mod tests {
         let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
         assert!(result.is_ok());
         let func_ty = result.unwrap();
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(
+            &func_ty,
+            Box::new(real_add),
+            std::ptr::null_mut(),
+            0,
+        );
         assert!(result.is_ok());
 
         assert_eq!(HOST_FUNCS.read().len(), 1);

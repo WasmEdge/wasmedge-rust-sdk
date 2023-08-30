@@ -54,7 +54,7 @@ impl ImportObjectBuilder {
             + Send
             + Sync
             + 'static,
-        data: Option<Box<D>>,
+        data: *mut D,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -98,7 +98,7 @@ impl ImportObjectBuilder {
             + Send
             + Sync
             + 'static,
-        data: Option<Box<D>>,
+        data: *mut D,
     ) -> WasmEdgeResult<Self> {
         let boxed_func = Box::new(real_func);
         let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
@@ -135,7 +135,7 @@ impl ImportObjectBuilder {
             > + Send
             + Sync
             + 'static,
-        data: Option<Box<D>>,
+        data: *mut D,
     ) -> WasmEdgeResult<Self>
     where
         Args: WasmValTypeList,
@@ -350,7 +350,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, std::ptr::null_mut())
             .expect("failed to add host func")
             .build::<NeverType>("extern", None);
         assert!(result.is_ok());
@@ -596,7 +596,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, std::ptr::null_mut())
             .expect("failed to add host func")
             .with_table("table", table)
             .build::<NeverType>("extern", None);
@@ -723,7 +723,7 @@ mod tests {
 
         // create an ImportModule instance
         let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, std::ptr::null_mut())
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("memory", memory)
@@ -841,7 +841,7 @@ mod tests {
 
         // create an import object
         let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
+            .with_func::<(i32, i32), i32, NeverType>("add", real_add, std::ptr::null_mut())
             .expect("failed to add host function")
             .with_global("global", global_const)
             .with_memory("memory", memory)

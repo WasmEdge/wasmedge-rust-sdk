@@ -134,7 +134,7 @@ extern "C" fn wrap_async_fn(
             let result = match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(ret)) => Ok(ret),
                 Ok(Err(err)) => Err(err),
-                Err(_err) => Err(HostFuncError::User(0x87)),
+                Err(_err) => Err(HostFuncError::Runtime(0x07)),
             };
 
             // parse result
@@ -228,15 +228,10 @@ impl Function {
     pub fn create_sync_func<T>(
         ty: &FuncType,
         real_fn: BoxedFn,
-        data: Option<Box<T>>,
+        data: *mut T,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        let data = match data {
-            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
-            None => std::ptr::null_mut(),
-        };
-
-        unsafe { Self::create_with_data(ty, real_fn, data, cost) }
+        unsafe { Self::create_with_data(ty, real_fn, data as _, cost) }
     }
 
     /// Creates a [host function](crate::Function) with the given function type.
@@ -317,14 +312,9 @@ impl Function {
     pub fn create_async_func<T: Send + Sync>(
         ty: &FuncType,
         real_fn: BoxedAsyncFn,
-        data: Option<Box<T>>,
+        data: *mut T,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        let data = match data {
-            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
-            None => std::ptr::null_mut(),
-        };
-
         let mut map_host_func = ASYNC_HOST_FUNCS.write();
 
         // generate key for the coming host function
@@ -341,7 +331,7 @@ impl Function {
                 ty.inner.0,
                 Some(wrap_async_fn),
                 key as *const usize as *mut c_void,
-                data,
+                data as _,
                 cost,
             )
         };
@@ -814,7 +804,7 @@ mod tests {
             _v: Vec<T>,
             _s: Vec<S>,
         }
-        let data: Data<i32, &str> = Data {
+        let mut data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
@@ -828,7 +818,7 @@ mod tests {
         ) -> Result<Vec<WasmValue>, HostFuncError> {
             println!("Rust: Entering Rust function real_add");
 
-            let host_data = unsafe { Box::from_raw(data as *mut T) };
+            let host_data = data as *mut T;
             println!("host_data: {:?}", host_data);
 
             if input.len() != 2 {
@@ -865,7 +855,7 @@ mod tests {
         let result = Function::create_sync_func(
             &func_ty,
             Box::new(real_add::<Data<i32, &str>>),
-            Some(Box::new(data)),
+            &mut data as *mut _,
             0,
         );
         assert!(result.is_ok());
@@ -945,8 +935,12 @@ mod tests {
                 assert!(result.is_ok());
                 let func_ty = result.unwrap();
                 // create a host function
-                let result =
-                    Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+                let result = Function::create_sync_func::<NeverType>(
+                    &func_ty,
+                    Box::new(real_add),
+                    std::ptr::null_mut(),
+                    0,
+                );
                 assert!(result.is_ok());
                 let host_func = result.unwrap();
 
@@ -973,7 +967,12 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(func), None, 0);
+        let result = Function::create_sync_func::<NeverType>(
+            &func_ty,
+            Box::new(func),
+            std::ptr::null_mut(),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -992,7 +991,12 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(
+            &func_ty,
+            Box::new(real_add),
+            std::ptr::null_mut(),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -1023,7 +1027,12 @@ mod tests {
         assert!(result.is_ok());
         let func_ty = result.unwrap();
         // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(
+            &func_ty,
+            Box::new(real_add),
+            std::ptr::null_mut(),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = Arc::new(Mutex::new(result.unwrap()));
 
@@ -1121,8 +1130,12 @@ mod tests {
             let func_ty = result.unwrap();
 
             // create a host function from the closure defined above
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+            let result = Function::create_sync_func::<NeverType>(
+                &func_ty,
+                Box::new(real_add),
+                std::ptr::null_mut(),
+                0,
+            );
             assert!(result.is_ok());
             let host_func = result.unwrap();
 
@@ -1195,7 +1208,12 @@ mod tests {
         let func_ty = result.unwrap();
 
         // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let result = Function::create_sync_func::<NeverType>(
+            &func_ty,
+            Box::new(real_add),
+            std::ptr::null_mut(),
+            0,
+        );
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
@@ -1322,7 +1340,7 @@ mod tests {
                 }
             }
 
-            let data: Data<i32, &str> = Data {
+            let mut data: Data<i32, &str> = Data {
                 _x: 12,
                 _y: "hello".to_string(),
                 _v: vec![1, 2, 3],
@@ -1359,8 +1377,7 @@ mod tests {
             let func_ty = result.unwrap();
 
             // create an async host function
-            let result =
-                Function::create_async_func(&func_ty, Box::new(c), Some(Box::new(data)), 0);
+            let result = Function::create_async_func(&func_ty, Box::new(c), &mut data, 0);
             assert!(result.is_ok());
             let async_hello_func = result.unwrap();
 
@@ -1427,7 +1444,7 @@ mod tests {
                 _v: Vec<T>,
                 _s: Vec<S>,
             }
-            let data: Data<i32, &str> = Data {
+            let mut data: Data<i32, &str> = Data {
                 _x: 12,
                 _y: "hello".to_string(),
                 _v: vec![1, 2, 3],
@@ -1465,7 +1482,7 @@ mod tests {
             let result = Function::create_async_func(
                 &func_ty,
                 Box::new(f::<Data<i32, &str>>),
-                Some(Box::new(data)),
+                &mut data as _,
                 0,
             );
             assert!(result.is_ok());
