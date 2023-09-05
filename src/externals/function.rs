@@ -243,6 +243,28 @@ impl Func {
         executor.run_func(self, args)
     }
 
+    /// Runs this host function and returns the result.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The [Executor](crate::Executor) instance.
+    ///
+    /// * `args` - The arguments passed to the host function.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the host function, then an error is returned.
+    pub fn run_timeout(
+        &self,
+        executor: &Executor,
+        args: impl IntoIterator<Item = WasmValue>,
+        timeout_sec: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        executor.run_func_timeout(self, args, timeout_sec)
+    }
+
     /// Asynchronously runs this host function and returns the result.
     ///
     /// # Arguments

@@ -12,6 +12,26 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
+scoped_tls::scoped_thread_local!(static SYNC_JMP_BUF: *mut setjmp::sigjmp_buf);
+unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
+    if let Some(info) = info.as_mut() {
+        let si_value = info.si_value();
+        let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
+        let dist_pthread = *value;
+        let self_pthread = libc::pthread_self();
+        if self_pthread == dist_pthread {
+            if SYNC_JMP_BUF.is_set() {
+                let env = SYNC_JMP_BUF.with(|f| *f);
+                setjmp::siglongjmp(env, 1);
+            }
+        } else {
+            libc::pthread_sigqueue(dist_pthread, sig, si_value);
+        }
+    }
+}
+
+static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
+
 /// Defines an execution environment for both pure WASM and compiled WASM.
 #[derive(Debug, Clone)]
 pub struct Executor {
@@ -261,6 +281,86 @@ impl Executor {
             ))?;
 
             returns.set_len(returns_len as usize);
+        }
+
+        Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
+    }
+
+    /// Run a host function instance and return the results or timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `func` - The function instance to run.
+    ///
+    /// * `params` - The arguments to pass to the function.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Errors
+    ///
+    /// If fail to run the host function, then an error is returned.
+    pub fn call_func_timeout(
+        &self,
+        func: &Function,
+        params: impl IntoIterator<Item = WasmValue>,
+        timeout_sec: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        use wasmedge_types::error;
+
+        let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
+        // get the length of the function's returns
+        let func_ty = func.ty()?;
+        let returns_len = func_ty.returns_len();
+        let mut returns = Vec::with_capacity(returns_len as usize);
+
+        unsafe {
+            INIT_SIGNAL_LISTEN.call_once(|| {
+                let mut new_act: libc::sigaction = std::mem::zeroed();
+                new_act.sa_sigaction = sync_timeout as usize;
+                new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
+                libc::sigaction(libc::SIGUSR1, &new_act, std::ptr::null_mut());
+            });
+
+            let mut self_thread = libc::pthread_self();
+            let mut sigjmp_buf: setjmp::sigjmp_buf = std::mem::zeroed();
+            let env = &mut sigjmp_buf as *mut _;
+
+            let mut timerid: libc::timer_t = std::mem::zeroed();
+            let mut sev: libc::sigevent = std::mem::zeroed();
+            sev.sigev_notify = libc::SIGEV_SIGNAL;
+            sev.sigev_signo = libc::SIGUSR1;
+            sev.sigev_value.sival_ptr = &mut self_thread as *mut _ as *mut libc::c_void;
+
+            if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
+                return Err(Box::new(error::WasmEdgeError::Operation(
+                    "timer_create error".into(),
+                )));
+            }
+            let mut value: libc::itimerspec = std::mem::zeroed();
+            value.it_value.tv_sec = timeout_sec as i64;
+            if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
+                return Err(Box::new(error::WasmEdgeError::Operation(
+                    "timer_settime error".into(),
+                )));
+            }
+            if setjmp::sigsetjmp(env, 1) == 0 {
+                let r = SYNC_JMP_BUF.set(&env, || {
+                    check(ffi::WasmEdge_ExecutorInvoke(
+                        self.inner.0,
+                        func.inner.lock().0 as *const _,
+                        raw_params.as_ptr(),
+                        raw_params.len() as u32,
+                        returns.as_mut_ptr(),
+                        returns_len,
+                    ))
+                });
+                libc::timer_delete(timerid);
+                r?;
+                returns.set_len(returns_len as usize);
+            } else {
+                libc::timer_delete(timerid);
+                return Err(Box::new(error::WasmEdgeError::Operation("timeout".into())));
+            }
         }
 
         Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())

@@ -58,6 +58,33 @@ impl Executor {
         self.inner.call_func(&func.inner, params)
     }
 
+    /// Runs a host function instance and returns the results.
+    ///
+    /// # Arguments
+    ///
+    /// * `func` - The function instance to run.
+    ///
+    /// * `params` - The arguments to pass to the function.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Errors
+    ///
+    /// If fail to run the host function, then an error is returned.
+    pub fn run_func_timeout(
+        &self,
+        func: &Func,
+        params: impl IntoIterator<Item = WasmValue>,
+        timeout_sec: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        if timeout_sec > 0 {
+            self.inner
+                .call_func_timeout(&func.inner, params, timeout_sec)
+        } else {
+            self.inner.call_func(&func.inner, params)
+        }
+    }
+
     /// Asynchronously runs a host function instance and returns the results.
     ///
     /// # Arguments

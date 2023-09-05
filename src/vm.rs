@@ -486,6 +486,50 @@ impl Vm {
         }
     }
 
+    /// Runs an exported wasm function in a (named or active) [module instance](crate::Instance).
+    ///
+    /// # Arguments
+    ///
+    /// * `mod_name` - The exported name of the module instance, which holds the target function. If `None`, then the active module is used.
+    ///
+    /// * `func_name` - The exported name of the target wasm function.
+    ///
+    /// * `args` - The arguments to be passed to the target wasm function.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the wasm function, then an error is returned.
+    pub fn run_func_timeout(
+        &self,
+        mod_name: Option<&str>,
+        func_name: impl AsRef<str>,
+        args: impl IntoIterator<Item = WasmValue>,
+        timeout_sec: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        match mod_name {
+            Some(mod_name) => match self.named_instances.get(mod_name) {
+                Some(named_instance) => named_instance.func(func_name.as_ref())?.run_timeout(
+                    self.executor(),
+                    args,
+                    timeout_sec,
+                ),
+                None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
+                    mod_name.into(),
+                )))),
+            },
+            None => match &self.active_instance {
+                Some(active_instance) => active_instance.func(func_name.as_ref())?.run_timeout(
+                    self.executor(),
+                    args,
+                    timeout_sec,
+                ),
+                None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule))),
+            },
+        }
+    }
+
     /// Asynchronously runs an exported wasm function in a (named or active) [module instance](crate::Instance).
     ///
     /// # Arguments
