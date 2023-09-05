@@ -57,6 +57,14 @@ impl<'a> FiberFuture<'a> {
 
         Ok(slot.unwrap())
     }
+
+    fn resume(&mut self, val: Result<(), ()>) -> Result<Result<(), ()>, ()> {
+        let async_cx = AsyncCx {
+            current_suspend: self.current_suspend,
+            current_poll_cx: self.current_poll_cx,
+        };
+        ASYNC_CX.set(&async_cx, || self.fiber.resume(val))
+    }
 }
 impl<'a> Future for FiberFuture<'a> {
     type Output = Result<(), ()>;
@@ -66,20 +74,29 @@ impl<'a> Future for FiberFuture<'a> {
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
-            let async_cx = AsyncCx {
-                current_suspend: self.current_suspend,
-                current_poll_cx: self.current_poll_cx,
-            };
-            ASYNC_CX.set(&async_cx, || match self.as_ref().fiber.resume(Ok(())) {
+            match self.resume(Ok(())) {
                 Ok(ret) => Poll::Ready(ret),
                 Err(_) => Poll::Pending,
-            })
+            }
         }
     }
 }
 unsafe impl Send for FiberFuture<'_> {}
 
 type FiberSuspend = Suspend<Result<(), ()>, (), Result<(), ()>>;
+
+impl Drop for FiberFuture<'_> {
+    fn drop(&mut self) {
+        if !self.fiber.done() {
+            let result = self.resume(Err(()));
+            // This resumption with an error should always complete the
+            // fiber. While it's technically possible for host code to catch
+            // the trap and re-resume, we'd ideally like to signal that to
+            // callers that they shouldn't be doing that.
+            debug_assert!(result.is_ok());
+        }
+    }
+}
 
 /// Defines a TimeoutFiberFuture.
 pub(crate) struct TimeoutFiberFuture<'a> {
@@ -197,6 +214,23 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
     }
 }
 unsafe impl Send for TimeoutFiberFuture<'_> {}
+
+impl Drop for TimeoutFiberFuture<'_> {
+    fn drop(&mut self) {
+        if !self.fiber.done() {
+            let async_cx = AsyncCx {
+                current_suspend: self.current_suspend,
+                current_poll_cx: self.current_poll_cx,
+            };
+            let result = ASYNC_CX.set(&async_cx, || self.fiber.resume(Err(())));
+            // This resumption with an error should always complete the
+            // fiber. While it's technically possible for host code to catch
+            // the trap and re-resume, we'd ideally like to signal that to
+            // callers that they shouldn't be doing that.
+            debug_assert!(result.is_ok());
+        }
+    }
+}
 
 scoped_tls::scoped_thread_local!(static ASYNC_CX: AsyncCx);
 
