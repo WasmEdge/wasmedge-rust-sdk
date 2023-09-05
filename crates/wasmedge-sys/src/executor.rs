@@ -2,7 +2,7 @@
 
 use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::fiber::{AsyncState, FiberFuture};
+use crate::r#async::fiber::{AsyncState, FiberFuture, TimeoutFiberFuture};
 use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
     Function, ImportModule, Instance, Module, Statistics, Store, WasiInstance, WasmEdgeResult,
@@ -339,6 +339,7 @@ impl Executor {
             let mut value: libc::itimerspec = std::mem::zeroed();
             value.it_value.tv_sec = timeout_sec as i64;
             if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
+                libc::timer_delete(timerid);
                 return Err(Box::new(error::WasmEdgeError::Operation(
                     "timer_settime error".into(),
                 )));
@@ -388,6 +389,35 @@ impl Executor {
         FiberFuture::on_fiber(async_state, || self.call_func(func, params))
             .await
             .unwrap()
+    }
+
+    /// Asynchronously runs a host function instance and returns the results.
+    ///
+    /// # Arguments
+    ///
+    /// * `func` - The function instance to run.
+    ///
+    /// * `params` - The arguments to pass to the function.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Errors
+    ///
+    /// If fail to run the host function, then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+    #[cfg(feature = "async")]
+    pub async fn call_func_async_timeout(
+        &self,
+        async_state: &AsyncState,
+        func: &Function,
+        params: impl IntoIterator<Item = WasmValue> + Send,
+        timeout_sec: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        use wasmedge_types::error;
+        TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), timeout_sec)
+            .await
+            .map_err(|_| Box::new(error::WasmEdgeError::Operation("timeout".into())))?
     }
 
     /// Runs a host function reference instance and returns the results.

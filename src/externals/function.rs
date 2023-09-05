@@ -286,6 +286,33 @@ impl Func {
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         executor.run_func_async(async_state, self, args).await
     }
+
+    /// Asynchronously runs this host function and returns the result.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The [Executor](crate::Executor) instance.
+    ///
+    /// * `args` - The arguments passed to the host function.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the host function, then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+    pub async fn run_async_timeout(
+        &self,
+        async_state: &AsyncState,
+        executor: &Executor,
+        args: impl IntoIterator<Item = WasmValue> + Send,
+        timeout_sec: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        executor
+            .run_func_async_timeout(async_state, self, args, timeout_sec)
+            .await
+    }
 }
 
 /// Defines a type builder for creating a [FuncType](https://wasmedge.github.io/WasmEdge/wasmedge_types/struct.FuncType.html) instance.
