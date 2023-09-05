@@ -9,28 +9,75 @@ use crate::{
     WasmValue,
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{os::raw::c_void, sync::Arc};
 use wasmedge_types::error::WasmEdgeError;
 
-scoped_tls::scoped_thread_local!(static SYNC_JMP_BUF: *mut setjmp::sigjmp_buf);
+pub(crate) struct JmpState {
+    pub(crate) sigjmp_buf: *mut setjmp::sigjmp_buf,
+    pub(crate) in_host: *mut bool,
+    pub(crate) is_timeout: *mut bool,
+}
+
+scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
+
 unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
-    if let Some(info) = info.as_mut() {
-        let si_value = info.si_value();
-        let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
-        let dist_pthread = *value;
-        let self_pthread = libc::pthread_self();
-        if self_pthread == dist_pthread {
-            if SYNC_JMP_BUF.is_set() {
-                let env = SYNC_JMP_BUF.with(|f| *f);
-                setjmp::siglongjmp(env, 1);
+    if JMP_BUF.is_set() {
+        if let Some(info) = info.as_mut() {
+            let si_value = info.si_value();
+            let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
+            let dist_pthread = *value;
+            let self_pthread = libc::pthread_self();
+            if self_pthread == dist_pthread {
+                if let Some(env) = JMP_BUF.with(|s| {
+                    if *s.in_host {
+                        *s.is_timeout = true;
+                        None
+                    } else {
+                        Some(s.sigjmp_buf)
+                    }
+                }) {
+                    setjmp::siglongjmp(env, 1);
+                }
+            } else {
+                libc::pthread_sigqueue(dist_pthread, sig, si_value);
             }
-        } else {
-            libc::pthread_sigqueue(dist_pthread, sig, si_value);
+        }
+    }
+}
+
+unsafe extern "C" fn pre_host_func(_: *mut c_void) {
+    if JMP_BUF.is_set() {
+        JMP_BUF.with(|s| {
+            *s.in_host = true;
+        })
+    }
+}
+unsafe extern "C" fn post_host_func(_: *mut c_void) {
+    if JMP_BUF.is_set() {
+        if let Some(env) = JMP_BUF.with(|s| {
+            *s.in_host = false;
+            if *s.is_timeout {
+                Some(s.sigjmp_buf)
+            } else {
+                None
+            }
+        }) {
+            setjmp::siglongjmp(env, 1);
         }
     }
 }
 
 static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
+
+#[inline(always)]
+pub(crate) unsafe fn init_signal_listen() {
+    INIT_SIGNAL_LISTEN.call_once(|| {
+        let mut new_act: libc::sigaction = std::mem::zeroed();
+        new_act.sa_sigaction = sync_timeout as usize;
+        new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
+        libc::sigaction(libc::SIGUSR1, &new_act, std::ptr::null_mut());
+    });
+}
 
 /// Defines an execution environment for both pure WASM and compiled WASM.
 #[derive(Debug, Clone)]
@@ -70,10 +117,23 @@ impl Executor {
 
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ExecutorCreate)),
-            false => Ok(Executor {
-                inner: Arc::new(InnerExecutor(ctx)),
-                registered: false,
-            }),
+            false => unsafe {
+                ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
+                    ctx,
+                    std::ptr::null_mut(),
+                    Some(pre_host_func),
+                );
+                ffi::WasmEdge_ExecutorExperimentalRegisterPostHostFunction(
+                    ctx,
+                    std::ptr::null_mut(),
+                    Some(post_host_func),
+                );
+
+                Ok(Executor {
+                    inner: Arc::new(InnerExecutor(ctx)),
+                    registered: false,
+                })
+            },
         }
     }
 
@@ -314,13 +374,7 @@ impl Executor {
         let mut returns = Vec::with_capacity(returns_len as usize);
 
         unsafe {
-            INIT_SIGNAL_LISTEN.call_once(|| {
-                let mut new_act: libc::sigaction = std::mem::zeroed();
-                new_act.sa_sigaction = sync_timeout as usize;
-                new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
-                libc::sigaction(libc::SIGUSR1, &new_act, std::ptr::null_mut());
-            });
-
+            init_signal_listen();
             let mut self_thread = libc::pthread_self();
             let mut sigjmp_buf: setjmp::sigjmp_buf = std::mem::zeroed();
             let env = &mut sigjmp_buf as *mut _;
@@ -344,8 +398,15 @@ impl Executor {
                     "timer_settime error".into(),
                 )));
             }
+            let mut in_host = false;
+            let mut is_timeout = false;
+            let jmp_state = JmpState {
+                sigjmp_buf: env,
+                in_host: &mut in_host,
+                is_timeout: &mut is_timeout,
+            };
             if setjmp::sigsetjmp(env, 1) == 0 {
-                let r = SYNC_JMP_BUF.set(&env, || {
+                let r = JMP_BUF.set(&jmp_state, || {
                     check(ffi::WasmEdge_ExecutorInvoke(
                         self.inner.0,
                         func.inner.lock().0 as *const _,

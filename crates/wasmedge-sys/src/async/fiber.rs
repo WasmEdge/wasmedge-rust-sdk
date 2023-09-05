@@ -81,31 +81,6 @@ unsafe impl Send for FiberFuture<'_> {}
 
 type FiberSuspend = Suspend<Result<(), ()>, (), Result<(), ()>>;
 
-// jmp_buf, in_host, timeout
-scoped_tls::scoped_thread_local!(static ASYNC_JMP_BUF: (*mut setjmp::sigjmp_buf,*mut bool,*mut bool));
-unsafe extern "C" fn async_timeout(sig: i32, info: *mut libc::siginfo_t) {
-    if let Some(info) = info.as_mut() {
-        let si_value = info.si_value();
-        let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
-        let dist_pthread = *value;
-        let self_pthread = libc::pthread_self();
-        if self_pthread == dist_pthread {
-            if ASYNC_JMP_BUF.is_set() {
-                let (env, in_host, timeout) = ASYNC_JMP_BUF.with(|f| *f);
-                if *in_host {
-                    *timeout = true;
-                } else {
-                    setjmp::siglongjmp(env, 1);
-                }
-            }
-        } else {
-            libc::pthread_sigqueue(dist_pthread, sig, si_value);
-        }
-    }
-}
-
-static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
-
 /// Defines a TimeoutFiberFuture.
 pub(crate) struct TimeoutFiberFuture<'a> {
     fiber: Fiber<'a, Result<(), ()>, (), Result<(), ()>>,
@@ -169,12 +144,7 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
     type Output = Result<(), ()>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {
-            INIT_SIGNAL_LISTEN.call_once(|| {
-                let mut new_act: libc::sigaction = std::mem::zeroed();
-                new_act.sa_sigaction = async_timeout as usize;
-                new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
-                libc::sigaction(libc::SIGUSR2, &new_act, std::ptr::null_mut());
-            });
+            crate::executor::init_signal_listen();
 
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
             *self.current_poll_cx =
@@ -189,7 +159,7 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
                 let mut timerid: libc::timer_t = std::mem::zeroed();
                 let mut sev: libc::sigevent = std::mem::zeroed();
                 sev.sigev_notify = libc::SIGEV_SIGNAL;
-                sev.sigev_signo = libc::SIGUSR2;
+                sev.sigev_signo = libc::SIGUSR1;
                 sev.sigev_value.sival_ptr = &mut self_thread as *mut _ as *mut libc::c_void;
 
                 if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
@@ -204,9 +174,14 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
 
                 let mut env: setjmp::sigjmp_buf = std::mem::zeroed();
                 let mut in_host = false;
-                let mut timeout = false;
+                let mut is_timeout = false;
+                let jmp_state = crate::executor::JmpState {
+                    sigjmp_buf: &mut env,
+                    in_host: &mut in_host,
+                    is_timeout: &mut is_timeout,
+                };
                 let r = if setjmp::sigsetjmp(&mut env, 1) == 0 {
-                    ASYNC_JMP_BUF.set(&(&mut env, &mut in_host, &mut timeout), || {
+                    crate::executor::JMP_BUF.set(&jmp_state, || {
                         match self.as_ref().fiber.resume(Ok(())) {
                             Ok(ret) => Poll::Ready(ret),
                             Err(_) => Poll::Pending,
