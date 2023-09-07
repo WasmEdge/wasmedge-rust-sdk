@@ -418,8 +418,9 @@ impl Executor {
                 in_host: &mut in_host,
                 is_timeout: &mut is_timeout,
             };
-            if setjmp::sigsetjmp(env, 1) == 0 {
-                let r = JMP_BUF.set(&jmp_state, || {
+
+            let r = JMP_BUF.set(&jmp_state, || {
+                if setjmp::sigsetjmp(env, 1) == 0 {
                     check(ffi::WasmEdge_ExecutorInvoke(
                         self.inner.0,
                         func.inner.lock().0 as *const _,
@@ -428,17 +429,16 @@ impl Executor {
                         returns.as_mut_ptr(),
                         returns_len,
                     ))
-                });
-                libc::timer_delete(timerid);
-                r?;
-                returns.set_len(returns_len as usize);
-            } else {
-                libc::timer_delete(timerid);
-                return Err(Box::new(error::WasmEdgeError::Operation("timeout".into())));
-            }
-        }
+                } else {
+                    Err(Box::new(error::WasmEdgeError::Operation("timeout".into())))
+                }
+            });
+            libc::timer_delete(timerid);
+            r?;
 
-        Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
+            returns.set_len(returns_len as usize);
+            Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
+        }
     }
 
     /// Asynchronously runs a host function instance and returns the results.

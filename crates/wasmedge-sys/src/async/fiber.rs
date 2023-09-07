@@ -197,16 +197,17 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
                     in_host: &mut in_host,
                     is_timeout: &mut is_timeout,
                 };
-                let r = if setjmp::sigsetjmp(&mut env, 1) == 0 {
-                    crate::executor::JMP_BUF.set(&jmp_state, || {
+
+                let r = crate::executor::JMP_BUF.set(&jmp_state, || {
+                    if setjmp::sigsetjmp(&mut env, 1) == 0 {
                         match self.as_ref().fiber.resume(Ok(())) {
                             Ok(ret) => Poll::Ready(ret),
                             Err(_) => Poll::Pending,
                         }
-                    })
-                } else {
-                    Poll::Ready(Err(()))
-                };
+                    } else {
+                        Poll::Ready(Err(()))
+                    }
+                });
                 libc::timer_delete(timerid);
                 r
             })
