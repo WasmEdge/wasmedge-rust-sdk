@@ -9,17 +9,22 @@ use crate::{
     WasmValue,
 };
 use parking_lot::Mutex;
-use std::{os::raw::c_void, sync::Arc};
+#[cfg(target_os = "linux")]
+use std::os::raw::c_void;
+use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
+#[cfg(target_os = "linux")]
 pub(crate) struct JmpState {
     pub(crate) sigjmp_buf: *mut setjmp::sigjmp_buf,
     pub(crate) in_host: *mut bool,
     pub(crate) is_timeout: *mut bool,
 }
 
+#[cfg(target_os = "linux")]
 scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
 
+#[cfg(target_os = "linux")]
 unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
     if JMP_BUF.is_set() {
         if let Some(info) = info.as_mut() {
@@ -44,7 +49,7 @@ unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
         }
     }
 }
-
+#[cfg(target_os = "linux")]
 unsafe extern "C" fn pre_host_func(_: *mut c_void) {
     if JMP_BUF.is_set() {
         JMP_BUF.with(|s| {
@@ -52,6 +57,7 @@ unsafe extern "C" fn pre_host_func(_: *mut c_void) {
         })
     }
 }
+#[cfg(target_os = "linux")]
 unsafe extern "C" fn post_host_func(_: *mut c_void) {
     if JMP_BUF.is_set() {
         if let Some(env) = JMP_BUF.with(|s| {
@@ -67,9 +73,11 @@ unsafe extern "C" fn post_host_func(_: *mut c_void) {
     }
 }
 
+#[cfg(target_os = "linux")]
 static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
 
 #[inline(always)]
+#[cfg(target_os = "linux")]
 pub(crate) unsafe fn init_signal_listen() {
     INIT_SIGNAL_LISTEN.call_once(|| {
         let mut new_act: libc::sigaction = std::mem::zeroed();
@@ -117,23 +125,26 @@ impl Executor {
 
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ExecutorCreate)),
-            false => unsafe {
-                ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
-                    ctx,
-                    std::ptr::null_mut(),
-                    Some(pre_host_func),
-                );
-                ffi::WasmEdge_ExecutorExperimentalRegisterPostHostFunction(
-                    ctx,
-                    std::ptr::null_mut(),
-                    Some(post_host_func),
-                );
+            false => {
+                #[cfg(target_os = "linux")]
+                unsafe {
+                    ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
+                        ctx,
+                        std::ptr::null_mut(),
+                        Some(pre_host_func),
+                    );
+                    ffi::WasmEdge_ExecutorExperimentalRegisterPostHostFunction(
+                        ctx,
+                        std::ptr::null_mut(),
+                        Some(post_host_func),
+                    );
+                }
 
                 Ok(Executor {
                     inner: Arc::new(InnerExecutor(ctx)),
                     registered: false,
                 })
-            },
+            }
         }
     }
 
@@ -359,6 +370,8 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
+    #[cfg(target_os = "linux")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
     pub fn call_func_timeout(
         &self,
         func: &Function,

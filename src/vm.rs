@@ -501,6 +501,7 @@ impl Vm {
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
+    #[cfg(target_os = "linux")]
     pub fn run_func_timeout(
         &self,
         mod_name: Option<&str>,

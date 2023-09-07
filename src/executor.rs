@@ -71,6 +71,8 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
+    #[cfg(target_os = "linux")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
     pub fn run_func_timeout(
         &self,
         func: &Func,
