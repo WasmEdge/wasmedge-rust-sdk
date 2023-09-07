@@ -486,7 +486,7 @@ impl Vm {
         }
     }
 
-    /// Runs an exported wasm function in a (named or active) [module instance](crate::Instance).
+    /// Runs an exported wasm function in a (named or active) [module instance](crate::Instance) with a timeout setting
     ///
     /// # Arguments
     ///
@@ -496,36 +496,34 @@ impl Vm {
     ///
     /// * `args` - The arguments to be passed to the target wasm function.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
     ///
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
     #[cfg(target_os = "linux")]
-    pub fn run_func_timeout(
+    pub fn run_func_with_timeout(
         &self,
         mod_name: Option<&str>,
         func_name: impl AsRef<str>,
         args: impl IntoIterator<Item = WasmValue>,
-        timeout_sec: u64,
+        timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         match mod_name {
-            Some(mod_name) => match self.named_instances.get(mod_name) {
-                Some(named_instance) => named_instance.func(func_name.as_ref())?.run_timeout(
-                    self.executor(),
-                    args,
-                    timeout_sec,
-                ),
-                None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                    mod_name.into(),
-                )))),
-            },
+            Some(mod_name) => {
+                match self.named_instances.get(mod_name) {
+                    Some(named_instance) => named_instance
+                        .func(func_name.as_ref())?
+                        .run_with_timeout(self.executor(), args, timeout),
+                    None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
+                        mod_name.into(),
+                    )))),
+                }
+            }
             None => match &self.active_instance {
-                Some(active_instance) => active_instance.func(func_name.as_ref())?.run_timeout(
-                    self.executor(),
-                    args,
-                    timeout_sec,
-                ),
+                Some(active_instance) => active_instance
+                    .func(func_name.as_ref())?
+                    .run_with_timeout(self.executor(), args, timeout),
                 None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule))),
             },
         }
@@ -579,7 +577,7 @@ impl Vm {
         }
     }
 
-    /// Asynchronously runs an exported wasm function in a (named or active) [module instance](crate::Instance).
+    /// Asynchronously runs an exported wasm function in a (named or active) [module instance](crate::Instance) with a timeout setting
     ///
     /// # Arguments
     ///
@@ -591,27 +589,27 @@ impl Vm {
     ///
     /// * `args` - The arguments to be passed to the target wasm function.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
     ///
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-    pub async fn run_func_async_timeout(
+    pub async fn run_func_async_with_timeout(
         &self,
         async_state: &AsyncState,
         mod_name: Option<&str>,
         func_name: impl AsRef<str> + Send,
         args: impl IntoIterator<Item = WasmValue> + Send,
-        timeout_sec: u64,
+        timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         match mod_name {
             Some(mod_name) => match self.named_instances.get(mod_name) {
                 Some(named_instance) => {
                     named_instance
                         .func(func_name.as_ref())?
-                        .run_async_timeout(async_state, self.executor(), args, timeout_sec)
+                        .run_async_with_timeout(async_state, self.executor(), args, timeout)
                         .await
                 }
                 None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
@@ -622,7 +620,7 @@ impl Vm {
                 Some(active_instance) => {
                     active_instance
                         .func(func_name.as_ref())?
-                        .run_async_timeout(async_state, self.executor(), args, timeout_sec)
+                        .run_async_with_timeout(async_state, self.executor(), args, timeout)
                         .await
                 }
                 None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule))),

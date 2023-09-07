@@ -365,18 +365,18 @@ impl Executor {
     ///
     /// * `params` - The arguments to pass to the function.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
     ///
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(target_os = "linux")]
     #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
-    pub fn call_func_timeout(
+    pub fn call_func_with_timeout(
         &self,
         func: &Function,
         params: impl IntoIterator<Item = WasmValue>,
-        timeout_sec: u64,
+        timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         use wasmedge_types::error;
 
@@ -404,7 +404,7 @@ impl Executor {
                 )));
             }
             let mut value: libc::itimerspec = std::mem::zeroed();
-            value.it_value.tv_sec = timeout_sec as i64;
+            value.it_value.tv_sec = timeout as i64;
             if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
                 libc::timer_delete(timerid);
                 return Err(Box::new(error::WasmEdgeError::Operation(
@@ -465,7 +465,7 @@ impl Executor {
             .unwrap()
     }
 
-    /// Asynchronously runs a host function instance and returns the results.
+    /// Asynchronously runs a host function instance with a timeout setting
     ///
     /// # Arguments
     ///
@@ -473,7 +473,7 @@ impl Executor {
     ///
     /// * `params` - The arguments to pass to the function.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
     ///
     /// # Errors
     ///
@@ -481,15 +481,15 @@ impl Executor {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     #[cfg(feature = "async")]
-    pub async fn call_func_async_timeout(
+    pub async fn call_func_async_with_timeout(
         &self,
         async_state: &AsyncState,
         func: &Function,
         params: impl IntoIterator<Item = WasmValue> + Send,
-        timeout_sec: u64,
+        timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         use wasmedge_types::error;
-        TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), timeout_sec)
+        TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), timeout)
             .await
             .map_err(|_| Box::new(error::WasmEdgeError::Operation("timeout".into())))?
     }

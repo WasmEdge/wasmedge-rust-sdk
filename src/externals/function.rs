@@ -243,7 +243,7 @@ impl Func {
         executor.run_func(self, args)
     }
 
-    /// Runs this host function and returns the result.
+    /// Runs this host function with a timeout setting.
     ///
     /// # Arguments
     ///
@@ -251,20 +251,20 @@ impl Func {
     ///
     /// * `args` - The arguments passed to the host function.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
     ///
     /// # Error
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(target_os = "linux")]
     #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
-    pub fn run_timeout(
+    pub fn run_with_timeout(
         &self,
         executor: &Executor,
         args: impl IntoIterator<Item = WasmValue>,
-        timeout_sec: u64,
+        timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
-        executor.run_func_timeout(self, args, timeout_sec)
+        executor.run_func_with_timeout(self, args, timeout)
     }
 
     /// Asynchronously runs this host function and returns the result.
@@ -289,7 +289,7 @@ impl Func {
         executor.run_func_async(async_state, self, args).await
     }
 
-    /// Asynchronously runs this host function and returns the result.
+    /// Asynchronously runs this host function with a timeout setting.
     ///
     /// # Arguments
     ///
@@ -297,22 +297,22 @@ impl Func {
     ///
     /// * `args` - The arguments passed to the host function.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
     ///
     /// # Error
     ///
     /// If fail to run the host function, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-    pub async fn run_async_timeout(
+    pub async fn run_async_with_timeout(
         &self,
         async_state: &AsyncState,
         executor: &Executor,
         args: impl IntoIterator<Item = WasmValue> + Send,
-        timeout_sec: u64,
+        timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         executor
-            .run_func_async_timeout(async_state, self, args, timeout_sec)
+            .run_func_async_with_timeout(async_state, self, args, timeout)
             .await
     }
 }
