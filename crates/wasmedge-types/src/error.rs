@@ -44,6 +44,8 @@ pub enum WasmEdgeError {
     Func(FuncError),
     #[error("Fail to create FuncType")]
     FuncTypeCreate,
+    #[error("Execution Timed Out")]
+    ExecuteTimeout,
     #[error("{0}")]
     Mem(MemError),
     #[error("Fail to create MemType")]
