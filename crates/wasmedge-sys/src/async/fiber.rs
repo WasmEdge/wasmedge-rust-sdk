@@ -178,7 +178,7 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
                 let mut timerid: libc::timer_t = std::mem::zeroed();
                 let mut sev: libc::sigevent = std::mem::zeroed();
                 sev.sigev_notify = libc::SIGEV_SIGNAL;
-                sev.sigev_signo = libc::SIGUSR1;
+                sev.sigev_signo = crate::executor::timeout_signo();
                 sev.sigev_value.sival_ptr = &mut self_thread as *mut _ as *mut libc::c_void;
 
                 if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
@@ -192,26 +192,23 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
                 }
 
                 let mut env: setjmp::sigjmp_buf = std::mem::zeroed();
-                let mut in_host = false;
-                let mut is_timeout = false;
                 let jmp_state = crate::executor::JmpState {
                     sigjmp_buf: &mut env,
-                    in_host: &mut in_host,
-                    is_timeout: &mut is_timeout,
                 };
 
-                let r = crate::executor::JMP_BUF.set(&jmp_state, || {
+                crate::executor::JMP_BUF.set(&jmp_state, || {
                     if setjmp::sigsetjmp(&mut env, 1) == 0 {
-                        match self.as_ref().fiber.resume(Ok(())) {
+                        let r = match self.as_ref().fiber.resume(Ok(())) {
                             Ok(ret) => Poll::Ready(ret),
                             Err(_) => Poll::Pending,
-                        }
+                        };
+                        libc::timer_delete(timerid);
+                        r
                     } else {
+                        libc::timer_delete(timerid);
                         Poll::Ready(Err(()))
                     }
-                });
-                libc::timer_delete(timerid);
-                r
+                })
             })
         }
     }
