@@ -58,6 +58,8 @@ impl<'a> FiberFuture<'a> {
         Ok(slot.unwrap())
     }
 
+    /// This is a helper function to call `resume` on the underlying
+    /// fiber while correctly managing thread-local data.
     fn resume(&mut self, val: Result<(), ()>) -> Result<Result<(), ()>, ()> {
         let async_cx = AsyncCx {
             current_suspend: self.current_suspend,
