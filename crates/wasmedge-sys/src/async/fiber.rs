@@ -57,6 +57,16 @@ impl<'a> FiberFuture<'a> {
 
         Ok(slot.unwrap())
     }
+
+    /// This is a helper function to call `resume` on the underlying
+    /// fiber while correctly managing thread-local data.
+    fn resume(&mut self, val: Result<(), ()>) -> Result<Result<(), ()>, ()> {
+        let async_cx = AsyncCx {
+            current_suspend: self.current_suspend,
+            current_poll_cx: self.current_poll_cx,
+        };
+        ASYNC_CX.set(&async_cx, || self.fiber.resume(val))
+    }
 }
 impl<'a> Future for FiberFuture<'a> {
     type Output = Result<(), ()>;
@@ -66,20 +76,161 @@ impl<'a> Future for FiberFuture<'a> {
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
-            let async_cx = AsyncCx {
-                current_suspend: self.current_suspend,
-                current_poll_cx: self.current_poll_cx,
-            };
-            ASYNC_CX.set(&async_cx, || match self.as_ref().fiber.resume(Ok(())) {
+            match self.resume(Ok(())) {
                 Ok(ret) => Poll::Ready(ret),
                 Err(_) => Poll::Pending,
-            })
+            }
         }
     }
 }
 unsafe impl Send for FiberFuture<'_> {}
 
 type FiberSuspend = Suspend<Result<(), ()>, (), Result<(), ()>>;
+
+impl Drop for FiberFuture<'_> {
+    fn drop(&mut self) {
+        if !self.fiber.done() {
+            let result = self.resume(Err(()));
+            // This resumption with an error should always complete the
+            // fiber. While it's technically possible for host code to catch
+            // the trap and re-resume, we'd ideally like to signal that to
+            // callers that they shouldn't be doing that.
+            debug_assert!(result.is_ok());
+        }
+    }
+}
+
+/// Defines a TimeoutFiberFuture.
+pub(crate) struct TimeoutFiberFuture<'a> {
+    fiber: Fiber<'a, Result<(), ()>, (), Result<(), ()>>,
+    current_suspend: *mut *const Suspend<Result<(), ()>, (), Result<(), ()>>,
+    current_poll_cx: *mut *mut Context<'static>,
+    timeout_sec: u64,
+}
+
+impl<'a> TimeoutFiberFuture<'a> {
+    /// Create a fiber to execute the given function.
+    ///
+    /// # Arguments
+    ///
+    /// * `func` - The function to execute.
+    ///
+    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    ///
+    /// # Error
+    ///
+    /// If fail to create the fiber stack or the fiber fail to resume, then an error is returned.
+    pub(crate) async fn on_fiber<R>(
+        async_state: &AsyncState,
+        func: impl FnOnce() -> R + Send,
+        timeout_sec: u64,
+    ) -> Result<R, ()> {
+        let mut slot = None;
+
+        let future = {
+            let current_poll_cx = async_state.current_poll_cx.get();
+            let current_suspend = async_state.current_suspend.get();
+
+            let stack = FiberStack::new(2 << 20).map_err(|_e| ())?;
+            let slot = &mut slot;
+            let fiber = Fiber::new(stack, move |keep_going, suspend| {
+                keep_going?;
+
+                unsafe {
+                    let _reset = Reset(current_suspend, *current_suspend);
+                    *current_suspend = suspend;
+                    *slot = Some(func());
+                    Ok(())
+                }
+            })
+            .map_err(|_e| ())?;
+
+            TimeoutFiberFuture {
+                fiber,
+                current_suspend,
+                current_poll_cx,
+                timeout_sec,
+            }
+        };
+
+        future.await?;
+
+        Ok(slot.unwrap())
+    }
+}
+
+impl<'a> Future for TimeoutFiberFuture<'a> {
+    type Output = Result<(), ()>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        unsafe {
+            crate::executor::init_signal_listen();
+
+            let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
+            *self.current_poll_cx =
+                std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
+            let async_cx = AsyncCx {
+                current_suspend: self.current_suspend,
+                current_poll_cx: self.current_poll_cx,
+            };
+
+            ASYNC_CX.set(&async_cx, || {
+                let mut self_thread = libc::pthread_self();
+                let mut timerid: libc::timer_t = std::mem::zeroed();
+                let mut sev: libc::sigevent = std::mem::zeroed();
+                sev.sigev_notify = libc::SIGEV_SIGNAL;
+                sev.sigev_signo = crate::executor::timeout_signo();
+                sev.sigev_value.sival_ptr = &mut self_thread as *mut _ as *mut libc::c_void;
+
+                if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
+                    return Poll::Ready(Err(()));
+                }
+                let mut value: libc::itimerspec = std::mem::zeroed();
+                value.it_value.tv_sec = self.timeout_sec as i64;
+                if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
+                    libc::timer_delete(timerid);
+                    return Poll::Ready(Err(()));
+                }
+
+                let mut env: setjmp::sigjmp_buf = std::mem::zeroed();
+                let jmp_state = crate::executor::JmpState {
+                    sigjmp_buf: &mut env,
+                };
+
+                crate::executor::JMP_BUF.set(&jmp_state, || {
+                    if setjmp::sigsetjmp(&mut env, 1) == 0 {
+                        let r = match self.as_ref().fiber.resume(Ok(())) {
+                            Ok(ret) => Poll::Ready(ret),
+                            Err(_) => Poll::Pending,
+                        };
+                        libc::timer_delete(timerid);
+                        r
+                    } else {
+                        libc::timer_delete(timerid);
+                        Poll::Ready(Err(()))
+                    }
+                })
+            })
+        }
+    }
+}
+unsafe impl Send for TimeoutFiberFuture<'_> {}
+
+impl Drop for TimeoutFiberFuture<'_> {
+    fn drop(&mut self) {
+        if !self.fiber.done() {
+            let async_cx = AsyncCx {
+                current_suspend: self.current_suspend,
+                current_poll_cx: self.current_poll_cx,
+            };
+            let result = ASYNC_CX.set(&async_cx, || self.fiber.resume(Err(())));
+            // This resumption with an error should always complete the
+            // fiber. While it's technically possible for host code to catch
+            // the trap and re-resume, we'd ideally like to signal that to
+            // callers that they shouldn't be doing that.
+            debug_assert!(result.is_ok());
+        }
+    }
+}
 
 scoped_tls::scoped_thread_local!(static ASYNC_CX: AsyncCx);
 

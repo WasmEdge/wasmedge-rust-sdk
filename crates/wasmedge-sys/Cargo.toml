@@ -26,8 +26,10 @@ parking_lot.workspace = true
 rand = "0.8.4"
 cfg-if.workspace = true
 
+
 [target.'cfg(target_os = "linux")'.dependencies]
 async-wasi = { workspace = true, optional = true }
+setjmp = "0.1"
 
 [build-dependencies]
 bindgen = { version = "0.65", default-features = false, features = ["runtime"] }

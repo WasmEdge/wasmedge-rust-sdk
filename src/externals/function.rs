@@ -243,6 +243,30 @@ impl Func {
         executor.run_func(self, args)
     }
 
+    /// Runs this host function with a timeout setting.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The [Executor](crate::Executor) instance.
+    ///
+    /// * `args` - The arguments passed to the host function.
+    ///
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the host function, then an error is returned.
+    #[cfg(target_os = "linux")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+    pub fn run_with_timeout(
+        &self,
+        executor: &Executor,
+        args: impl IntoIterator<Item = WasmValue>,
+        timeout: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        executor.run_func_with_timeout(self, args, timeout)
+    }
+
     /// Asynchronously runs this host function and returns the result.
     ///
     /// # Arguments
@@ -263,6 +287,33 @@ impl Func {
         args: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         executor.run_func_async(async_state, self, args).await
+    }
+
+    /// Asynchronously runs this host function with a timeout setting.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The [Executor](crate::Executor) instance.
+    ///
+    /// * `args` - The arguments passed to the host function.
+    ///
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    ///
+    /// # Error
+    ///
+    /// If fail to run the host function, then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+    pub async fn run_async_with_timeout(
+        &self,
+        async_state: &AsyncState,
+        executor: &Executor,
+        args: impl IntoIterator<Item = WasmValue> + Send,
+        timeout: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        executor
+            .run_func_async_with_timeout(async_state, self, args, timeout)
+            .await
     }
 }
 

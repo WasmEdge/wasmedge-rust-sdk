@@ -134,7 +134,7 @@ extern "C" fn wrap_async_fn(
             let result = match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(ret)) => Ok(ret),
                 Ok(Err(err)) => Err(err),
-                Err(_err) => Err(HostFuncError::User(0x87)),
+                Err(_err) => Err(HostFuncError::Runtime(0x07)),
             };
 
             // parse result

@@ -2,15 +2,84 @@
 
 use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::fiber::{AsyncState, FiberFuture};
+use crate::r#async::fiber::{AsyncState, FiberFuture, TimeoutFiberFuture};
 use crate::{
     instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
     Function, ImportModule, Instance, Module, Statistics, Store, WasiInstance, WasmEdgeResult,
     WasmValue,
 };
 use parking_lot::Mutex;
+#[cfg(target_os = "linux")]
+use std::os::raw::c_void;
 use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
+
+#[cfg(target_os = "linux")]
+pub(crate) struct JmpState {
+    pub(crate) sigjmp_buf: *mut setjmp::sigjmp_buf,
+}
+
+#[cfg(target_os = "linux")]
+scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
+    if let Some(info) = info.as_mut() {
+        let si_value = info.si_value();
+        let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
+        let dist_pthread = *value;
+        let self_pthread = libc::pthread_self();
+        if self_pthread == dist_pthread {
+            if JMP_BUF.is_set() {
+                let env = JMP_BUF.with(|s| s.sigjmp_buf);
+                setjmp::siglongjmp(env, 1);
+            }
+        } else {
+            libc::pthread_sigqueue(dist_pthread, sig, si_value);
+        }
+    }
+}
+#[cfg(target_os = "linux")]
+unsafe extern "C" fn pre_host_func(_: *mut c_void) {
+    use libc::SIG_BLOCK;
+
+    let mut set = std::mem::zeroed();
+    libc::sigemptyset(&mut set);
+    libc::sigaddset(&mut set, timeout_signo());
+    libc::pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut());
+}
+#[cfg(target_os = "linux")]
+unsafe extern "C" fn post_host_func(_: *mut c_void) {
+    use libc::SIG_UNBLOCK;
+
+    let mut set = std::mem::zeroed();
+    libc::sigemptyset(&mut set);
+    libc::sigaddset(&mut set, timeout_signo());
+    libc::pthread_sigmask(SIG_UNBLOCK, &set, std::ptr::null_mut());
+}
+
+#[inline]
+#[cfg(target_os = "linux")]
+pub(crate) fn timeout_signo() -> i32 {
+    option_env!("SIG_OFFSET")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+        + libc::SIGRTMIN()
+}
+
+#[cfg(target_os = "linux")]
+static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
+
+#[inline(always)]
+#[cfg(target_os = "linux")]
+pub(crate) unsafe fn init_signal_listen() {
+    INIT_SIGNAL_LISTEN.call_once(|| {
+        let mut new_act: libc::sigaction = std::mem::zeroed();
+        new_act.sa_sigaction = sync_timeout as usize;
+        new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
+        libc::sigaction(timeout_signo(), &new_act, std::ptr::null_mut());
+    });
+}
 
 /// Defines an execution environment for both pure WASM and compiled WASM.
 #[derive(Debug, Clone)]
@@ -50,10 +119,26 @@ impl Executor {
 
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ExecutorCreate)),
-            false => Ok(Executor {
-                inner: Arc::new(InnerExecutor(ctx)),
-                registered: false,
-            }),
+            false => {
+                #[cfg(target_os = "linux")]
+                unsafe {
+                    ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
+                        ctx,
+                        std::ptr::null_mut(),
+                        Some(pre_host_func),
+                    );
+                    ffi::WasmEdge_ExecutorExperimentalRegisterPostHostFunction(
+                        ctx,
+                        std::ptr::null_mut(),
+                        Some(post_host_func),
+                    );
+                }
+
+                Ok(Executor {
+                    inner: Arc::new(InnerExecutor(ctx)),
+                    registered: false,
+                })
+            }
         }
     }
 
@@ -266,6 +351,85 @@ impl Executor {
         Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
     }
 
+    /// Run a host function instance and return the results or timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `func` - The function instance to run.
+    ///
+    /// * `params` - The arguments to pass to the function.
+    ///
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    ///
+    /// # Errors
+    ///
+    /// If fail to run the host function, then an error is returned.
+    #[cfg(target_os = "linux")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+    pub fn call_func_with_timeout(
+        &self,
+        func: &Function,
+        params: impl IntoIterator<Item = WasmValue>,
+        timeout: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        use wasmedge_types::error;
+
+        let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
+        // get the length of the function's returns
+        let func_ty = func.ty()?;
+        let returns_len = func_ty.returns_len();
+        let mut returns = Vec::with_capacity(returns_len as usize);
+
+        unsafe {
+            init_signal_listen();
+            let mut self_thread = libc::pthread_self();
+            let mut sigjmp_buf: setjmp::sigjmp_buf = std::mem::zeroed();
+            let env = &mut sigjmp_buf as *mut _;
+
+            let mut timerid: libc::timer_t = std::mem::zeroed();
+            let mut sev: libc::sigevent = std::mem::zeroed();
+            sev.sigev_notify = libc::SIGEV_SIGNAL;
+            sev.sigev_signo = timeout_signo();
+            sev.sigev_value.sival_ptr = &mut self_thread as *mut _ as *mut libc::c_void;
+
+            if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
+                return Err(Box::new(error::WasmEdgeError::Operation(
+                    "timer_create error".into(),
+                )));
+            }
+            let mut value: libc::itimerspec = std::mem::zeroed();
+            value.it_value.tv_sec = timeout as i64;
+            if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
+                libc::timer_delete(timerid);
+                return Err(Box::new(error::WasmEdgeError::Operation(
+                    "timer_settime error".into(),
+                )));
+            }
+            let jmp_state = JmpState { sigjmp_buf: env };
+
+            JMP_BUF.set(&jmp_state, || {
+                if setjmp::sigsetjmp(env, 1) == 0 {
+                    let r = check(ffi::WasmEdge_ExecutorInvoke(
+                        self.inner.0,
+                        func.inner.lock().0 as *const _,
+                        raw_params.as_ptr(),
+                        raw_params.len() as u32,
+                        returns.as_mut_ptr(),
+                        returns_len,
+                    ));
+                    libc::timer_delete(timerid);
+                    r
+                } else {
+                    libc::timer_delete(timerid);
+                    Err(Box::new(error::WasmEdgeError::Operation("timeout".into())))
+                }
+            })?;
+
+            returns.set_len(returns_len as usize);
+            Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
+        }
+    }
+
     /// Asynchronously runs a host function instance and returns the results.
     ///
     /// # Arguments
@@ -288,6 +452,35 @@ impl Executor {
         FiberFuture::on_fiber(async_state, || self.call_func(func, params))
             .await
             .unwrap()
+    }
+
+    /// Asynchronously runs a host function instance with a timeout setting
+    ///
+    /// # Arguments
+    ///
+    /// * `func` - The function instance to run.
+    ///
+    /// * `params` - The arguments to pass to the function.
+    ///
+    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    ///
+    /// # Errors
+    ///
+    /// If fail to run the host function, then an error is returned.
+    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+    #[cfg(feature = "async")]
+    pub async fn call_func_async_with_timeout(
+        &self,
+        async_state: &AsyncState,
+        func: &Function,
+        params: impl IntoIterator<Item = WasmValue> + Send,
+        timeout: u64,
+    ) -> WasmEdgeResult<Vec<WasmValue>> {
+        use wasmedge_types::error;
+        TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), timeout)
+            .await
+            .map_err(|_| Box::new(error::WasmEdgeError::Operation("timeout".into())))?
     }
 
     /// Runs a host function reference instance and returns the results.
