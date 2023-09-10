@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2023-09-10
+
+### ⛰️  Features
+
+- New `timeout` APIs ([#61](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/61))
+  - Add `Vm::run_func_with_timeout` and `Vm::run_func_async_with_timeout`. These APIs are used to run a host function with a timeout
+  - Add `Executor::run_func_with_timeout` and `Executor::run_func_async_with_timeout`. These APIs are used to run a host function with a timeout
+  - Add `Func::run_with_timeout` and `Func::run_async_with_timeout`. These APIs are used to run a host function with a timeout
+- New API `Store::register_plugin_module`. This API is used to register a `PluginInstance`` into a store instance ([#53](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/53))
+- New type alias `PluginInstance` ([#53](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/53))
+
+### 🚜 Refactor
+
+- [BREAKING] Merge `async` mod into `wasi` mod ([#55](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/55))
+- [BREAKING] Update the return type of `PluginManager::find` from `Option<Plugin>` to `WasmEdgeResult<Plugin>` ([#53](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/53))
+- [BREAKING] Update the return type of `Plugin::mod_instance` from `Option<Instance>` to `WasmEdgeResult<PluginInstance>` ([#53](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/53))
+
+### 📚 Documentation
+
+- Update WasmEdge RustSDK API Document ([#55](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/55))
+
 ## [0.11.2] - 2023-08-07
 
 ### ⛰️  Features
