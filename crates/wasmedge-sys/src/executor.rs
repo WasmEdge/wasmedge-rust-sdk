@@ -421,7 +421,7 @@ impl Executor {
                     r
                 } else {
                     libc::timer_delete(timerid);
-                    Err(Box::new(error::WasmEdgeError::Operation("timeout".into())))
+                    Err(Box::new(error::WasmEdgeError::ExecuteTimeout))
                 }
             })?;
 
@@ -480,7 +480,7 @@ impl Executor {
         use wasmedge_types::error;
         TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), timeout)
             .await
-            .map_err(|_| Box::new(error::WasmEdgeError::Operation("timeout".into())))?
+            .map_err(|_| Box::new(error::WasmEdgeError::ExecuteTimeout))?
     }
 
     /// Runs a host function reference instance and returns the results.
