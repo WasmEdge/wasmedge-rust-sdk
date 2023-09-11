@@ -9,7 +9,7 @@ use build_standalone::*;
 
 use crate::build_paths::AsPath;
 
-const WASMEDGE_RELEASE_VERSION: &str = "0.13.3";
+const WASMEDGE_RELEASE_VERSION: &str = "0.13.4";
 const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = phf_map! {
     // The key is: {os}/{arch}[/{libc}][/static]
     //  * The libc abi is only added on linux.
