@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1] - 2023-09-14
+
+### 🐛 Bug Fixes
+
+- *(wasmedge-sys)* Update the `sha256sum` of WasmEdge 0.13.4 ([#66](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/66))
+
 ## [0.12.0] - 2023-09-10
 
 ### ⛰️  Features
