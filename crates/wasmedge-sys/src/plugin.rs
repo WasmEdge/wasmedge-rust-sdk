@@ -57,7 +57,7 @@ impl PluginManager {
             .collect();
         let c_strs: Vec<*const i8> = c_args.iter().map(|x| x.as_ptr()).collect();
         let len = c_strs.len() as u32;
-        unsafe { ffi::WasmEdge_ModuleInstanceInitWASINN(c_strs.as_ptr(), len) }
+        unsafe { ffi::WasmEdge_PluginInitWASINN(c_strs.as_ptr(), len) }
     }
 
     /// Returns the count of loaded plugins.
