@@ -501,7 +501,7 @@ impl Vm {
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(target_env = "musl")))]
     pub fn run_func_with_timeout(
         &self,
         mod_name: Option<&str>,
@@ -594,8 +594,11 @@ impl Vm {
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+    #[cfg(all(feature = "async", target_os = "linux", not(target_env = "musl")))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "async", target_os = "linux", not(target_env = "musl"))))
+    )]
     pub async fn run_func_async_with_timeout(
         &self,
         async_state: &AsyncState,
