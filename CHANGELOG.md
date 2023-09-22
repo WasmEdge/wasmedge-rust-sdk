@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.2] - 2023-09-22
+
+### 🚜 Refactor
+
+- Disable `timeout` related APIs for the `musl` environment ([#71](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/71))
+
 ## [0.12.1] - 2023-09-14
 
 ### 🐛 Bug Fixes
