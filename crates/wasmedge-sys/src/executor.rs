@@ -2,7 +2,11 @@
 
 use super::ffi;
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::fiber::{AsyncState, FiberFuture, TimeoutFiberFuture};
+use crate::r#async::fiber::{AsyncState, FiberFuture};
+
+#[cfg(all(feature = "async", target_os = "linux", not(target_env = "musl")))]
+use crate::r#async::fiber::TimeoutFiberFuture;
+
 use crate::{
     instance::{function::AsFunc, module::InnerInstance},
     store::Store,
@@ -10,20 +14,19 @@ use crate::{
     utils::check,
     AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
 };
-
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 use std::os::raw::c_void;
 use wasmedge_types::error::WasmEdgeError;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 pub(crate) struct JmpState {
     pub(crate) sigjmp_buf: *mut setjmp::sigjmp_buf,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
     if let Some(info) = info.as_mut() {
         let si_value = info.si_value();
@@ -40,7 +43,7 @@ unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
         }
     }
 }
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn pre_host_func(_: *mut c_void) {
     use libc::SIG_BLOCK;
 
@@ -49,7 +52,7 @@ unsafe extern "C" fn pre_host_func(_: *mut c_void) {
     libc::sigaddset(&mut set, timeout_signo());
     libc::pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut());
 }
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn post_host_func(_: *mut c_void) {
     use libc::SIG_UNBLOCK;
 
@@ -60,7 +63,7 @@ unsafe extern "C" fn post_host_func(_: *mut c_void) {
 }
 
 #[inline]
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 pub(crate) fn timeout_signo() -> i32 {
     option_env!("SIG_OFFSET")
         .and_then(|s| s.parse().ok())
@@ -68,11 +71,11 @@ pub(crate) fn timeout_signo() -> i32 {
         + libc::SIGRTMIN()
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
 
 #[inline(always)]
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 pub(crate) unsafe fn init_signal_listen() {
     INIT_SIGNAL_LISTEN.call_once(|| {
         let mut new_act: libc::sigaction = std::mem::zeroed();
@@ -119,7 +122,7 @@ impl Executor {
         if ctx.is_null() {
             Err(Box::new(WasmEdgeError::ExecutorCreate))
         } else {
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", not(target_env = "musl")))]
             unsafe {
                 ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
                     ctx,
@@ -195,8 +198,8 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
-    #[cfg(target_os = "linux")]
-    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+    #[cfg(all(target_os = "linux", not(target_env = "musl")))]
+    #[cfg_attr(docsrs, doc(cfg(all(target_os = "linux", not(target_env = "musl")))))]
     pub fn call_func_with_timeout(
         &self,
         func: &mut Function,
@@ -305,8 +308,11 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function, then an error is returned.
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-    #[cfg(all(feature = "async", target_os = "linux"))]
+    #[cfg(all(feature = "async", target_os = "linux", not(target_env = "musl")))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "async", target_os = "linux", not(target_env = "musl"))))
+    )]
     pub async fn call_func_async_with_timeout(
         &mut self,
         async_state: &AsyncState,
