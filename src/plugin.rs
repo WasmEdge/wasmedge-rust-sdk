@@ -46,11 +46,11 @@ impl PluginManager {
         }
     }
 
-    // #[cfg(feature = "wasi_nn")]
-    // #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-    // pub fn nn_preload(preloads: Vec<&str>) {
-    //     sys::plugin::PluginManager::nn_preload(preloads);
-    // }
+    #[cfg(feature = "wasi_nn")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+    pub fn nn_preload(preloads: Vec<&str>) {
+        sys::plugin::PluginManager::nn_preload(preloads);
+    }
 
     /// Returns the count of loaded plugins.
     pub fn count() -> u32 {
