@@ -1,16 +1,16 @@
 //! Defines WasmEdge VmDock and Param types.
 
-use crate::{error::WasmEdgeError, params, Memory, Vm, WasmEdgeResult, WasmVal, WasmValue};
+use crate::{error::WasmEdgeError, params, Vm, WasmEdgeResult, WasmVal, WasmValue};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::any::Any;
 
 /// Extends a [Vm](crate::Vm) instance by supporting function arguments of Rust built-in types.
 #[derive(Debug)]
-pub struct VmDock {
-    pub(crate) vm: Box<Vm>, // Can't use Arc because vm can be get_mut after cloned for hostfunc
+pub struct VmDock<VM> {
+    pub(crate) vm: VM, // Can't use Arc because vm can be get_mut after cloned for hostfunc
 }
-impl VmDock {
+impl VmDock<Vm<'_>> {
     /// Creates a new [VmDock] to be associated with the given [Vm](crate::Vm).
     ///
     /// # Arguments
@@ -251,8 +251,6 @@ impl VmDock {
         self.vm.run_func(mod_name, "deallocate", args)
     }
 }
-unsafe impl Send for VmDock {}
-unsafe impl Sync for VmDock {}
 
 /// Defines a type container that wraps a value of Rust built-in type.
 #[derive(Debug)]

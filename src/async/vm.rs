@@ -1,14 +1,18 @@
 //! Defines WasmEdge Vm struct.
 use crate::{
     error::{VmError, WasmEdgeError},
-    ImportObject, Instance, Module, Store, WasmEdgeResult, WasmValue,
+    vm::SyncInst,
+    Instance, Module, Store, WasmEdgeResult, WasmValue,
 };
-use sys::AsInstance;
+use sys::{r#async::fiber::AsyncState, AsInstance};
 use wasmedge_sys as sys;
 
-pub trait SyncInst: AsInstance {}
-impl<T> SyncInst for ImportObject<T> {}
-impl SyncInst for Instance {}
+use super::import::ImportObject;
+
+pub trait AsyncInst: AsInstance {}
+
+impl<T: Send> AsyncInst for ImportObject<T> {}
+impl<T: Send + SyncInst> AsyncInst for T {}
 
 /// A [Vm] defines a virtual environment for managing WebAssembly programs.
 ///
@@ -75,16 +79,18 @@ impl SyncInst for Instance {}
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Vm<'inst, T: ?Sized + SyncInst> {
+pub struct Vm<'inst, T: ?Sized + Send + AsyncInst> {
     store: Store<'inst, T>,
     active_instance: Option<sys::Instance>,
+    async_state: AsyncState,
 }
-impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
+impl<'inst, T: ?Sized + Send + AsyncInst> Vm<'inst, T> {
     pub fn new(store: Store<'inst, T>) -> Self {
         // create a Vm instance
-        Vm {
+        Self {
             store,
             active_instance: None,
+            async_state: AsyncState::new(),
         }
     }
 
@@ -130,11 +136,11 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
-    pub fn run_func(
+    pub async fn run_func(
         &mut self,
         mod_name: Option<&str>,
         func_name: impl AsRef<str>,
-        args: impl IntoIterator<Item = WasmValue>,
+        args: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         let (mut func, executor) = match mod_name {
             Some(mod_name) => {
@@ -164,7 +170,9 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
                 )
             }
         };
-        executor.call_func(&mut func, args)
+        executor
+            .call_func_async(&self.async_state, &mut func, args)
+            .await
     }
 
     /// Runs an exported wasm function in a (named or active) [module instance](crate::Instance) with a timeout setting
@@ -183,11 +191,11 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
     ///
     /// If fail to run the wasm function, then an error is returned.
     #[cfg(target_os = "linux")]
-    pub fn run_func_with_timeout(
+    pub async fn run_func_with_timeout(
         &mut self,
         mod_name: Option<&str>,
         func_name: impl AsRef<str>,
-        args: impl IntoIterator<Item = WasmValue>,
+        args: impl IntoIterator<Item = WasmValue> + Send,
         timeout: u64,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         let (mut func, executor) = match mod_name {
@@ -218,7 +226,9 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
                 )
             }
         };
-        executor.call_func_with_timeout(&mut func, args, timeout)
+        executor
+            .call_func_async_with_timeout(&self.async_state, &mut func, args, timeout)
+            .await
     }
 
     /// Returns a reference to the internal [store](crate::Store) from this vm.

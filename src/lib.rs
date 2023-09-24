@@ -86,15 +86,14 @@
 //!
 
 #[doc(hidden)]
-pub mod caller;
-#[doc(hidden)]
 #[cfg(feature = "aot")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 mod compiler;
 pub mod config;
+
+#[cfg(feature = "dock")]
 pub mod dock;
-mod executor;
-mod externals;
+
 mod import;
 mod instance;
 #[doc(hidden)]
@@ -109,20 +108,18 @@ pub mod types;
 pub mod utils;
 #[doc(hidden)]
 pub mod vm;
-pub mod wasi;
 
-pub use caller::Caller;
+#[cfg(all(feature = "async", target_os = "linux"))]
+pub mod r#async;
+
 #[doc(inline)]
 #[cfg(feature = "aot")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 pub use compiler::Compiler;
+
 #[doc(inline)]
-pub use executor::Executor;
-#[doc(inline)]
-pub use externals::{Func, FuncRef, FuncTypeBuilder, Global, Memory, Table};
-#[doc(inline)]
-pub use import::{ImportObject, ImportObjectBuilder};
-pub use instance::{AsInstance, Instance};
+pub use import::{AsInstance, ImportObject, ImportObjectBuilder};
+pub use instance::Instance;
 #[doc(inline)]
 pub use io::{WasmVal, WasmValType, WasmValTypeList};
 #[doc(inline)]
@@ -134,7 +131,7 @@ pub use statistics::Statistics;
 #[doc(inline)]
 pub use store::Store;
 #[doc(inline)]
-pub use vm::{Vm, VmBuilder};
+pub use vm::Vm;
 
 pub use wasmedge_types::{
     error, wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType,
@@ -156,39 +153,6 @@ pub type NeverType = wasmedge_types::NeverType;
 #[doc(hidden)]
 pub type CallingFrame = wasmedge_sys::CallingFrame;
 
-/// The object that is used to perform a [host function](crate::Func) is required to implement this trait.
-pub trait Engine {
-    /// Runs a host function instance and returns the results.
-    ///
-    /// # Arguments
-    ///
-    /// * `func` - The function instance to run.
-    ///
-    /// * `params` - The arguments to pass to the function.
-    ///
-    /// # Errors
-    ///
-    /// If fail to run the host function, then an error is returned.
-    fn run_func(
-        &self,
-        func: &Func,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>>;
-
-    /// Runs a host function instance by calling its reference and returns the results.
-    ///
-    /// # Arguments
-    ///
-    /// * `func_ref` - A reference to the target host function instance.
-    ///
-    /// * `params` - The arguments to pass to the function.
-    ///
-    /// # Errors
-    ///
-    /// If fail to run the host function, then an error is returned.
-    fn run_func_ref(
-        &self,
-        func_ref: &FuncRef,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>>;
+pub mod wasi {
+    pub use wasmedge_sys::WasiModule;
 }

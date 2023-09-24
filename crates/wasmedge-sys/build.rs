@@ -134,7 +134,7 @@ fn main() {
         bindgen::builder()
             .header(header)
             .clang_arg(format!("-I{inc_dir}"))
-            .prepend_enum_name(false) // The API already prepends the name.
+            .prepend_enum_name(false)
             .dynamic_link_require_all(true)
             .parse_callbacks(Box::new(bindgen::CargoCallbacks))
             .generate()

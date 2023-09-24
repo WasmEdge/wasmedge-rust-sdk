@@ -84,6 +84,7 @@ impl<'a> Future for FiberFuture<'a> {
     }
 }
 unsafe impl Send for FiberFuture<'_> {}
+unsafe impl Sync for FiberFuture<'_> {}
 
 type FiberSuspend = Suspend<Result<(), ()>, (), Result<(), ()>>;
 
@@ -214,6 +215,7 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
     }
 }
 unsafe impl Send for TimeoutFiberFuture<'_> {}
+unsafe impl Sync for TimeoutFiberFuture<'_> {}
 
 impl Drop for TimeoutFiberFuture<'_> {
     fn drop(&mut self) {

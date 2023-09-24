@@ -304,6 +304,8 @@ pub enum CoreError {
 /// The error type for the common errors from WasmEdge Core.
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 pub enum CoreCommonError {
+    #[error("process terminated")]
+    Terminated,
     #[error("generic runtime error")]
     RuntimeError,
     #[error("cost limit exceeded")]

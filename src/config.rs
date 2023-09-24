@@ -1,5 +1,7 @@
 //! Defines the structs used to construct configurations.
 
+use std::sync::Arc;
+
 use crate::WasmEdgeResult;
 #[cfg(feature = "aot")]
 use crate::{CompilerOptimizationLevel, CompilerOutputFormat};
@@ -13,7 +15,6 @@ pub struct ConfigBuilder {
     #[cfg(feature = "aot")]
     compiler_config: Option<CompilerConfigOptions>,
     runtime_config: Option<RuntimeConfigOptions>,
-    host_config: Option<HostRegistrationConfigOptions>,
 }
 impl ConfigBuilder {
     /// Creates a new [ConfigBuilder] with the given [CommonConfigOptions] setting.
@@ -24,7 +25,6 @@ impl ConfigBuilder {
             #[cfg(feature = "aot")]
             compiler_config: None,
             runtime_config: None,
-            host_config: None,
         }
     }
 
@@ -66,18 +66,6 @@ impl ConfigBuilder {
         }
     }
 
-    /// Sets the [HostRegistrationConfigOptions] for the [ConfigBuilder].
-    ///
-    /// # Argument
-    ///
-    /// - `options` specifies the [HostRegistrationConfigOptions] settings to set.
-    pub fn with_host_registration_config(self, options: HostRegistrationConfigOptions) -> Self {
-        Self {
-            host_config: Some(options),
-            ..self
-        }
-    }
-
     /// Creates a new [Config] from the [ConfigBuilder].
     ///
     /// # Errors
@@ -114,11 +102,10 @@ impl ConfigBuilder {
         if let Some(runtim_config) = self.runtime_config {
             inner.set_max_memory_pages(runtim_config.max_memory_pages);
         }
-        if let Some(host_config) = self.host_config {
-            inner.wasi(host_config.wasi);
-        }
 
-        Ok(Config { inner })
+        Ok(Config {
+            inner: Arc::new(inner),
+        })
     }
 }
 
@@ -162,14 +149,9 @@ impl ConfigBuilder {
 /// ```
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub(crate) inner: sys::Config,
+    pub(crate) inner: Arc<sys::Config>,
 }
 impl Config {
-    /// Checks if the host registration wasi option turns on or not.
-    pub fn wasi_enabled(&self) -> bool {
-        self.inner.wasi_enabled()
-    }
-
     /// Returns the number of the memory pages available.
     pub fn max_memory_pages(&self) -> u32 {
         self.inner.get_max_memory_pages()
@@ -737,31 +719,6 @@ impl StatisticsConfigOptions {
             measure_time: enable,
             ..self
         }
-    }
-}
-
-/// Defines the host registration configuration options.
-///
-/// [HostRegistrationConfigOptions] is used to set the host registration configuration options, which are
-///
-///   - `Wasi` turns on the `WASI` support.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct HostRegistrationConfigOptions {
-    wasi: bool,
-}
-impl HostRegistrationConfigOptions {
-    /// Creates a new instance of [HostRegistrationConfigOptions].
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Enables or disables host registration wasi.
-    ///
-    /// # Argument
-    ///
-    /// - `enable` specifies if the option turns on or not.
-    pub fn wasi(self, enable: bool) -> Self {
-        Self { wasi: enable }
     }
 }
 

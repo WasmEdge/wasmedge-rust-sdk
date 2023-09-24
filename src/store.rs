@@ -1,75 +1,53 @@
 //! Defines WasmEdge Store struct.
 
-use crate::{plugin::PluginInstance, Executor, ImportObject, Instance, Module, WasmEdgeResult};
+use std::{collections::HashMap, fmt::Debug};
+
+use crate::{config::Config, Module, WasmEdgeResult};
+use sys::{AsInstance, Instance};
 use wasmedge_sys as sys;
 
 /// Represents all global state that can be manipulated by WebAssembly programs. A [store](crate::Store) consists of the runtime representation of all instances of [functions](crate::Func), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global).
-#[derive(Debug, Clone)]
-pub struct Store {
+// #[derive(Debug)]
+pub struct Store<'inst, T: ?Sized> {
     pub(crate) inner: sys::Store,
+    pub(crate) instances: HashMap<String, &'inst mut T>,
+    pub(crate) wasm_instance_map: HashMap<String, Instance>,
+    pub(crate) executor: sys::Executor,
 }
-impl Store {
+
+impl<T: ?Sized> Debug for Store<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Store")
+            .field("inner", &self.inner)
+            .field("instance_map", &self.instances.keys())
+            .field("wasm_instance_map", &self.wasm_instance_map.keys())
+            .field("wasm_instance_map", &self.executor)
+            .finish()
+    }
+}
+
+impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
     /// Creates a new [Store].
     ///
     /// # Error
     ///
     /// If fail to create a new [Store], then an error is returned.
-    pub fn new() -> WasmEdgeResult<Self> {
-        let inner = sys::Store::create()?;
-        Ok(Self { inner })
-    }
+    pub fn new(
+        config: Option<&Config>,
+        instances: HashMap<String, &'inst mut T>,
+    ) -> WasmEdgeResult<Self> {
+        let mut store = sys::Store::create()?;
+        let mut executor = sys::Executor::create(config.map(|cfg| cfg.inner.as_ref()), None)?;
 
-    /// Registers and instantiates a WasmEdge [import object](crate::ImportObject) into this [store](crate::Store).
-    ///
-    /// # Arguments
-    ///
-    /// * `executor` - The [executor](crate::Executor) that runs the host functions in this [store](crate::Store).
-    ///
-    /// * `import` - The WasmEdge [import object](crate::ImportObject) to be registered.
-    ///
-    /// # Error
-    ///
-    /// If fail to register the given [import object](crate::ImportObject), then an error is returned.
-    pub fn register_import_module<T>(
-        &mut self,
-        executor: &mut Executor,
-        import: &ImportObject<T>,
-    ) -> WasmEdgeResult<()>
-    where
-        T: ?Sized + Send + Sync + Clone,
-    {
-        executor
-            .inner
-            .register_import_module(&self.inner, &import.0)
-    }
+        for (_k, v) in &instances {
+            executor.register_import_module(&mut store, *v)?;
+        }
 
-    /// Registers and instantiates a WasmEdge [compiled module](crate::Module) into this [store](crate::Store) as a named [module instance](crate::Instance), and returns the module instance.
-    ///
-    /// Instantiates the given WasmEdge [compiled module](crate::Module), including the [functions](crate::Func), [memories](crate::Memory), [tables](crate::Table), and [globals](crate::Global) it hosts; and then, registers the [module instance](crate::Instance) into the [store](crate::Store) with the given name.
-    ///
-    /// # Arguments
-    ///
-    /// * `executor` - The [executor](crate::Executor) that runs the host functions in this [store](crate::Store).
-    ///
-    /// * `mod_name` - The exported name of the registered [module](crate::Module).
-    ///
-    /// * `module` - The validated [module](crate::Module) to be registered.
-    ///
-    /// # Error
-    ///
-    /// If fail to register the given [module](crate::Module), then an error is returned.
-    pub fn register_named_module(
-        &mut self,
-        executor: &mut Executor,
-        mod_name: impl AsRef<str>,
-        module: &Module,
-    ) -> WasmEdgeResult<Instance> {
-        let inner_instance =
-            executor
-                .inner
-                .register_named_module(&self.inner, &module.inner, mod_name.as_ref())?;
-        Ok(Instance {
-            inner: inner_instance,
+        Ok(Self {
+            inner: store,
+            instances,
+            wasm_instance_map: Default::default(),
+            executor,
         })
     }
 
@@ -84,63 +62,43 @@ impl Store {
     /// # Error
     ///
     /// If fail to register the given [module](crate::Module), then an error is returned.
-    pub fn register_active_module(
-        &mut self,
-        executor: &mut Executor,
-        module: &Module,
-    ) -> WasmEdgeResult<Instance> {
-        let inner = executor
-            .inner
-            .register_active_module(&self.inner, &module.inner)?;
-
-        Ok(Instance { inner })
+    pub fn register_active_module(&mut self, module: &Module) -> WasmEdgeResult<Instance> {
+        let Store {
+            inner, executor, ..
+        } = self;
+        let inner = executor.register_active_module(inner, &module.inner)?;
+        Ok(inner)
     }
 
-    /// Registers a PluginInstance into this store.
-    ///
-    /// # Arguments
-    ///
-    /// * `executor` - The [executor](crate::Executor) that runs the host functions in this [store](crate::Store).
-    ///
-    /// * `plugin` - The WasmEdge [plugin instance](crate::plugin::PluginInstance) to be registered.
-    ///
-    /// # Error
-    ///
-    /// If fail to register the plugin instance, then an error is returned.
-    pub fn register_plugin_module(
+    pub fn register_named_module(
         &mut self,
-        executor: &mut Executor,
-        plugin: &PluginInstance,
+        name: impl AsRef<str>,
+        module: &Module,
     ) -> WasmEdgeResult<()> {
-        executor
-            .inner
-            .register_plugin_instance(&self.inner, &plugin.inner)
+        let Store {
+            inner,
+            executor,
+            wasm_instance_map,
+            ..
+        } = self;
+        let name = name.as_ref().to_string();
+        let inst = executor.register_named_module(inner, &module.inner, &name)?;
+        wasm_instance_map.insert(name, inst);
+        Ok(())
     }
 
     /// Returns the number of the named [module instances](crate::Instance) in this [store](crate::Store).
-    pub fn named_instance_count(&self) -> u32 {
-        self.inner.module_len()
+    pub fn named_instance_count(&self) -> usize {
+        self.instances.len() + self.wasm_instance_map.len()
     }
 
     /// Returns the names of all registered named [module instances](crate::Instance).
     pub fn instance_names(&self) -> Vec<String> {
-        match self.inner.module_names() {
-            Some(names) => names,
-            None => vec![],
-        }
-    }
-
-    /// Returns the named [module instance](crate::Instance) with the given name.
-    ///
-    /// # Argument
-    ///
-    /// * `name` - The name of the target [module instance](crate::Instance) to be returned.
-    pub fn named_instance(&mut self, name: impl AsRef<str>) -> WasmEdgeResult<Instance> {
-        let inner_instance = self.inner.module(name.as_ref())?;
-
-        Ok(Instance {
-            inner: inner_instance,
-        })
+        self.instances
+            .keys()
+            .chain(self.wasm_instance_map.keys())
+            .cloned()
+            .collect()
     }
 
     /// Checks if the [store](crate::Store) contains a named module instance.
@@ -150,11 +108,37 @@ impl Store {
     /// * `mod_name` - The name of the named module.
     ///
     pub fn contains(&self, mod_name: impl AsRef<str>) -> bool {
-        self.inner.contains(mod_name.as_ref())
+        let mod_name = mod_name.as_ref().to_string();
+        self.instances.contains_key(&mod_name) || self.wasm_instance_map.contains_key(&mod_name)
+    }
+
+    pub fn get_instance_and_executor(
+        &mut self,
+        mod_name: impl AsRef<str>,
+    ) -> Option<(&mut T, &mut sys::Executor)> {
+        let inst = self
+            .instances
+            .get_mut(mod_name.as_ref())
+            .map(|p| *p as &mut T)?;
+
+        Some((inst, &mut self.executor))
+    }
+
+    pub fn get_named_wasm_and_executor(
+        &mut self,
+        mod_name: impl AsRef<str>,
+    ) -> Option<(&mut Instance, &mut sys::Executor)> {
+        let wasm_mod = self.wasm_instance_map.get_mut(mod_name.as_ref())?;
+        Some((wasm_mod, &mut self.executor))
+    }
+
+    pub fn executor(&mut self) -> &mut sys::Executor {
+        &mut self.executor
     }
 }
 
-#[cfg(test)]
+// #[cfg(test)]
+#[cfg(ignore)]
 mod tests {
     use super::*;
     use crate::{

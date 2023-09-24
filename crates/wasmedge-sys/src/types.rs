@@ -1,8 +1,8 @@
 //! Defines the WebAssembly primitive types.
 
-use crate::{ffi, instance::function::InnerFuncRef, FuncRef};
+use crate::{ffi, instance::function::AsFunc, FuncRef, Function};
 use core::ffi::c_void;
-use std::{ffi::CString, str::FromStr};
+use std::ffi::CString;
 use wasmedge_types::{RefType, ValType};
 
 #[derive(Debug, Clone)]
@@ -55,7 +55,7 @@ impl From<ffi::WasmEdge_Limit> for WasmEdgeLimit {
 
 /// Struct of WasmEdge String.
 #[derive(Debug)]
-pub(crate) struct WasmEdgeString {
+pub struct WasmEdgeString {
     inner: InnerWasmEdgeString,
 }
 impl Drop for WasmEdgeString {
@@ -66,6 +66,18 @@ impl Drop for WasmEdgeString {
 impl WasmEdgeString {
     pub(crate) fn as_raw(&self) -> ffi::WasmEdge_String {
         self.inner.0
+    }
+
+    pub unsafe fn into_raw(self) -> ffi::WasmEdge_String {
+        let s = self.inner.0;
+        std::mem::forget(self);
+        s
+    }
+
+    pub unsafe fn from_raw(s: ffi::WasmEdge_String) -> Self {
+        Self {
+            inner: InnerWasmEdgeString(s),
+        }
     }
 }
 impl<T: AsRef<str>> From<T> for WasmEdgeString {
@@ -93,20 +105,58 @@ impl PartialEq for WasmEdgeString {
     }
 }
 impl Eq for WasmEdgeString {}
+
+impl AsRef<ffi::WasmEdge_String> for WasmEdgeString {
+    fn as_ref(&self) -> &ffi::WasmEdge_String {
+        &self.inner.0
+    }
+}
+impl AsMut<ffi::WasmEdge_String> for WasmEdgeString {
+    fn as_mut(&mut self) -> &mut ffi::WasmEdge_String {
+        &mut self.inner.0
+    }
+}
+
+impl From<&WasmEdgeString> for String {
+    fn from(s: &WasmEdgeString) -> Self {
+        s.as_ref().into()
+    }
+}
+impl From<&WasmEdgeString> for &std::ffi::CStr {
+    fn from(s: &WasmEdgeString) -> Self {
+        s.as_ref().into()
+    }
+}
 impl From<WasmEdgeString> for String {
     fn from(s: WasmEdgeString) -> Self {
-        let bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(s.as_raw().Buf as *const u8, s.as_raw().Length as usize)
-        };
-        let x =
-            std::str::from_utf8(bytes).expect("Fail to generate string slice: invalid utf8 bytes");
-        String::from_str(x).expect("Ill-formatted string")
+        s.as_ref().into()
+    }
+}
+impl From<WasmEdgeString> for &std::ffi::CStr {
+    fn from(s: WasmEdgeString) -> Self {
+        s.as_ref().into()
+    }
+}
+
+impl From<&ffi::WasmEdge_String> for String {
+    fn from(s: &ffi::WasmEdge_String) -> Self {
+        let cstr: &std::ffi::CStr = s.into();
+        cstr.to_string_lossy().into_owned()
+    }
+}
+impl From<&ffi::WasmEdge_String> for &std::ffi::CStr {
+    fn from(s: &ffi::WasmEdge_String) -> Self {
+        unsafe { std::ffi::CStr::from_ptr(s.Buf as *const _) }
     }
 }
 impl From<ffi::WasmEdge_String> for String {
     fn from(s: ffi::WasmEdge_String) -> Self {
-        let cstr = unsafe { std::ffi::CStr::from_ptr(s.Buf as *const _) };
-        cstr.to_string_lossy().into_owned()
+        (&s).into()
+    }
+}
+impl From<ffi::WasmEdge_String> for &std::ffi::CStr {
+    fn from(s: ffi::WasmEdge_String) -> Self {
+        (&s).into()
     }
 }
 
@@ -244,9 +294,9 @@ impl WasmValue {
     /// # Argument
     ///
     /// * `func_ref` - A [FuncRef] instance.
-    pub fn from_func_ref(func_ref: FuncRef) -> Self {
+    pub fn from_func_ref<Func: AsFunc>(func_ref: &Func) -> Self {
         Self {
-            ctx: unsafe { ffi::WasmEdge_ValueGenFuncRef(func_ref.inner.0) },
+            ctx: unsafe { ffi::WasmEdge_ValueGenFuncRef(func_ref.get_func_raw()) },
             ty: ValType::FuncRef,
         }
     }
@@ -254,15 +304,17 @@ impl WasmValue {
     /// Returns the FuncRef(crate::FuncRef).
     ///
     /// If the [WasmValue] is a `NullRef`, then `None` is returned.
-    pub fn func_ref(&self) -> Option<FuncRef> {
+    pub fn func_ref(&self) -> Option<FuncRef<&Self>> {
         unsafe {
             match ffi::WasmEdge_ValueIsNullRef(self.ctx) {
                 true => None,
                 false => {
                     let ctx = ffi::WasmEdge_ValueGetFuncRef(self.ctx);
-                    Some(FuncRef {
-                        inner: InnerFuncRef(ctx),
-                    })
+                    let f = Function::from_raw(ctx as _);
+                    Some(FuncRef::create_from_ref(
+                        std::mem::ManuallyDrop::new(f),
+                        self,
+                    ))
                 }
             }
         }
@@ -372,10 +424,8 @@ mod tests {
         assert_eq!(val.ty(), ValType::V128);
 
         // ExternRef
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        let result = Table::create(&ty);
+        let ty = TableType::new(RefType::FuncRef, 10, Some(20));
+        let result = Table::create(ty);
         assert!(result.is_ok());
         let mut table = result.unwrap();
         let value = WasmValue::from_extern_ref(&mut table);
@@ -414,10 +464,8 @@ mod tests {
         let val_v128 = WasmValue::from_v128(1314);
 
         // ExternRef
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        let result = Table::create(&ty);
+        let ty = TableType::new(RefType::FuncRef, 10, Some(20));
+        let result = Table::create(ty);
         assert!(result.is_ok());
         let mut table = result.unwrap();
         let val_extern_ref = WasmValue::from_extern_ref(&mut table);
@@ -486,10 +534,8 @@ mod tests {
         let val_v128_cloned = Arc::clone(&val_v128);
 
         // ExternRef
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        let result = Table::create(&ty);
+        let ty = TableType::new(RefType::FuncRef, 10, Some(20));
+        let result = Table::create(ty);
         assert!(result.is_ok());
         let mut table = result.unwrap();
         let val_extern_ref = Arc::new(Mutex::new(WasmValue::from_extern_ref(&mut table)));

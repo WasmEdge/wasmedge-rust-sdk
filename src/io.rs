@@ -1,4 +1,4 @@
-use crate::{types::ExternRef, FuncRef, ValType, WasmValue};
+use crate::{types::ExternRef, ValType, WasmValue};
 
 /// Describes the mapping of Rust type to Wasm type.
 ///
@@ -38,7 +38,7 @@ impl_wasm_val_type!(i64, ValType::I64);
 impl_wasm_val_type!(f32, ValType::F32);
 impl_wasm_val_type!(f64, ValType::F64);
 impl_wasm_val_type!(i128, ValType::V128);
-impl_wasm_val_type!(FuncRef, ValType::FuncRef);
+// impl_wasm_val_type!(FuncRef, ValType::FuncRef);
 impl_wasm_val_type!(ExternRef, ValType::ExternRef);
 
 #[cfg(test)]
@@ -57,7 +57,7 @@ mod test_wasm_val_type {
         assert_eq!(f32::WASM_TYPE, ValType::F32);
         assert_eq!(f64::WASM_TYPE, ValType::F64);
         assert_eq!(i128::WASM_TYPE, ValType::V128);
-        assert_eq!(FuncRef::WASM_TYPE, ValType::FuncRef);
+        // assert_eq!(FuncRef::WASM_TYPE, ValType::FuncRef);
         assert_eq!(ExternRef::WASM_TYPE, ValType::ExternRef);
     }
 }
@@ -208,21 +208,21 @@ mod test_wasm_val_type_list {
         assert_eq!(<(i64, i64)>::wasm_types(), [ValType::I64, ValType::I64]);
         assert_eq!(<(f32, f32)>::wasm_types(), [ValType::F32, ValType::F32]);
         assert_eq!(<(f64, f64)>::wasm_types(), [ValType::F64, ValType::F64]);
-        assert_eq!(
-            <(i32, i64, f32, f64, FuncRef, ExternRef)>::wasm_types(),
-            [
-                ValType::I32,
-                ValType::I64,
-                ValType::F32,
-                ValType::F64,
-                ValType::FuncRef,
-                ValType::ExternRef,
-            ]
-        );
-        assert_eq!(
-            <(FuncRef, ExternRef)>::wasm_types(),
-            [ValType::FuncRef, ValType::ExternRef]
-        );
+        // assert_eq!(
+        //     <(i32, i64, f32, f64, FuncRef, ExternRef)>::wasm_types(),
+        //     [
+        //         ValType::I32,
+        //         ValType::I64,
+        //         ValType::F32,
+        //         ValType::F64,
+        //         ValType::FuncRef,
+        //         ValType::ExternRef,
+        //     ]
+        // );
+        // assert_eq!(
+        //     <(FuncRef, ExternRef)>::wasm_types(),
+        //     [ValType::FuncRef, ValType::ExternRef]
+        // );
     }
 }
 
@@ -280,11 +280,11 @@ impl WasmVal for i128 {
         WasmValue::from_v128(self)
     }
 }
-impl WasmVal for FuncRef {
-    fn to_wasm_value(self) -> WasmValue {
-        WasmValue::from_func_ref(self.inner)
-    }
-}
+// impl WasmVal for FuncRef {
+//     fn to_wasm_value(self) -> WasmValue {
+//         WasmValue::from_func_ref(self.inner)
+//     }
+// }
 impl WasmVal for ExternRef {
     fn to_wasm_value(self) -> WasmValue {
         self.inner

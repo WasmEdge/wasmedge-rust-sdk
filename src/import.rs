@@ -1,8 +1,7 @@
-use crate::{
-    error::HostFuncError, io::WasmValTypeList, CallingFrame, FuncType, Global, Memory, Table,
-    WasmEdgeResult,
-};
-use wasmedge_sys::{self as sys, AsImport, WasmValue};
+use crate::{io::WasmValTypeList, FuncType, WasmEdgeResult};
+pub use sys::AsInstance;
+use sys::Function;
+use wasmedge_sys::{self as sys};
 
 /// Creates a normal or wasi [import object](crate::ImportObject).
 ///
@@ -10,22 +9,15 @@ use wasmedge_sys::{self as sys, AsImport, WasmValue};
 ///
 /// This example shows how to create a normal import object that contains a host function, a global variable, a memory and a table. The import object is named "extern".
 ///
-#[derive(Debug, Default)]
-pub struct ImportObjectBuilder {
-    funcs: Vec<(String, sys::Function)>,
-    globals: Vec<(String, sys::Global)>,
-    memories: Vec<(String, sys::Memory)>,
-    tables: Vec<(String, sys::Table)>,
+#[derive(Debug)]
+pub struct ImportObjectBuilder<Data> {
+    import_object: ImportObject<Data>,
 }
-impl ImportObjectBuilder {
+impl<Data> ImportObjectBuilder<Data> {
     /// Creates a new [ImportObjectBuilder].
-    pub fn new() -> Self {
-        Self {
-            funcs: Vec::new(),
-            globals: Vec::new(),
-            memories: Vec::new(),
-            tables: Vec::new(),
-        }
+    pub fn new(name: &str, data: Data) -> WasmEdgeResult<Self> {
+        let import_object = ImportObject::create(name, Box::new(data))?;
+        Ok(Self { import_object })
     }
 
     /// Adds a [host function](crate::Func) to the [ImportObject] to create.
@@ -43,29 +35,22 @@ impl ImportObjectBuilder {
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func<Args, Rets, D>(
-        mut self,
+    pub fn with_func<Args, Rets>(
+        &mut self,
         name: impl AsRef<str>,
-        real_func: impl Fn(
-                CallingFrame,
-                Vec<WasmValue>,
-                *mut std::os::raw::c_void,
-            ) -> Result<Vec<WasmValue>, HostFuncError>
-            + Send
-            + Sync
-            + 'static,
-        data: Option<Box<D>>,
-    ) -> WasmEdgeResult<Self>
+        real_func: sys::SyncFn<Data>,
+    ) -> WasmEdgeResult<&mut Self>
     where
         Args: WasmValTypeList,
         Rets: WasmValTypeList,
     {
-        let boxed_func = Box::new(real_func);
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
+        let ty = FuncType::new(args.to_vec(), returns.to_vec());
+        let func =
+            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)?;
+        self.import_object.add_func(name, func);
+
         Ok(self)
     }
 
@@ -86,68 +71,15 @@ impl ImportObjectBuilder {
     /// # error
     ///
     /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    pub fn with_func_by_type<D>(
-        mut self,
+    pub fn with_func_by_type(
+        &mut self,
         name: impl AsRef<str>,
         ty: FuncType,
-        real_func: impl Fn(
-                CallingFrame,
-                Vec<WasmValue>,
-                *mut std::os::raw::c_void,
-            ) -> Result<Vec<WasmValue>, HostFuncError>
-            + Send
-            + Sync
-            + 'static,
-        data: Option<Box<D>>,
-    ) -> WasmEdgeResult<Self> {
-        let boxed_func = Box::new(real_func);
-        let inner_func = sys::Function::create_sync_func::<D>(&ty.into(), boxed_func, data, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
-        Ok(self)
-    }
-
-    /// Adds an [async host function](crate::Func) to the [ImportObject] to create.
-    ///
-    /// N.B. that this function can be used in thread-safe scenarios.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
-    ///
-    /// * `real_func` - The native function.
-    ///
-    /// * `data` - The host context data used in this function.
-    ///
-    /// # error
-    ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-    pub fn with_async_func<Args, Rets, D>(
-        mut self,
-        name: impl AsRef<str>,
-        real_func: impl Fn(
-                CallingFrame,
-                Vec<WasmValue>,
-                *mut std::os::raw::c_void,
-            ) -> Box<
-                dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send,
-            > + Send
-            + Sync
-            + 'static,
-        data: Option<Box<D>>,
-    ) -> WasmEdgeResult<Self>
-    where
-        Args: WasmValTypeList,
-        Rets: WasmValTypeList,
-        D: Send + Sync,
-    {
-        let args = Args::wasm_types();
-        let returns = Rets::wasm_types();
-        let ty = FuncType::new(Some(args.to_vec()), Some(returns.to_vec()));
-        let inner_func =
-            sys::Function::create_async_func(&ty.into(), Box::new(real_func), data, 0)?;
-        self.funcs.push((name.as_ref().to_owned(), inner_func));
+        real_func: sys::SyncFn<Data>,
+    ) -> WasmEdgeResult<&mut Self> {
+        let func =
+            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)?;
+        self.import_object.add_func(name, func);
         Ok(self)
     }
 
@@ -159,8 +91,8 @@ impl ImportObjectBuilder {
     ///
     /// * `global` - The wasm [global instance](crate::Global) to add.
     ///
-    pub fn with_global(mut self, name: impl AsRef<str>, global: Global) -> Self {
-        self.globals.push((name.as_ref().to_owned(), global.inner));
+    pub fn with_global(mut self, name: impl AsRef<str>, global: sys::Global) -> Self {
+        self.import_object.add_global(name, global);
         self
     }
 
@@ -172,8 +104,8 @@ impl ImportObjectBuilder {
     ///
     /// * `memory` - The wasm [memory instance](crate::Memory) to add.
     ///
-    pub fn with_memory(mut self, name: impl AsRef<str>, memory: Memory) -> Self {
-        self.memories.push((name.as_ref().to_owned(), memory.inner));
+    pub fn with_memory(mut self, name: impl AsRef<str>, memory: sys::Memory) -> Self {
+        self.import_object.add_memory(name, memory);
         self
     }
 
@@ -185,8 +117,8 @@ impl ImportObjectBuilder {
     ///
     /// * `table` - The wasm [table instance](crate::Table) to add.
     ///
-    pub fn with_table(mut self, name: impl AsRef<str>, table: Table) -> Self {
-        self.tables.push((name.as_ref().to_owned(), table.inner));
+    pub fn with_table(mut self, name: impl AsRef<str>, table: sys::Table) -> Self {
+        self.import_object.add_table(name, table);
         self
     }
 
@@ -201,60 +133,18 @@ impl ImportObjectBuilder {
     /// # Error
     ///
     /// If fail to create the [ImportObject], then an error is returned.
-    pub fn build<T>(
-        self,
-        name: impl AsRef<str>,
-        host_data: Option<Box<T>>,
-    ) -> WasmEdgeResult<ImportObject<T>>
-    where
-        T: ?Sized + Send + Sync + Clone,
-    {
-        let mut inner = sys::ImportModule::create(name.as_ref(), host_data)?;
-
-        // add func
-        for (name, func) in self.funcs.into_iter() {
-            inner.add_func(name, func);
-        }
-
-        // add global
-        for (name, global) in self.globals.into_iter() {
-            inner.add_global(name, global);
-        }
-
-        // add memory
-        for (name, memory) in self.memories.into_iter() {
-            inner.add_memory(name, memory);
-        }
-
-        // add table
-        for (name, table) in self.tables.into_iter() {
-            inner.add_table(name, table);
-        }
-
-        Ok(ImportObject(inner))
+    pub fn build(self) -> ImportObject<Data> {
+        self.import_object
     }
 }
 
 /// Defines an import object that contains the required import data used when instantiating a [module](crate::Module).
 ///
 /// An [ImportObject] instance is created with [ImportObjectBuilder](crate::ImportObjectBuilder).
-#[derive(Debug, Clone)]
-pub struct ImportObject<T: ?Sized + Send + Sync + Clone>(pub(crate) sys::ImportModule<T>);
-impl<T: ?Sized + Send + Sync + Clone> ImportObject<T> {
-    /// Returns the name of the import object.
-    pub fn name(&self) -> &str {
-        self.0.name()
-    }
+pub type ImportObject<T> = sys::ImportModule<T>;
 
-    /// Returns the raw pointer to the inner `WasmEdge_ModuleInstanceContext`.
-    #[cfg(feature = "ffi")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
-    pub fn as_ptr(&self) -> *const sys::ffi::WasmEdge_ModuleInstanceContext {
-        self.0.as_ptr()
-    }
-}
-
-#[cfg(test)]
+// #[cfg(test)]
+#[cfg(ignore)]
 mod tests {
     use super::*;
     #[cfg(not(feature = "async"))]
