@@ -15,26 +15,27 @@ pub mod ffi {
 
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NNPreload {
     /// The alias of the model in the WASI-NN environment.
     pub alias: String,
     /// The inference backend.
-    pub backend: Backend,
+    pub backend: NNBackend,
     /// The execution target, on which the inference runs.
     pub target: ExecutionTarget,
     /// The path to the model file. Note that the path is the guest path instead of the host path.
-    pub path: Path,
+    pub path: std::path::PathBuf,
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-impl NNPreload {
-    fn to_string(&self) -> String {
-        format!(
+impl std::fmt::Display for NNPreload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "{alias}:{backend}:{target}:{path}",
             alias = self.alias,
-            backend = self.backend.to_string(),
-            target = self.target.to_string(),
+            backend = self.backend,
+            target = self.target,
             path = self.path.to_string_lossy().into_owned()
         )
     }
@@ -52,13 +53,13 @@ pub enum NNBackend {
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-impl NNBackend {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for NNBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NNBackend::PyTorch => "PyTorch".to_string(),
-            NNBackend::TensorFlowLite => "TensorFlowLite".to_string(),
-            NNBackend::OpenVINO => "OpenVINO".to_string(),
-            NNBackend::GGML => "GGML".to_string(),
+            NNBackend::PyTorch => write!(f, "PyTorch"),
+            NNBackend::TensorFlowLite => write!(f, "TensorFlowLite"),
+            NNBackend::OpenVINO => write!(f, "OpenVINO"),
+            NNBackend::GGML => write!(f, "GGML"),
         }
     }
 }
@@ -75,12 +76,12 @@ pub enum ExecutionTarget {
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-impl ExecutionTarget {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for ExecutionTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecutionTarget::CPU => "CPU".to_string(),
-            ExecutionTarget::GPU => "GPU".to_string(),
-            ExecutionTarget::TPU => "TPU".to_string(),
+            ExecutionTarget::CPU => write!(f, "CPU"),
+            ExecutionTarget::GPU => write!(f, "GPU"),
+            ExecutionTarget::TPU => write!(f, "TPU"),
         }
     }
 }
@@ -126,7 +127,9 @@ impl PluginManager {
             nn_preloads.push(preload.to_string());
         }
 
-        sys::plugin::PluginManager::nn_preload(nn_preloads);
+        let nn_preloads_str: Vec<&str> = nn_preloads.iter().map(|s| s.as_str()).collect();
+
+        sys::plugin::PluginManager::nn_preload(nn_preloads_str);
     }
 
     /// Returns the count of loaded plugins.
