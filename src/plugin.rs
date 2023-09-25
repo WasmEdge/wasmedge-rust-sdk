@@ -65,8 +65,10 @@ impl std::fmt::Display for NNPreload {
 pub enum NNBackend {
     PyTorch,
     TensorFlowLite,
+    TensorFlow,
     OpenVINO,
     GGML,
+    ONNX,
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
@@ -74,9 +76,11 @@ impl std::fmt::Display for NNBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NNBackend::PyTorch => write!(f, "PyTorch"),
-            NNBackend::TensorFlowLite => write!(f, "TensorFlowLite"),
+            NNBackend::TensorFlowLite => write!(f, "TensorflowLite"),
+            NNBackend::TensorFlow => write!(f, "Tensorflow"),
             NNBackend::OpenVINO => write!(f, "OpenVINO"),
             NNBackend::GGML => write!(f, "GGML"),
+            NNBackend::ONNX => write!(f, "ONNX"),
         }
     }
 }
