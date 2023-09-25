@@ -28,6 +28,23 @@ pub struct NNPreload {
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl NNPreload {
+    pub fn new(
+        alias: impl AsRef<str>,
+        backend: NNBackend,
+        target: ExecutionTarget,
+        path: impl AsRef<std::path::Path>,
+    ) -> Self {
+        Self {
+            alias: alias.as_ref().to_owned(),
+            backend,
+            target,
+            path: path.as_ref().to_owned(),
+        }
+    }
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
 impl std::fmt::Display for NNPreload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
