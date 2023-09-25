@@ -13,6 +13,78 @@ pub mod ffi {
     };
 }
 
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+#[derive(Debug, Clone)]
+pub struct NNPreload {
+    /// The alias of the model in the WASI-NN environment.
+    pub alias: String,
+    /// The inference backend.
+    pub backend: Backend,
+    /// The execution target, on which the inference runs.
+    pub target: ExecutionTarget,
+    /// The path to the model file. Note that the path is the guest path instead of the host path.
+    pub path: Path,
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl NNPreload {
+    fn to_string(&self) -> String {
+        format!(
+            "{alias}:{backend}:{target}:{path}",
+            alias = self.alias,
+            backend = self.backend.to_string(),
+            target = self.target.to_string(),
+            path = self.path.to_string_lossy().into_owned()
+        )
+    }
+}
+
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(non_camel_case_types)]
+pub enum NNBackend {
+    PyTorch,
+    TensorFlowLite,
+    OpenVINO,
+    GGML,
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl NNBackend {
+    fn to_string(&self) -> String {
+        match self {
+            NNBackend::PyTorch => "PyTorch".to_string(),
+            NNBackend::TensorFlowLite => "TensorFlowLite".to_string(),
+            NNBackend::OpenVINO => "OpenVINO".to_string(),
+            NNBackend::GGML => "GGML".to_string(),
+        }
+    }
+}
+
+/// Define where the graph should be executed.
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(non_camel_case_types)]
+pub enum ExecutionTarget {
+    CPU,
+    GPU,
+    TPU,
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl ExecutionTarget {
+    fn to_string(&self) -> String {
+        match self {
+            ExecutionTarget::CPU => "CPU".to_string(),
+            ExecutionTarget::GPU => "GPU".to_string(),
+            ExecutionTarget::TPU => "TPU".to_string(),
+        }
+    }
+}
+
 /// Defines the API to manage plugins.
 #[derive(Debug)]
 pub struct PluginManager {}
@@ -48,8 +120,13 @@ impl PluginManager {
 
     #[cfg(feature = "wasi_nn")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-    pub fn nn_preload(preloads: Vec<&str>) {
-        sys::plugin::PluginManager::nn_preload(preloads);
+    pub fn nn_preload(preloads: Vec<NNPreload>) {
+        let mut nn_preloads = Vec::new();
+        for preload in preloads {
+            nn_preloads.push(preload.to_string());
+        }
+
+        sys::plugin::PluginManager::nn_preload(nn_preloads);
     }
 
     /// Returns the count of loaded plugins.
