@@ -5,6 +5,7 @@ use crate::{
     Memory, Table, WasmEdgeResult, WasmValue,
 };
 use wasmedge_sys::{self as sys, AsImport};
+#[cfg(feature = "wasi_nn")]
 use wasmedge_types::error::WasmEdgeError;
 
 /// Defines low-level types used in Plugin development.
