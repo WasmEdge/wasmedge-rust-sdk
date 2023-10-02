@@ -293,6 +293,8 @@ impl Func {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `executor` - The [Executor](crate::Executor) instance.
     ///
     /// * `args` - The arguments passed to the host function.

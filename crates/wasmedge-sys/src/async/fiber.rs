@@ -19,6 +19,8 @@ impl<'a> FiberFuture<'a> {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `func` - The function to execute.
     ///
     /// # Error
@@ -115,7 +117,9 @@ impl<'a> TimeoutFiberFuture<'a> {
     ///
     /// * `func` - The function to execute.
     ///
-    /// * `deadline` - The deadline the function instance.
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
+    /// * `deadline` - The deadline the function to be run.
     ///
     /// # Error
     ///
@@ -185,11 +189,10 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
                     return Poll::Ready(Err(()));
                 }
 
-                let timeout = self.deadline.duration_since(std::time::SystemTime::now());
-                if timeout.is_err() {
-                    return Poll::Ready(Err(()));
-                }
-                let timeout = timeout.unwrap().max(std::time::Duration::from_millis(100));
+                let timeout = match self.deadline.duration_since(std::time::SystemTime::now()) {
+                    Ok(timeout) => timeout.max(std::time::Duration::from_millis(100)),
+                    Err(_) => return Poll::Ready(Err(())),
+                };
 
                 let mut value: libc::itimerspec = std::mem::zeroed();
                 value.it_value.tv_sec = timeout.as_secs() as _;

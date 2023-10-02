@@ -111,6 +111,8 @@ impl Executor {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `func` - The function instance to run.
     ///
     /// * `params` - The arguments to pass to the function.
