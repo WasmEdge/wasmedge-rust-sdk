@@ -67,7 +67,7 @@ impl Executor {
     ///
     /// * `params` - The arguments to pass to the function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Errors
     ///
@@ -78,14 +78,10 @@ impl Executor {
         &self,
         func: &Func,
         params: impl IntoIterator<Item = WasmValue>,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
-        if timeout > 0 {
-            self.inner
-                .call_func_with_timeout(&func.inner, params, timeout)
-        } else {
-            self.inner.call_func(&func.inner, params)
-        }
+        self.inner
+            .call_func_with_timeout(&func.inner, params, timeout)
     }
 
     /// Asynchronously runs a host function instance and returns the results.
@@ -116,11 +112,13 @@ impl Executor {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `func` - The function instance to run.
     ///
     /// * `params` - The arguments to pass to the function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Errors
     ///
@@ -132,7 +130,7 @@ impl Executor {
         async_state: &AsyncState,
         func: &Func,
         params: impl IntoIterator<Item = WasmValue> + Send,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         self.inner
             .call_func_async_with_timeout(async_state, &func.inner, params, timeout)

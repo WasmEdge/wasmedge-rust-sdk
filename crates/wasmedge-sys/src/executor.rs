@@ -190,7 +190,7 @@ impl Executor {
     ///
     /// * `params` - The arguments to pass to the function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Errors
     ///
@@ -201,7 +201,7 @@ impl Executor {
         &self,
         func: &Function,
         params: impl IntoIterator<Item = WasmValue>,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         use wasmedge_types::error;
 
@@ -231,7 +231,8 @@ impl Executor {
                 )));
             }
             let mut value: libc::itimerspec = std::mem::zeroed();
-            value.it_value.tv_sec = timeout as i64;
+            value.it_value.tv_sec = timeout.as_secs() as _;
+            value.it_value.tv_nsec = timeout.subsec_nanos() as _;
             if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
                 libc::timer_delete(timerid);
                 return Err(Box::new(error::WasmEdgeError::Operation(
@@ -267,6 +268,8 @@ impl Executor {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `func` - The function instance to run.
     ///
     /// * `params` - The arguments to pass to the function.
@@ -291,11 +294,13 @@ impl Executor {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `func` - The function instance to run.
     ///
     /// * `params` - The arguments to pass to the function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Errors
     ///
@@ -307,10 +312,11 @@ impl Executor {
         async_state: &AsyncState,
         func: &mut Function,
         params: impl IntoIterator<Item = WasmValue> + Send,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         use wasmedge_types::error;
-        TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), timeout)
+        let ldd = std::time::SystemTime::now() + timeout;
+        TimeoutFiberFuture::on_fiber(async_state, || self.call_func(func, params), ldd)
             .await
             .map_err(|_| Box::new(error::WasmEdgeError::ExecuteTimeout))?
     }
@@ -356,6 +362,8 @@ impl Executor {
     /// Asynchronously runs a host function reference instance and returns the results.
     ///
     /// # Arguments
+    ///
+    /// * `async_state` - Used to store asynchronous state at run time.
     ///
     /// * `func_ref` - The function reference instance to run.
     ///
