@@ -19,6 +19,8 @@ impl<'a> FiberFuture<'a> {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `func` - The function to execute.
     ///
     /// # Error
@@ -105,7 +107,7 @@ pub(crate) struct TimeoutFiberFuture<'a> {
     fiber: Fiber<'a, Result<(), ()>, (), Result<(), ()>>,
     current_suspend: *mut *const Suspend<Result<(), ()>, (), Result<(), ()>>,
     current_poll_cx: *mut *mut Context<'static>,
-    timeout_sec: u64,
+    deadline: std::time::SystemTime,
 }
 
 impl<'a> TimeoutFiberFuture<'a> {
@@ -115,7 +117,9 @@ impl<'a> TimeoutFiberFuture<'a> {
     ///
     /// * `func` - The function to execute.
     ///
-    /// * `timeout_sec` - The maximum execution time in seconds for the function instance.
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
+    /// * `deadline` - The deadline the function to be run.
     ///
     /// # Error
     ///
@@ -123,7 +127,7 @@ impl<'a> TimeoutFiberFuture<'a> {
     pub(crate) async fn on_fiber<R>(
         async_state: &AsyncState,
         func: impl FnOnce() -> R + Send,
-        timeout_sec: u64,
+        deadline: std::time::SystemTime,
     ) -> Result<R, ()> {
         let mut slot = None;
 
@@ -149,7 +153,7 @@ impl<'a> TimeoutFiberFuture<'a> {
                 fiber,
                 current_suspend,
                 current_poll_cx,
-                timeout_sec,
+                deadline,
             }
         };
 
@@ -184,8 +188,15 @@ impl<'a> Future for TimeoutFiberFuture<'a> {
                 if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
                     return Poll::Ready(Err(()));
                 }
+
+                let timeout = match self.deadline.duration_since(std::time::SystemTime::now()) {
+                    Ok(timeout) => timeout.max(std::time::Duration::from_millis(100)),
+                    Err(_) => return Poll::Ready(Err(())),
+                };
+
                 let mut value: libc::itimerspec = std::mem::zeroed();
-                value.it_value.tv_sec = self.timeout_sec as i64;
+                value.it_value.tv_sec = timeout.as_secs() as _;
+                value.it_value.tv_nsec = timeout.subsec_nanos() as _;
                 if libc::timer_settime(timerid, 0, &value, std::ptr::null_mut()) < 0 {
                     libc::timer_delete(timerid);
                     return Poll::Ready(Err(()));

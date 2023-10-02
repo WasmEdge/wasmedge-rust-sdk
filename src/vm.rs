@@ -496,7 +496,7 @@ impl Vm {
     ///
     /// * `args` - The arguments to be passed to the target wasm function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Error
     ///
@@ -507,7 +507,7 @@ impl Vm {
         mod_name: Option<&str>,
         func_name: impl AsRef<str>,
         args: impl IntoIterator<Item = WasmValue>,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         match mod_name {
             Some(mod_name) => {
@@ -589,7 +589,7 @@ impl Vm {
     ///
     /// * `args` - The arguments to be passed to the target wasm function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Error
     ///
@@ -605,7 +605,7 @@ impl Vm {
         mod_name: Option<&str>,
         func_name: impl AsRef<str> + Send,
         args: impl IntoIterator<Item = WasmValue> + Send,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         match mod_name {
             Some(mod_name) => match self.named_instances.get(mod_name) {

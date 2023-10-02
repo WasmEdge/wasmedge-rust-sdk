@@ -251,7 +251,7 @@ impl Func {
     ///
     /// * `args` - The arguments passed to the host function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Error
     ///
@@ -262,7 +262,7 @@ impl Func {
         &self,
         executor: &Executor,
         args: impl IntoIterator<Item = WasmValue>,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         executor.run_func_with_timeout(self, args, timeout)
     }
@@ -293,11 +293,13 @@ impl Func {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `executor` - The [Executor](crate::Executor) instance.
     ///
     /// * `args` - The arguments passed to the host function.
     ///
-    /// * `timeout` - The maximum execution time (in seconds) of the function to be run.
+    /// * `timeout` - The maximum execution time of the function to be run.
     ///
     /// # Error
     ///
@@ -312,7 +314,7 @@ impl Func {
         async_state: &AsyncState,
         executor: &Executor,
         args: impl IntoIterator<Item = WasmValue> + Send,
-        timeout: u64,
+        timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         executor
             .run_func_async_with_timeout(async_state, self, args, timeout)

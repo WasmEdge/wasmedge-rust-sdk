@@ -447,6 +447,8 @@ impl Function {
     ///
     /// # Arguments
     ///
+    /// * `async_state` - Used to store asynchronous state at run time.
+    ///
     /// * `engine` - The object implementing the [Engine](crate::Engine) trait.
     ///
     /// * `args` - The arguments passed to the host function.
