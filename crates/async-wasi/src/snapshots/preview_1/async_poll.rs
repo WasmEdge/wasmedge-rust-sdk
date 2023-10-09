@@ -169,6 +169,7 @@ async fn poll_only_fd<M: Memory>(
             for fd in connected_fds.into_iter().flatten() {
                 if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
                     socket.state.so_conn_state = ConnectState::Connected;
+                    socket.writable.set_writable();
                 }
             }
         }

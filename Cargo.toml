@@ -34,7 +34,7 @@ async-wasi = { workspace = true, optional = true }
 [features]
 aot = ["wasmedge-sys/aot"]
 async = ["wasmedge-sys/async", "dep:async-wasi"]
-default = []
+default = ["async"]
 ffi = ["wasmedge-sys/ffi"]
 standalone = ["wasmedge-sys/standalone"]
 static = ["wasmedge-sys/static"]
