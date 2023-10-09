@@ -291,6 +291,7 @@ pub async fn sock_send<M: Memory>(
     if let VFD::AsyncSocket(s) = sock_fd {
         let iovec = mem.get_iovec(buf_ptr, buf_len)?;
         let n = s.send(&iovec, MSG_NOSIGNAL).await?;
+        s.writable.set_writable();
         mem.write_data(send_len_ptr, (n as u32).to_le())?;
         Ok(())
     } else {
@@ -316,6 +317,7 @@ pub async fn sock_send_to<M: Memory>(
         let iovec = mem.get_iovec(buf_ptr, buf_len)?;
 
         let n = s.send_to(&iovec, addr, MSG_NOSIGNAL).await?;
+        s.writable.set_writable();
         mem.write_data(send_len_ptr, (n as u32).to_le())?;
         Ok(())
     } else {

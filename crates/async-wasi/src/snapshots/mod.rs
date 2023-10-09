@@ -636,7 +636,7 @@ pub mod serialize {
                 VFD::Inode(INode::Stdin(_)) => Self::Stdin(SerialStdin),
                 VFD::Inode(INode::Stdout(_)) => Self::Stdout(SerialStdout),
                 VFD::Inode(INode::Stderr(_)) => Self::Stderr(SerialStderr),
-                VFD::AsyncSocket(AsyncWasiSocket { inner, state }) => match inner {
+                VFD::AsyncSocket(AsyncWasiSocket { inner, state, .. }) => match inner {
                     super::common::net::async_tokio::AsyncWasiSocketInner::PreOpen(_) => {
                         Self::Closed
                     }
