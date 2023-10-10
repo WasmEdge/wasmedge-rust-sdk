@@ -31,6 +31,8 @@ pub fn args_get<M: Memory>(
         let arg_bytes = arg.as_bytes();
         let arg_buf = mem.mut_slice(argv_buf + header_offset, arg.len())?;
         arg_buf.copy_from_slice(arg_bytes);
+        let ptr = mem.mut_data::<u8>(argv_buf + header_offset + arg.len())?;
+        *ptr = 0u8;
 
         header_offset += arg.len() + 1;
     }
@@ -74,6 +76,8 @@ pub fn environ_get<M: Memory>(
         let env_bytes = env.as_bytes();
         let env_buf = mem.mut_slice(environ_buf + header_offset, env.len())?;
         env_buf.copy_from_slice(env_bytes);
+        let ptr = mem.mut_data::<u8>(environ_buf + header_offset + env.len())?;
+        *ptr = 0u8;
 
         header_offset += env.len() + 1;
     }
