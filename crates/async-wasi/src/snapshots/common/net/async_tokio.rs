@@ -164,7 +164,7 @@ impl Future for SocketWritableFuture {
 #[derive(Debug)]
 pub struct AsyncWasiSocket {
     pub(crate) inner: AsyncWasiSocketInner,
-    pub state: WasiSocketState,
+    pub state: Box<WasiSocketState>,
     pub(crate) writable: SocketWritable,
 }
 
@@ -221,7 +221,7 @@ impl AsyncWasiSocket {
         socket.set_nonblocking(true)?;
         Ok(Self {
             inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?),
-            state,
+            state: Box::new(state),
             writable: Default::default(),
         })
     }
@@ -231,7 +231,7 @@ impl AsyncWasiSocket {
         socket.set_nonblocking(true)?;
         Ok(Self {
             inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?),
-            state,
+            state: Box::new(state),
             writable: Default::default(),
         })
     }
@@ -278,7 +278,7 @@ impl AsyncWasiSocket {
         }
         Ok(AsyncWasiSocket {
             inner: AsyncWasiSocketInner::PreOpen(inner),
-            state,
+            state: Box::new(state),
             writable: Default::default(),
         })
     }
@@ -333,7 +333,7 @@ impl AsyncWasiSocket {
 
             Ok(AsyncWasiSocket {
                 inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
-                state: new_state,
+                state: Box::new(new_state),
                 writable: Default::default(),
             })
         } else {
@@ -347,7 +347,7 @@ impl AsyncWasiSocket {
 
                     Ok(AsyncWasiSocket {
                         inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
-                        state: new_state.clone(),
+                        state: Box::new(new_state.clone()),
                         writable: Default::default(),
                     })
                 }) {

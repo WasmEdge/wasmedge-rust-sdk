@@ -580,6 +580,7 @@ impl WasiFile {
         self.right.can(WASIRights::FD_READ | WASIRights::FD_SEEK)?;
 
         let old_seek = self.fd.stream_position()?;
+        self.fd.seek(SeekFrom::Start(offset))?;
         let r = self.fd.read_vectored(bufs);
         self.fd.seek(SeekFrom::Start(old_seek))?;
         Ok(r?)
@@ -600,6 +601,7 @@ impl WasiFile {
         self.right.can(WASIRights::FD_WRITE | WASIRights::FD_SEEK)?;
 
         let old_seek = self.fd.stream_position()?;
+        self.fd.seek(SeekFrom::Start(offset))?;
         let r = self.fd.write_vectored(bufs);
         self.fd.seek(SeekFrom::Start(old_seek))?;
         Ok(r?)
