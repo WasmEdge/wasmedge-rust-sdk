@@ -1,5 +1,6 @@
 use super::*;
 use std::{
+    fmt::Debug,
     fs, io,
     io::{Read, Seek, Write},
     ops::{Deref, DerefMut},
@@ -23,53 +24,42 @@ fn systimespec(
     }
 }
 
-#[derive(Debug)]
-pub struct WasiStdin;
-impl WasiStdin {
-    #[inline]
-    fn fd_rights() -> WASIRights {
-        WASIRights::FD_READ | WASIRights::POLL_FD_READWRITE
+pub struct WasiStdin(Box<dyn Read + Send>);
+impl Debug for WasiStdin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasiStdin").finish()
     }
-
-    pub fn fd_advise(
-        &mut self,
-        offset: wasi_types::__wasi_filesize_t,
-        len: wasi_types::__wasi_filesize_t,
-        advice: Advice,
-    ) -> Result<(), Errno> {
-        Ok(())
+}
+impl Default for WasiStdin {
+    fn default() -> Self {
+        WasiStdin(Box::new(std::io::stdin()))
     }
-
-    pub fn fd_allocate(
-        &mut self,
-        offset: wasi_types::__wasi_filesize_t,
-        len: wasi_types::__wasi_filesize_t,
-    ) -> Result<(), Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
+}
+impl From<Box<dyn Read + Send>> for WasiStdin {
+    fn from(value: Box<dyn Read + Send>) -> Self {
+        Self(value)
     }
-
-    pub fn fd_datasync(&mut self) -> Result<(), Errno> {
-        Ok(())
+}
+impl Into<INode> for WasiStdin {
+    fn into(self) -> INode {
+        INode::Stdin(self)
     }
-
-    pub fn fd_sync(&mut self) -> Result<(), Errno> {
-        Ok(())
-    }
-
-    pub fn fd_fdstat_get(&mut self) -> Result<FdStat, Errno> {
+}
+impl WasiVirtualNode for WasiStdin {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno> {
         Ok(FdStat {
             filetype: FileType::CHARACTER_DEVICE,
-            fs_rights_base: Self::fd_rights(),
+            fs_rights_base: WASIRights::FD_READ | WASIRights::POLL_FD_READWRITE,
             fs_rights_inheriting: WASIRights::empty(),
             flags: FdFlags::empty(),
         })
     }
 
-    pub fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_fdstat_set_rights(
+    fn fd_fdstat_set_rights(
         &mut self,
         fs_rights_base: WASIRights,
         _fs_rights_inheriting: WASIRights,
@@ -77,7 +67,7 @@ impl WasiStdin {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
+    fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
         Ok(Filestat {
             filetype: FileType::CHARACTER_DEVICE,
             nlink: 0,
@@ -89,14 +79,11 @@ impl WasiStdin {
         })
     }
 
-    pub fn fd_filestat_set_size(
-        &mut self,
-        size: wasi_types::__wasi_filesize_t,
-    ) -> Result<(), Errno> {
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_filestat_set_times(
+    fn fd_filestat_set_times(
         &mut self,
         atim: wasi_types::__wasi_timestamp_t,
         mtim: wasi_types::__wasi_timestamp_t,
@@ -104,53 +91,9 @@ impl WasiStdin {
     ) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
-
-    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
-        Ok(std::io::stdin().read_vectored(bufs)?)
-    }
-
-    pub fn fd_pread(
-        &mut self,
-        bufs: &[io::IoSliceMut<'_>],
-        offset: wasi_types::__wasi_filesize_t,
-    ) -> Result<usize, Errno> {
-        Err(Errno::__WASI_ERRNO_SPIPE)
-    }
-
-    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_pwrite(
-        &mut self,
-        bufs: &[io::IoSlice<'_>],
-        offset: wasi_types::__wasi_filesize_t,
-    ) -> Result<usize, Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_seek(
-        &mut self,
-        offset: wasi_types::__wasi_filedelta_t,
-        whence: wasi_types::__wasi_whence_t::Type,
-    ) -> Result<wasi_types::__wasi_filesize_t, Errno> {
-        Err(Errno::__WASI_ERRNO_SPIPE)
-    }
-
-    pub fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
-        Err(Errno::__WASI_ERRNO_SPIPE)
-    }
 }
-
-#[derive(Debug)]
-pub struct WasiStdout;
-impl WasiStdout {
-    #[inline]
-    fn fd_rights() -> WASIRights {
-        WASIRights::FD_WRITE | WASIRights::POLL_FD_READWRITE
-    }
-
-    pub fn fd_advise(
+impl WasiVirtualFile for WasiStdin {
+    fn fd_advise(
         &mut self,
         offset: wasi_types::__wasi_filesize_t,
         len: wasi_types::__wasi_filesize_t,
@@ -159,7 +102,7 @@ impl WasiStdout {
         Ok(())
     }
 
-    pub fn fd_allocate(
+    fn fd_allocate(
         &mut self,
         offset: wasi_types::__wasi_filesize_t,
         len: wasi_types::__wasi_filesize_t,
@@ -167,88 +110,39 @@ impl WasiStdout {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_datasync(&mut self) -> Result<(), Errno> {
+    fn fd_datasync(&mut self) -> Result<(), Errno> {
         Ok(())
     }
 
-    pub fn fd_sync(&mut self) -> Result<(), Errno> {
+    fn fd_sync(&mut self) -> Result<(), Errno> {
         Ok(())
     }
 
-    pub fn fd_fdstat_get(&mut self) -> Result<FdStat, Errno> {
-        Ok(FdStat {
-            filetype: FileType::CHARACTER_DEVICE,
-            fs_rights_base: Self::fd_rights(),
-            fs_rights_inheriting: WASIRights::empty(),
-            flags: FdFlags::APPEND,
-        })
+    fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+        Ok(self.0.read_vectored(bufs)?)
     }
 
-    pub fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_fdstat_set_rights(
+    fn fd_pread(
         &mut self,
-        fs_rights_base: WASIRights,
-        _fs_rights_inheriting: WASIRights,
-    ) -> Result<(), Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
-        Ok(Filestat {
-            filetype: FileType::CHARACTER_DEVICE,
-            nlink: 0,
-            inode: 0,
-            size: 0,
-            atim: None,
-            mtim: None,
-            ctim: None,
-        })
-    }
-
-    pub fn fd_filestat_set_size(
-        &mut self,
-        size: wasi_types::__wasi_filesize_t,
-    ) -> Result<(), Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_filestat_set_times(
-        &mut self,
-        atim: wasi_types::__wasi_timestamp_t,
-        mtim: wasi_types::__wasi_timestamp_t,
-        fst_flags: wasi_types::__wasi_fstflags_t::Type,
-    ) -> Result<(), Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_read(&mut self, bufs: &[io::IoSliceMut<'_>]) -> Result<usize, Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_pread(
-        &mut self,
-        bufs: &[io::IoSliceMut<'_>],
-        offset: wasi_types::__wasi_filesize_t,
-    ) -> Result<usize, Errno> {
-        Err(Errno::__WASI_ERRNO_BADF)
-    }
-
-    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
-        Ok(std::io::stdout().write_vectored(bufs)?)
-    }
-
-    pub fn fd_pwrite(
-        &mut self,
-        bufs: &[io::IoSlice<'_>],
+        bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
     }
 
-    pub fn fd_seek(
+    fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_pwrite(
+        &mut self,
+        bufs: &[io::IoSlice<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_seek(
         &mut self,
         offset: wasi_types::__wasi_filedelta_t,
         whence: wasi_types::__wasi_whence_t::Type,
@@ -256,20 +150,34 @@ impl WasiStdout {
         Err(Errno::__WASI_ERRNO_SPIPE)
     }
 
-    pub fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
+    fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
     }
 }
 
-#[derive(Debug)]
-pub struct WasiStderr;
-impl WasiStderr {
-    #[inline]
-    fn fd_rights() -> WASIRights {
-        WASIRights::FD_WRITE | WASIRights::POLL_FD_READWRITE
+pub struct WasiStdout(Box<dyn Write + Send>);
+impl Debug for WasiStdout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasiStdout").finish()
     }
-
-    pub fn fd_advise(
+}
+impl Default for WasiStdout {
+    fn default() -> Self {
+        WasiStdout(Box::new(std::io::stdout()))
+    }
+}
+impl From<Box<dyn Write + Send>> for WasiStdout {
+    fn from(value: Box<dyn Write + Send>) -> Self {
+        Self(value)
+    }
+}
+impl Into<INode> for WasiStdout {
+    fn into(self) -> INode {
+        INode::Stdout(self)
+    }
+}
+impl WasiVirtualFile for WasiStdout {
+    fn fd_advise(
         &mut self,
         offset: wasi_types::__wasi_filesize_t,
         len: wasi_types::__wasi_filesize_t,
@@ -278,7 +186,7 @@ impl WasiStderr {
         Ok(())
     }
 
-    pub fn fd_allocate(
+    fn fd_allocate(
         &mut self,
         offset: wasi_types::__wasi_filesize_t,
         len: wasi_types::__wasi_filesize_t,
@@ -286,28 +194,67 @@ impl WasiStderr {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_datasync(&mut self) -> Result<(), Errno> {
+    fn fd_datasync(&mut self) -> Result<(), Errno> {
+        self.0.flush()?;
         Ok(())
     }
 
-    pub fn fd_sync(&mut self) -> Result<(), Errno> {
+    fn fd_sync(&mut self) -> Result<(), Errno> {
+        self.0.flush()?;
         Ok(())
     }
 
-    pub fn fd_fdstat_get(&mut self) -> Result<FdStat, Errno> {
+    fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_pread(
+        &mut self,
+        bufs: &mut [io::IoSliceMut<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
+        Ok(self.0.write_vectored(bufs)?)
+    }
+
+    fn fd_pwrite(
+        &mut self,
+        bufs: &[io::IoSlice<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno> {
+        Err(Errno::__WASI_ERRNO_SPIPE)
+    }
+
+    fn fd_seek(
+        &mut self,
+        offset: wasi_types::__wasi_filedelta_t,
+        whence: wasi_types::__wasi_whence_t::Type,
+    ) -> Result<wasi_types::__wasi_filesize_t, Errno> {
+        Err(Errno::__WASI_ERRNO_SPIPE)
+    }
+
+    fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
+        Err(Errno::__WASI_ERRNO_SPIPE)
+    }
+}
+impl WasiVirtualNode for WasiStdout {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno> {
         Ok(FdStat {
             filetype: FileType::CHARACTER_DEVICE,
-            fs_rights_base: Self::fd_rights(),
+            fs_rights_base: WASIRights::FD_WRITE | WASIRights::POLL_FD_READWRITE,
             fs_rights_inheriting: WASIRights::empty(),
             flags: FdFlags::APPEND,
         })
     }
 
-    pub fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_fdstat_set_rights(
+    fn fd_fdstat_set_rights(
         &mut self,
         fs_rights_base: WASIRights,
         _fs_rights_inheriting: WASIRights,
@@ -315,7 +262,7 @@ impl WasiStderr {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
+    fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
         Ok(Filestat {
             filetype: FileType::CHARACTER_DEVICE,
             nlink: 0,
@@ -327,14 +274,11 @@ impl WasiStderr {
         })
     }
 
-    pub fn fd_filestat_set_size(
-        &mut self,
-        size: wasi_types::__wasi_filesize_t,
-    ) -> Result<(), Errno> {
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_filestat_set_times(
+    fn fd_filestat_set_times(
         &mut self,
         atim: wasi_types::__wasi_timestamp_t,
         mtim: wasi_types::__wasi_timestamp_t,
@@ -342,24 +286,119 @@ impl WasiStderr {
     ) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
+}
 
-    pub fn fd_read(&mut self, bufs: &[io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+pub struct WasiStderr(Box<dyn Write + Send>);
+impl Debug for WasiStderr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasiStderr").finish()
+    }
+}
+impl Default for WasiStderr {
+    fn default() -> Self {
+        WasiStderr(Box::new(std::io::stderr()))
+    }
+}
+impl From<Box<dyn Write + Send>> for WasiStderr {
+    fn from(value: Box<dyn Write + Send>) -> Self {
+        Self(value)
+    }
+}
+impl Into<INode> for WasiStderr {
+    fn into(self) -> INode {
+        INode::Stderr(self)
+    }
+}
+impl WasiVirtualNode for WasiStderr {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno> {
+        Ok(FdStat {
+            filetype: FileType::CHARACTER_DEVICE,
+            fs_rights_base: WASIRights::FD_WRITE | WASIRights::POLL_FD_READWRITE,
+            fs_rights_inheriting: WASIRights::empty(),
+            flags: FdFlags::APPEND,
+        })
+    }
+
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_pread(
+    fn fd_fdstat_set_rights(
         &mut self,
-        bufs: &[io::IoSliceMut<'_>],
+        fs_rights_base: WASIRights,
+        _fs_rights_inheriting: WASIRights,
+    ) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
+        Ok(Filestat {
+            filetype: FileType::CHARACTER_DEVICE,
+            nlink: 0,
+            inode: 0,
+            size: 0,
+            atim: None,
+            mtim: None,
+            ctim: None,
+        })
+    }
+
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_filestat_set_times(
+        &mut self,
+        atim: wasi_types::__wasi_timestamp_t,
+        mtim: wasi_types::__wasi_timestamp_t,
+        fst_flags: wasi_types::__wasi_fstflags_t::Type,
+    ) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+}
+impl WasiVirtualFile for WasiStderr {
+    fn fd_advise(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+        advice: Advice,
+    ) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_allocate(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+    ) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_datasync(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_sync(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_pread(
+        &mut self,
+        bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
     ) -> Result<usize, Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
-        Ok(std::io::stderr().write_vectored(bufs)?)
+    fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
+        Ok(self.0.write_vectored(bufs)?)
     }
 
-    pub fn fd_pwrite(
+    fn fd_pwrite(
         &mut self,
         bufs: &[io::IoSlice<'_>],
         offset: wasi_types::__wasi_filesize_t,
@@ -367,7 +406,7 @@ impl WasiStderr {
         Err(Errno::__WASI_ERRNO_SPIPE)
     }
 
-    pub fn fd_seek(
+    fn fd_seek(
         &mut self,
         offset: wasi_types::__wasi_filedelta_t,
         whence: wasi_types::__wasi_whence_t::Type,
@@ -375,8 +414,111 @@ impl WasiStderr {
         Err(Errno::__WASI_ERRNO_SPIPE)
     }
 
-    pub fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
+    fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
         Err(Errno::__WASI_ERRNO_SPIPE)
+    }
+}
+
+pub trait WasiVirtualNode {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno>;
+
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno>;
+
+    fn fd_fdstat_set_rights(
+        &mut self,
+        fs_rights_base: WASIRights,
+        fs_rights_inheriting: WASIRights,
+    ) -> Result<(), Errno>;
+
+    fn fd_filestat_get(&mut self) -> Result<Filestat, Errno>;
+
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno>;
+
+    fn fd_filestat_set_times(
+        &mut self,
+        atim: wasi_types::__wasi_timestamp_t,
+        mtim: wasi_types::__wasi_timestamp_t,
+        fst_flags: wasi_types::__wasi_fstflags_t::Type,
+    ) -> Result<(), Errno>;
+}
+
+pub trait WasiVirtualFile: WasiVirtualNode {
+    fn fd_advise(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+        advice: Advice,
+    ) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_allocate(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+    ) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_datasync(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_sync(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno>;
+
+    fn fd_pread(
+        &mut self,
+        bufs: &mut [io::IoSliceMut<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno>;
+
+    fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno>;
+
+    fn fd_pwrite(
+        &mut self,
+        bufs: &[io::IoSlice<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno>;
+
+    fn fd_seek(
+        &mut self,
+        offset: wasi_types::__wasi_filedelta_t,
+        whence: wasi_types::__wasi_whence_t::Type,
+    ) -> Result<wasi_types::__wasi_filesize_t, Errno>;
+
+    fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno>;
+}
+
+pub trait WasiVirtualDir: WasiVirtualNode {
+    fn get_readdir(&self, start: u64) -> Result<Vec<(String, u64, FileType)>, Errno>;
+
+    fn fd_readdir(&self, cursor: usize, write_buf: &mut [u8]) -> Result<usize, Errno> {
+        let buflen = write_buf.len();
+
+        let mut bufused = 0;
+        let mut next = cursor as u64;
+
+        for (name, inode, filetype) in self.get_readdir(next)? {
+            next += 1;
+            let entity = ReaddirEntity {
+                next,
+                inode,
+                name,
+                filetype,
+            };
+
+            let n = write_dirent(&entity, &mut write_buf[bufused..]);
+            bufused += n;
+            if bufused == buflen {
+                return Ok(bufused);
+            }
+        }
+
+        Ok(bufused)
     }
 }
 
@@ -387,47 +529,8 @@ pub struct WasiFile {
     pub right: WASIRights,
 }
 
-impl WasiFile {
-    pub fn fd_advise(
-        &mut self,
-        offset: wasi_types::__wasi_filesize_t,
-        len: wasi_types::__wasi_filesize_t,
-        advice: Advice,
-    ) -> Result<(), Errno> {
-        Ok(())
-    }
-
-    pub fn fd_allocate(
-        &mut self,
-        offset: wasi_types::__wasi_filesize_t,
-        len: wasi_types::__wasi_filesize_t,
-    ) -> Result<(), Errno> {
-        self.right.can(WASIRights::FD_ALLOCATE)?;
-        let f = &mut self.fd;
-        let metadata = f.metadata()?;
-        let file_len = metadata.len();
-        let new_len = offset + len;
-        if new_len > file_len {
-            let old_seek = f.stream_position()?;
-            f.set_len(new_len)?;
-            f.seek(io::SeekFrom::Start(old_seek))?;
-        }
-        Ok(())
-    }
-
-    pub fn fd_datasync(&mut self) -> Result<(), Errno> {
-        self.right.can(WASIRights::FD_DATASYNC)?;
-        self.fd.sync_data()?;
-        Ok(())
-    }
-
-    pub fn fd_sync(&mut self) -> Result<(), Errno> {
-        self.right.can(WASIRights::FD_SYNC)?;
-        self.fd.sync_all()?;
-        Ok(())
-    }
-
-    pub fn fd_fdstat_get(&mut self) -> Result<FdStat, Errno> {
+impl WasiVirtualNode for WasiFile {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno> {
         let meta = self.fd.metadata()?;
         let fd_flags = FdStat {
             filetype: if meta.is_symlink() {
@@ -442,7 +545,7 @@ impl WasiFile {
         Ok(fd_flags)
     }
 
-    pub fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
         self.right.can(WASIRights::FD_FDSTAT_SET_FLAGS)?;
         if flags.contains(FdFlags::NONBLOCK)
             && flags.intersects(FdFlags::DSYNC | FdFlags::SYNC | FdFlags::RSYNC)
@@ -456,7 +559,7 @@ impl WasiFile {
         Ok(())
     }
 
-    pub fn fd_fdstat_set_rights(
+    fn fd_fdstat_set_rights(
         &mut self,
         fs_rights_base: WASIRights,
         _fs_rights_inheriting: WASIRights,
@@ -466,7 +569,7 @@ impl WasiFile {
         Ok(())
     }
 
-    pub fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
+    fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
         self.right.can(WASIRights::FD_FILESTAT_GET)?;
         let meta = self.fd.metadata()?;
         let filetype = if meta.is_symlink() {
@@ -489,16 +592,13 @@ impl WasiFile {
         })
     }
 
-    pub fn fd_filestat_set_size(
-        &mut self,
-        size: wasi_types::__wasi_filesize_t,
-    ) -> Result<(), Errno> {
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno> {
         self.right.can(WASIRights::FD_FILESTAT_SET_SIZE)?;
         self.fd.set_len(size)?;
         Ok(())
     }
 
-    pub fn fd_filestat_set_times(
+    fn fd_filestat_set_times(
         &mut self,
         atim: wasi_types::__wasi_timestamp_t,
         mtim: wasi_types::__wasi_timestamp_t,
@@ -564,13 +664,54 @@ impl WasiFile {
             Err(Errno::__WASI_ERRNO_NOSYS)
         }
     }
+}
 
-    pub fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
+impl WasiVirtualFile for WasiFile {
+    fn fd_advise(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+        advice: Advice,
+    ) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_allocate(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+    ) -> Result<(), Errno> {
+        self.right.can(WASIRights::FD_ALLOCATE)?;
+        let f = &mut self.fd;
+        let metadata = f.metadata()?;
+        let file_len = metadata.len();
+        let new_len = offset + len;
+        if new_len > file_len {
+            let old_seek = f.stream_position()?;
+            f.set_len(new_len)?;
+            f.seek(io::SeekFrom::Start(old_seek))?;
+        }
+        Ok(())
+    }
+
+    fn fd_datasync(&mut self) -> Result<(), Errno> {
+        self.right.can(WASIRights::FD_DATASYNC)?;
+        self.fd.sync_data()?;
+        Ok(())
+    }
+
+    fn fd_sync(&mut self) -> Result<(), Errno> {
+        self.right.can(WASIRights::FD_SYNC)?;
+        self.fd.sync_all()?;
+        Ok(())
+    }
+
+    fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno> {
         self.right.can(WASIRights::FD_READ)?;
         Ok(self.fd.read_vectored(bufs)?)
     }
 
-    pub fn fd_pread(
+    fn fd_pread(
         &mut self,
         bufs: &mut [io::IoSliceMut<'_>],
         offset: wasi_types::__wasi_filesize_t,
@@ -586,12 +727,12 @@ impl WasiFile {
         Ok(r?)
     }
 
-    pub fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
+    fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno> {
         self.right.can(WASIRights::FD_WRITE)?;
         Ok(self.fd.write_vectored(bufs)?)
     }
 
-    pub fn fd_pwrite(
+    fn fd_pwrite(
         &mut self,
         bufs: &[io::IoSlice<'_>],
         offset: wasi_types::__wasi_filesize_t,
@@ -607,7 +748,7 @@ impl WasiFile {
         Ok(r?)
     }
 
-    pub fn fd_seek(
+    fn fd_seek(
         &mut self,
         offset: wasi_types::__wasi_filedelta_t,
         whence: wasi_types::__wasi_whence_t::Type,
@@ -633,7 +774,7 @@ impl WasiFile {
         Ok(self.fd.seek(pos)?)
     }
 
-    pub fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
+    fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno> {
         use std::io::SeekFrom;
         self.right.can(WASIRights::FD_TELL)?;
         Ok(self.fd.stream_position()?)
@@ -880,95 +1021,8 @@ fn write_dirent(entity: &ReaddirEntity, write_buf: &mut [u8]) -> usize {
     }
 }
 
-impl WasiDir {
-    fn metadata(&self) -> io::Result<fs::Metadata> {
-        fs::metadata(&self.real_path)
-    }
-
-    pub fn fd_readdir(&self, mut cursor: usize, write_buf: &mut [u8]) -> Result<usize, Errno> {
-        self.dir_rights.can(WASIRights::FD_READDIR)?;
-        let dir_meta = self.metadata()?;
-        let dir_ino = get_file_ino(&dir_meta);
-
-        let buflen = write_buf.len();
-
-        let mut bufused = 0;
-        let mut next = cursor as u64;
-
-        if cursor == 0 {
-            next += 1;
-            let entity = ReaddirEntity {
-                next,
-                inode: dir_ino,
-                name: ".".to_string(),
-                filetype: FileType::DIRECTORY,
-            };
-
-            let n = write_dirent(&entity, &mut write_buf[bufused..]);
-            bufused += n;
-            if bufused == buflen {
-                return Ok(bufused);
-            }
-        }
-        if cursor <= 1 {
-            next += 1;
-            let entity = ReaddirEntity {
-                next,
-                inode: dir_ino,
-                name: "..".to_string(),
-                filetype: FileType::DIRECTORY,
-            };
-            let n = write_dirent(&entity, &mut write_buf[bufused..]);
-            bufused += n;
-            if bufused == buflen {
-                return Ok(bufused);
-            }
-        }
-
-        if cursor >= 2 {
-            cursor -= 2;
-        } else {
-            cursor = 0;
-        }
-
-        let read_dir = self.real_path.read_dir()?;
-        for dir_entity in read_dir.into_iter().skip(cursor) {
-            next += 1;
-
-            let dir_entity = dir_entity?;
-            let name = dir_entity
-                .file_name()
-                .into_string()
-                .map_err(|_| Errno::__WASI_ERRNO_ILSEQ)?;
-            let metadata = dir_entity.metadata()?;
-            let inode = get_file_ino(&metadata);
-
-            let filetype = if metadata.is_dir() {
-                FileType::DIRECTORY
-            } else if metadata.is_symlink() {
-                FileType::SYMBOLIC_LINK
-            } else {
-                FileType::REGULAR_FILE
-            };
-
-            let entity = ReaddirEntity {
-                next,
-                inode,
-                name,
-                filetype,
-            };
-
-            let n = write_dirent(&entity, &mut write_buf[bufused..]);
-            bufused += n;
-            if bufused == buflen {
-                return Ok(bufused);
-            }
-        }
-
-        Ok(bufused)
-    }
-
-    pub fn fd_fdstat_get(&self) -> Result<FdStat, Errno> {
+impl WasiVirtualNode for WasiDir {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno> {
         Ok(FdStat {
             filetype: FileType::DIRECTORY,
             fs_rights_base: self.dir_rights.clone(),
@@ -977,7 +1031,11 @@ impl WasiDir {
         })
     }
 
-    pub fn fd_fdstat_set_rights(
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_fdstat_set_rights(
         &mut self,
         fs_rights_base: WASIRights,
         fs_rights_inheriting: WASIRights,
@@ -991,9 +1049,9 @@ impl WasiDir {
         Ok(())
     }
 
-    pub fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
+    fn fd_filestat_get(&mut self) -> Result<Filestat, Errno> {
         self.dir_rights.can(WASIRights::FD_FILESTAT_GET)?;
-        let meta = self.metadata()?;
+        let meta = fs::metadata(&self.real_path)?;
         let filetype = if meta.is_symlink() {
             FileType::SYMBOLIC_LINK
         } else {
@@ -1014,7 +1072,11 @@ impl WasiDir {
         })
     }
 
-    pub fn fd_filestat_set_times(
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_filestat_set_times(
         &mut self,
         atim: wasi_types::__wasi_timestamp_t,
         mtim: wasi_types::__wasi_timestamp_t,
@@ -1023,6 +1085,55 @@ impl WasiDir {
         use wasi_types::__wasi_fstflags_t;
         self.dir_rights.can(WASIRights::FD_FILESTAT_SET_TIMES)?;
         Err(Errno::__WASI_ERRNO_NOSYS)
+    }
+}
+
+impl WasiVirtualDir for WasiDir {
+    fn get_readdir(&self, mut index: u64) -> Result<Vec<(String, u64, FileType)>, Errno> {
+        self.dir_rights.can(WASIRights::FD_READDIR)?;
+
+        let mut dirs = vec![];
+        if index == 0 {
+            let dir_meta = fs::metadata(&self.real_path)?;
+            let dir_ino = get_file_ino(&dir_meta);
+            dirs.push((".".to_string(), dir_ino, FileType::DIRECTORY));
+            index += 1;
+        }
+
+        if index == 1 {
+            let dir_ino = if let Some(parent) = self.real_path.parent() {
+                let dir_meta = fs::metadata(parent)?;
+                get_file_ino(&dir_meta)
+            } else {
+                0
+            };
+            dirs.push(("..".to_string(), dir_ino, FileType::DIRECTORY));
+            index += 1;
+        }
+
+        let read_dir = self.real_path.read_dir()?;
+
+        for dir_entity in read_dir.into_iter().skip((index - 2) as usize) {
+            let dir_entity = dir_entity?;
+            let name = dir_entity
+                .file_name()
+                .into_string()
+                .map_err(|_| Errno::__WASI_ERRNO_ILSEQ)?;
+            let metadata = dir_entity.metadata()?;
+            let inode = get_file_ino(&metadata);
+
+            let filetype = if metadata.is_dir() {
+                FileType::DIRECTORY
+            } else if metadata.is_symlink() {
+                FileType::SYMBOLIC_LINK
+            } else {
+                FileType::REGULAR_FILE
+            };
+
+            dirs.push((name, inode, filetype));
+        }
+
+        Ok(dirs)
     }
 }
 

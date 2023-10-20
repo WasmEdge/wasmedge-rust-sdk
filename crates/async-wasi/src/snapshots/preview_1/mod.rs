@@ -6,7 +6,7 @@ use super::{
         types::*,
     },
     env::{
-        vfs::{self, FdFlags, INode, WASIRights},
+        vfs::{self, FdFlags, INode, WASIRights, WasiVirtualDir, WasiVirtualFile, WasiVirtualNode},
         AsyncVM, VFD,
     },
     WasiCtx,
@@ -484,8 +484,8 @@ pub fn fd_pread<M: Memory>(
             mem.write_data(nread, n.to_le())
         }
         VFD::Inode(INode::Stdin(fs)) => {
-            let bufs = mem.mut_iovec(iovs, iovs_len)?;
-            let n = fs.fd_pread(&bufs, offset)? as __wasi_size_t;
+            let mut bufs = mem.mut_iovec(iovs, iovs_len)?;
+            let n = fs.fd_pread(&mut bufs, offset)? as __wasi_size_t;
             mem.write_data(nread, n.to_le())
         }
         _ => Err(Errno::__WASI_ERRNO_BADF),

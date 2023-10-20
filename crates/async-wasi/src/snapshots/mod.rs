@@ -25,9 +25,9 @@ impl Default for WasiCtx {
 }
 impl WasiCtx {
     pub fn new() -> Self {
-        let wasi_stdin = VFD::Inode(env::vfs::INode::Stdin(env::vfs::WasiStdin));
-        let wasi_stdout = VFD::Inode(env::vfs::INode::Stdout(env::vfs::WasiStdout));
-        let wasi_stderr = VFD::Inode(env::vfs::INode::Stderr(env::vfs::WasiStderr));
+        let wasi_stdin = VFD::Inode(env::vfs::INode::Stdin(env::vfs::WasiStdin::default()));
+        let wasi_stdout = VFD::Inode(env::vfs::INode::Stdout(env::vfs::WasiStdout::default()));
+        let wasi_stderr = VFD::Inode(env::vfs::INode::Stderr(env::vfs::WasiStderr::default()));
         let mut vfs = ObjectPool::new();
         vfs.push(wasi_stdin);
         vfs.push(wasi_stdout);
@@ -162,7 +162,7 @@ mod vfs_test {
         assert_eq!(ctx.vfs_preopen_limit, 3, "vfs_preopen_limit");
 
         fn vfd_stub() -> VFD {
-            VFD::Inode(vfs::INode::Stdin(vfs::WasiStdin))
+            VFD::Inode(vfs::INode::Stdin(vfs::WasiStdin::default()))
         }
 
         // [0,1,2,3,4]
