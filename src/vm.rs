@@ -86,7 +86,7 @@ impl VmBuilder {
     ///
     /// * `pname` - The name of the plugin.
     ///
-    /// * `mnames` - The names of the plugin modules.
+    /// * `mnames` - The names of the plugin modules to be registered. If `None`, then all modules in the plugin are registered.
     pub fn with_plugin(mut self, pname: impl AsRef<str>, mnames: Option<Vec<&str>>) -> Self {
         match mnames {
             Some(mod_names) => self.plugins.push((
