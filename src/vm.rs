@@ -61,33 +61,23 @@ impl VmBuilder {
     }
 
     /// Sets the `wasi_nn` plugin for the [Vm] to build. The `wasi_nn` plugin should be deployed with WasmEdge library.
-    pub fn with_plugin_wasi_nn(mut self) -> Self {
-        self.plugins
-            .push(("wasi_nn".into(), vec!["wasi_nn".into()]));
-        self
+    pub fn with_plugin_wasi_nn(self) -> Self {
+        self.with_plugin("wasi_nn", None)
     }
 
     /// Sets the `wasi_crypto` plugin for the [Vm] to build. The `wasi_crypto` plugin should be deployed with WasmEdge library.
-    pub fn with_plugin_wasi_crypto(mut self) -> Self {
-        self.plugins.push((
-            "wasi_crypto".into(),
-            vec![
-                "wasi_crypto_common".into(),
-                "wasi_crypto_asymmetric_common".into(),
-                "wasi_crypto_kx".into(),
-                "wasi_crypto_signatures".into(),
-                "wasi_crypto_symmetric".into(),
-            ],
-        ));
-
-        self
+    pub fn with_plugin_wasi_crypto(self) -> Self {
+        self.with_plugin("wasi_crypto", None)
     }
 
     /// Sets the `wasmedge_process` plugin for the [Vm] to build. The `wasmedge_process` plugin should be deployed with WasmEdge library.
-    pub fn with_plugin_wasmedge_process(mut self) -> Self {
-        self.plugins
-            .push(("wasmedge_process".into(), vec!["wasmedge_process".into()]));
-        self
+    pub fn with_plugin_wasmedge_process(self) -> Self {
+        self.with_plugin("wasmedge_process", None)
+    }
+
+    /// Sets the `rustls` plugin for the [Vm] to build. The `rustls` plugin should be deployed with WasmEdge library.
+    pub fn with_plugin_rustls(self) -> Self {
+        self.with_plugin("rustls", None)
     }
 
     /// Set the third-party plugin for the [Vm] to build.
@@ -97,15 +87,11 @@ impl VmBuilder {
     /// * `pname` - The name of the plugin.
     ///
     /// * `mnames` - The names of the plugin modules.
-    pub fn with_plugin<T: AsRef<str>>(
-        mut self,
-        pname: impl AsRef<str>,
-        mnames: Option<Vec<T>>,
-    ) -> Self {
+    pub fn with_plugin(mut self, pname: impl AsRef<str>, mnames: Option<Vec<&str>>) -> Self {
         match mnames {
             Some(mod_names) => self.plugins.push((
                 pname.as_ref().into(),
-                mod_names.into_iter().map(|s| s.as_ref().into()).collect(),
+                mod_names.into_iter().map(|s| s.into()).collect(),
             )),
             None => self.plugins.push((pname.as_ref().into(), Vec::new())),
         }
@@ -174,13 +160,28 @@ impl VmBuilder {
 
         // * load and register plugin instances
         for (pname, mnames) in self.plugins.iter() {
-            for mname in mnames {
-                let plugin_instance = Self::create_plugin_instance(pname, mname)?;
-                vm.plugin_host_instances.push(plugin_instance);
-                vm.store.register_plugin_module(
-                    &mut vm.executor,
-                    vm.plugin_host_instances.last().unwrap(),
-                )?;
+            match mnames.is_empty() {
+                true => {
+                    let plugin = PluginManager::find(pname)?;
+                    for mname in plugin.mod_names().iter() {
+                        let plugin_instance = plugin.mod_instance(mname)?;
+                        vm.plugin_host_instances.push(plugin_instance);
+                        vm.store.register_plugin_module(
+                            &mut vm.executor,
+                            vm.plugin_host_instances.last().unwrap(),
+                        )?;
+                    }
+                }
+                false => {
+                    for mname in mnames {
+                        let plugin_instance = Self::create_plugin_instance(pname, mname)?;
+                        vm.plugin_host_instances.push(plugin_instance);
+                        vm.store.register_plugin_module(
+                            &mut vm.executor,
+                            vm.plugin_host_instances.last().unwrap(),
+                        )?;
+                    }
+                }
             }
         }
 
@@ -241,13 +242,28 @@ impl VmBuilder {
 
         // * load and register plugin instances
         for (pname, mnames) in self.plugins.iter() {
-            for mname in mnames {
-                let plugin_instance = Self::create_plugin_instance(pname, mname)?;
-                vm.plugin_host_instances.push(plugin_instance);
-                vm.store.register_plugin_module(
-                    &mut vm.executor,
-                    vm.plugin_host_instances.last().unwrap(),
-                )?;
+            match mnames.is_empty() {
+                true => {
+                    let plugin = PluginManager::find(pname)?;
+                    for mname in plugin.mod_names().iter() {
+                        let plugin_instance = plugin.mod_instance(mname)?;
+                        vm.plugin_host_instances.push(plugin_instance);
+                        vm.store.register_plugin_module(
+                            &mut vm.executor,
+                            vm.plugin_host_instances.last().unwrap(),
+                        )?;
+                    }
+                }
+                false => {
+                    for mname in mnames {
+                        let plugin_instance = Self::create_plugin_instance(pname, mname)?;
+                        vm.plugin_host_instances.push(plugin_instance);
+                        vm.store.register_plugin_module(
+                            &mut vm.executor,
+                            vm.plugin_host_instances.last().unwrap(),
+                        )?;
+                    }
+                }
             }
         }
 
@@ -986,6 +1002,55 @@ mod tests {
         wat2wasm, CallingFrame, Global, GlobalType, ImportObjectBuilder, Memory, MemoryType,
         Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
     };
+
+    #[test]
+    fn test_vmbuilder() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{
+            config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions},
+            params,
+            plugin::PluginManager,
+            VmBuilder,
+        };
+
+        // load plugins from the default plugin path
+        PluginManager::load(None)?;
+
+        PluginManager::names().iter().for_each(|name| {
+            println!("plugin name: {}", name);
+        });
+
+        let wasm_app_file = "examples/wasmedge-sys/data/test_crypto.wasm";
+
+        let config = ConfigBuilder::new(CommonConfigOptions::default())
+            .with_host_registration_config(HostRegistrationConfigOptions::default().wasi(true))
+            .build()?;
+        assert!(config.wasi_enabled());
+
+        let mut vm = VmBuilder::new()
+            .with_config(config)
+            // .with_plugin_wasi_crypto()
+            // .with_plugin("rustls", "rustls_client")
+            .with_plugin(
+                "wasi_crypto",
+                Some(vec![
+                    "wasi_crypto_asymmetric_common",
+                    "wasi_crypto_signatures",
+                    "wasi_crypto_symmetric",
+                ]),
+            )
+            // .with_plugin("wasi_crypto", None)
+            .with_plugin("rustls", None)
+            .build()?;
+
+        vm.wasi_module_mut()
+            .expect("Not found wasi module")
+            .initialize(None, None, None);
+
+        vm.register_module_from_file("wasm-app", &wasm_app_file)?
+            .run_func(Some("wasm-app"), "_start", params!())?;
+
+        Ok(())
+    }
 
     #[test]
     fn test_vm_run_func_from_file() {
