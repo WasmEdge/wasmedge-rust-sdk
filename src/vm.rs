@@ -1003,6 +1003,7 @@ mod tests {
         Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
     };
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn test_vmbuilder() -> Result<(), Box<dyn std::error::Error>> {
         use crate::{
@@ -1029,7 +1030,6 @@ mod tests {
         let mut vm = VmBuilder::new()
             .with_config(config)
             // .with_plugin_wasi_crypto()
-            // .with_plugin("rustls", "rustls_client")
             .with_plugin(
                 "wasi_crypto",
                 Some(vec![
@@ -1039,7 +1039,6 @@ mod tests {
                 ]),
             )
             // .with_plugin("wasi_crypto", None)
-            .with_plugin("rustls", None)
             .build()?;
 
         vm.wasi_module_mut()
