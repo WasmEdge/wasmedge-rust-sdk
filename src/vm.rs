@@ -20,7 +20,7 @@ pub struct VmBuilder {
     config: Option<Config>,
     stat: Option<Statistics>,
     store: Option<Store>,
-    plugins: Vec<(String, String)>,
+    plugins: Vec<(String, Vec<String>)>,
     #[cfg(all(feature = "async", target_os = "linux"))]
     wasi_ctx: Option<WasiContext>,
 }
@@ -62,29 +62,31 @@ impl VmBuilder {
 
     /// Sets the `wasi_nn` plugin for the [Vm] to build. The `wasi_nn` plugin should be deployed with WasmEdge library.
     pub fn with_plugin_wasi_nn(mut self) -> Self {
-        self.plugins.push(("wasi_nn".into(), "wasi_nn".into()));
+        self.plugins
+            .push(("wasi_nn".into(), vec!["wasi_nn".into()]));
         self
     }
 
     /// Sets the `wasi_crypto` plugin for the [Vm] to build. The `wasi_crypto` plugin should be deployed with WasmEdge library.
     pub fn with_plugin_wasi_crypto(mut self) -> Self {
-        self.plugins
-            .push(("wasi_crypto".into(), "wasi_crypto_common".into()));
-        self.plugins
-            .push(("wasi_crypto".into(), "wasi_crypto_asymmetric_common".into()));
-        self.plugins
-            .push(("wasi_crypto".into(), "wasi_crypto_kx".into()));
-        self.plugins
-            .push(("wasi_crypto".into(), "wasi_crypto_signatures".into()));
-        self.plugins
-            .push(("wasi_crypto".into(), "wasi_crypto_symmetric".into()));
+        self.plugins.push((
+            "wasi_crypto".into(),
+            vec![
+                "wasi_crypto_common".into(),
+                "wasi_crypto_asymmetric_common".into(),
+                "wasi_crypto_kx".into(),
+                "wasi_crypto_signatures".into(),
+                "wasi_crypto_symmetric".into(),
+            ],
+        ));
+
         self
     }
 
     /// Sets the `wasmedge_process` plugin for the [Vm] to build. The `wasmedge_process` plugin should be deployed with WasmEdge library.
     pub fn with_plugin_wasmedge_process(mut self) -> Self {
         self.plugins
-            .push(("wasmedge_process".into(), "wasmedge_process".into()));
+            .push(("wasmedge_process".into(), vec!["wasmedge_process".into()]));
         self
     }
 
@@ -94,10 +96,20 @@ impl VmBuilder {
     ///
     /// * `pname` - The name of the plugin.
     ///
-    /// * `mname` - The name of the plugin module.
-    pub fn with_plugin(mut self, pname: impl AsRef<str>, mname: impl AsRef<str>) -> Self {
-        self.plugins
-            .push((pname.as_ref().into(), mname.as_ref().into()));
+    /// * `mnames` - The names of the plugin modules.
+    pub fn with_plugin<T: AsRef<str>>(
+        mut self,
+        pname: impl AsRef<str>,
+        mnames: Option<Vec<T>>,
+    ) -> Self {
+        match mnames {
+            Some(mod_names) => self.plugins.push((
+                pname.as_ref().into(),
+                mod_names.into_iter().map(|s| s.as_ref().into()).collect(),
+            )),
+            None => self.plugins.push((pname.as_ref().into(), Vec::new())),
+        }
+
         self
     }
 
@@ -161,13 +173,15 @@ impl VmBuilder {
         }
 
         // * load and register plugin instances
-        for (pname, mname) in self.plugins.iter() {
-            let plugin_instance = Self::create_plugin_instance(pname, mname)?;
-            vm.plugin_host_instances.push(plugin_instance);
-            vm.store.register_plugin_module(
-                &mut vm.executor,
-                vm.plugin_host_instances.last().unwrap(),
-            )?;
+        for (pname, mnames) in self.plugins.iter() {
+            for mname in mnames {
+                let plugin_instance = Self::create_plugin_instance(pname, mname)?;
+                vm.plugin_host_instances.push(plugin_instance);
+                vm.store.register_plugin_module(
+                    &mut vm.executor,
+                    vm.plugin_host_instances.last().unwrap(),
+                )?;
+            }
         }
 
         Ok(vm)
@@ -226,13 +240,15 @@ impl VmBuilder {
         }
 
         // * load and register plugin instances
-        for (pname, mname) in self.plugins.iter() {
-            let plugin_instance = Self::create_plugin_instance(pname, mname)?;
-            vm.plugin_host_instances.push(plugin_instance);
-            vm.store.register_plugin_module(
-                &mut vm.executor,
-                vm.plugin_host_instances.last().unwrap(),
-            )?;
+        for (pname, mnames) in self.plugins.iter() {
+            for mname in mnames {
+                let plugin_instance = Self::create_plugin_instance(pname, mname)?;
+                vm.plugin_host_instances.push(plugin_instance);
+                vm.store.register_plugin_module(
+                    &mut vm.executor,
+                    vm.plugin_host_instances.last().unwrap(),
+                )?;
+            }
         }
 
         Ok(vm)
