@@ -78,16 +78,22 @@ impl std::str::FromStr for NNPreload {
     type Err = WasmEdgeError;
 
     fn from_str(preload: &str) -> std::result::Result<Self, Self::Err> {
-        let preload: Vec<&str> = preload.split(':').collect();
+        let nn_preload: Vec<&str> = preload.split(':').collect();
+        if nn_preload.len() != 4 {
+            return Err(WasmEdgeError::Operation(format!(
+                "Failed to convert to NNPreload value. Invalid preload string: {}. The correct format is: 'alias:backend:target:path'",
+                preload
+            )));
+        }
         let (alias, backend, target, path) = (
-            preload[0].to_string(),
-            preload[1]
+            nn_preload[0].to_string(),
+            nn_preload[1]
                 .parse::<GraphEncoding>()
                 .map_err(|err| WasmEdgeError::Operation(err.to_string()))?,
-            preload[2]
+            nn_preload[2]
                 .parse::<ExecutionTarget>()
                 .map_err(|err| WasmEdgeError::Operation(err.to_string()))?,
-            std::path::PathBuf::from(preload[3]),
+            std::path::PathBuf::from(nn_preload[3]),
         );
 
         Ok(Self::new(alias, backend, target, path))
@@ -132,6 +138,19 @@ fn test_generate_nnpreload_from_str() {
     assert_eq!(
         WasmEdgeError::Operation(
             "Failed to convert to ExecutionTarget value. Unknown ExecutionTarget type: NPU"
+                .to_string()
+        ),
+        err
+    );
+
+    // invalid preload string: invalid format
+    let preload = "default:GGML:CPU";
+    let result = NNPreload::from_str(preload);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(
+        WasmEdgeError::Operation(
+            "Failed to convert to NNPreload value. Invalid preload string: default:GGML:CPU. The correct format is: 'alias:backend:target:path'"
                 .to_string()
         ),
         err
