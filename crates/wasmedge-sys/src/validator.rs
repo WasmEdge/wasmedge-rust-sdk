@@ -7,7 +7,6 @@ use wasmedge_types::error::WasmEdgeError;
 #[derive(Debug)]
 pub struct Validator {
     pub(crate) inner: InnerValidator,
-    pub(crate) registered: bool,
 }
 impl Validator {
     /// Creates a new [Validator] to be associated with the given global configuration.
@@ -28,7 +27,6 @@ impl Validator {
             true => Err(Box::new(WasmEdgeError::CompilerCreate)),
             false => Ok(Self {
                 inner: InnerValidator(ctx),
-                registered: false,
             }),
         }
     }
@@ -62,9 +60,7 @@ impl Validator {
 }
 impl Drop for Validator {
     fn drop(&mut self) {
-        if !self.registered && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_ValidatorDelete(self.inner.0) }
-        }
+        unsafe { ffi::WasmEdge_ValidatorDelete(self.inner.0) }
     }
 }
 
