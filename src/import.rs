@@ -47,8 +47,9 @@ impl<Data> ImportObjectBuilder<Data> {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(args.to_vec(), returns.to_vec());
-        let func =
-            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)?;
+        let func = unsafe {
+            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)
+        }?;
         self.import_object.add_func(name, func);
 
         Ok(self)
@@ -77,8 +78,9 @@ impl<Data> ImportObjectBuilder<Data> {
         ty: FuncType,
         real_func: sys::SyncFn<Data>,
     ) -> WasmEdgeResult<&mut Self> {
-        let func =
-            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)?;
+        let func = unsafe {
+            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)
+        }?;
         self.import_object.add_func(name, func);
         Ok(self)
     }

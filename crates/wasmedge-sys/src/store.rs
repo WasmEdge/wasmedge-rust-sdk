@@ -86,7 +86,7 @@ impl Store {
                 unsafe {
                     Ok(InnerRef::create_from_ref(
                         std::mem::ManuallyDrop::new(inst),
-                        &self,
+                        self,
                     ))
                 }
             }

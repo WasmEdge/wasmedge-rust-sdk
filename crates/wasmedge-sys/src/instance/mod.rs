@@ -29,11 +29,17 @@ pub struct InnerRef<D, Ref: ?Sized> {
 }
 
 impl<D, Ref: ?Sized> InnerRef<D, &Ref> {
+    /// # Safety
+    ///
+    /// The return value type of this function should ensure the correctness of lifetimes.
     pub unsafe fn create_from_ref(value: std::mem::ManuallyDrop<D>, _r: &Ref) -> Self {
         let r = Default::default();
         Self { value, _ref: r }
     }
 
+    /// # Safety
+    ///
+    /// The return value type of this function should ensure the correctness of lifetimes.
     pub unsafe fn create_ref(value: std::mem::ManuallyDrop<D>) -> Self {
         let r = Default::default();
         Self { value, _ref: r }
@@ -41,11 +47,17 @@ impl<D, Ref: ?Sized> InnerRef<D, &Ref> {
 }
 
 impl<D, Ref: ?Sized> InnerRef<D, &mut Ref> {
+    /// # Safety
+    ///
+    /// The return value type of this function should ensure the correctness of lifetimes.
     pub unsafe fn create_from_mut(value: std::mem::ManuallyDrop<D>, _r: &mut Ref) -> Self {
         let r = Default::default();
         Self { value, _ref: r }
     }
 
+    /// # Safety
+    ///
+    /// The return value type of this function should ensure the correctness of lifetimes.
     pub unsafe fn create_mut(value: std::mem::ManuallyDrop<D>) -> Self {
         let r = Default::default();
         Self { value, _ref: r }

@@ -190,7 +190,9 @@ impl Plugin {
         }
     }
 
-    /// Provides a raw pointer to the inner Plugin context.
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     pub unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_PluginContext {
         self.inner.0 as *const _
     }

@@ -103,10 +103,16 @@ impl Global {
         Ok(())
     }
 
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     pub unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_GlobalInstanceContext {
         self.inner.0 as *const _
     }
 
+    /// # Safety
+    ///
+    /// This function takes ownership of `ptr`, so do not call `ffi::WasmEdge_GlobalInstanceDelete` on `ptr` after this.
     pub unsafe fn from_raw(ptr: *mut ffi::WasmEdge_GlobalInstanceContext) -> Self {
         Self {
             inner: InnerGlobal(ptr),

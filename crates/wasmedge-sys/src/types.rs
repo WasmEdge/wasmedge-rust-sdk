@@ -68,12 +68,18 @@ impl WasmEdgeString {
         self.inner.0
     }
 
+    /// # Safety
+    ///
+    /// After calling this function, the caller is responsible for managing the lifetime of `ffi::WasmEdge_String`` and should call `ffi::WasmEdge_StringDelete`` at the appropriate time.
     pub unsafe fn into_raw(self) -> ffi::WasmEdge_String {
         let s = self.inner.0;
         std::mem::forget(self);
         s
     }
 
+    /// # Safety
+    ///
+    /// This function takes ownership of `s`, so do not call `ffi::WasmEdge_StringDelete` on `s` after this.
     pub unsafe fn from_raw(s: ffi::WasmEdge_String) -> Self {
         Self {
             inner: InnerWasmEdgeString(s),

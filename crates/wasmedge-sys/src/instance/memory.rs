@@ -165,6 +165,10 @@ impl Memory {
     ///
     /// If fail to get the data pointer, then an error is returned.
     ///
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
+    ///
     pub unsafe fn data_pointer(&self, offset: u32, len: u32) -> WasmEdgeResult<*const u8> {
         let ptr = unsafe { ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.0, offset, len) };
         match ptr.is_null() {
@@ -184,6 +188,10 @@ impl Memory {
     /// # Errors
     ///
     /// If fail to get the data pointer, then an error is returned.
+    ///
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     ///
     pub unsafe fn data_pointer_mut(&mut self, offset: u32, len: u32) -> WasmEdgeResult<*mut u8> {
         let ptr = unsafe { ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.0, offset, len) };
@@ -229,7 +237,10 @@ impl Memory {
         unsafe { check(ffi::WasmEdge_MemoryInstanceGrowPage(self.inner.0, count)) }
     }
 
+    /// # Safety
+    ///
     /// Provides a raw pointer to the inner memory context.
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     pub unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_MemoryInstanceContext {
         self.inner.0
     }

@@ -155,10 +155,16 @@ impl Table {
         unsafe { check(ffi::WasmEdge_TableInstanceGrow(self.inner.0, size)) }
     }
 
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     pub unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_TableInstanceContext {
         self.inner.0 as *const _
     }
 
+    /// # Safety
+    ///
+    /// This function will take over the lifetime management of `ptr`, so do not call `ffi::WasmEdge_TableInstanceDelete` on `ptr` after this.
     pub unsafe fn from_raw(ptr: *mut ffi::WasmEdge_TableInstanceContext) -> Self {
         Self {
             inner: InnerTable(ptr),

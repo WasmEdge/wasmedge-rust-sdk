@@ -315,9 +315,9 @@ fn gen_runtime_error(code: u32) -> WasmEdgeResult<()> {
     }
 }
 
-impl Into<WasmEdge_Result> for CoreError {
-    fn into(self) -> WasmEdge_Result {
-        let code = match self {
+impl From<CoreError> for WasmEdge_Result {
+    fn from(val: CoreError) -> WasmEdge_Result {
+        let code = match val {
             CoreError::Common(CoreCommonError::Terminated) => 0x01,
             // Common errors
             CoreError::Common(CoreCommonError::RuntimeError) => 0x02,

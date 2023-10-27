@@ -98,6 +98,10 @@ impl Function {
     ///
     /// * If fail to create a [Function], then [WasmEdgeError::Func(FuncError::Create)](wasmedge_types::error::FuncError) is returned.
     ///
+    /// # Safety
+    ///
+    /// The lifetime of `data` must be greater than that of `Function` itself.
+    ///
     /// # Example
     ///
     /// The example defines a host function `real_add`, and creates a [Function] binding to it by calling
@@ -137,7 +141,7 @@ impl Function {
     /// // create a Function instance
     /// let func = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0).expect("fail to create a Function instance");
     /// ```
-    pub fn create_sync_func<T>(
+    pub unsafe fn create_sync_func<T>(
         ty: &wasmedge_types::FuncType,
         real_fn: SyncFn<T>,
         data: *mut T,
@@ -220,10 +224,16 @@ impl Function {
         }
     }
 
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     pub unsafe fn as_ptr(&self) -> *mut ffi::WasmEdge_FunctionInstanceContext {
         self.inner.0
     }
 
+    /// # Safety
+    ///
+    /// This function will take over the lifetime management of `ctx`, so do not call `ffi::WasmEdge_FunctionInstanceDelete` on `ctx` after this.
     pub unsafe fn from_raw(ctx: *mut ffi::WasmEdge_FunctionInstanceContext) -> Self {
         Self {
             inner: InnerFunc(ctx),
@@ -240,6 +250,9 @@ impl Drop for Function {
 pub type FuncRef<Ref> = InnerRef<Function, Ref>;
 
 pub trait AsFunc {
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     unsafe fn get_func_raw(&self) -> *mut ffi::WasmEdge_FunctionInstanceContext;
 
     fn ty(&self) -> Option<wasmedge_types::FuncType>

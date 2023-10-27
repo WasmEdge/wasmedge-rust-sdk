@@ -115,7 +115,7 @@ pub trait AsInstance {
 
                 Ok(InnerRef::create_from_ref(
                     std::mem::ManuallyDrop::new(mem),
-                    &self,
+                    self,
                 ))
             }
         }
@@ -373,7 +373,10 @@ pub trait AsInstance {
         }
     }
 
+    /// # Safety
+    ///
     /// Provides a raw pointer to the inner module instance context.
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext;
 }
 
@@ -431,11 +434,17 @@ impl<T: Sized> ImportModule<T> {
         Ok(import)
     }
 
+    /// # Safety
+    ///
     /// Provides a raw pointer to the inner module instance context.
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
     pub unsafe fn as_raw(&self) -> *mut ffi::WasmEdge_ModuleInstanceContext {
         self.inner.0
     }
 
+    /// # Safety
+    ///
+    /// This function will take over the lifetime management of `ctx`, so do not call `ffi::WasmEdge_ModuleInstanceDelete` on `ctx` after this.
     pub unsafe fn from_raw(ctx: *mut ffi::WasmEdge_ModuleInstanceContext) -> Self {
         let wasmedge_s = WasmEdgeString::from_raw(ffi::WasmEdge_ModuleInstanceGetModuleName(ctx));
         let name = (&wasmedge_s).into();

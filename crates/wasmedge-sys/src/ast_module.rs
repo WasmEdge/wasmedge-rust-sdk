@@ -31,7 +31,7 @@ impl Module {
     }
 
     /// Returns the types of wasm imports in the [Module].
-    pub fn imports<'module>(&'module self) -> Vec<ImportType<'module>> {
+    pub fn imports(&self) -> Vec<ImportType<'_>> {
         let size = self.count_of_imports();
         let mut returns = Vec::with_capacity(size as usize);
         unsafe {
@@ -54,7 +54,7 @@ impl Module {
     }
 
     /// Returns the types of wasm exports in the [Module].
-    pub fn export<'module>(&'module self) -> Vec<ExportType<'module>> {
+    pub fn export(&self) -> Vec<ExportType<'_>> {
         let size = self.count_of_exports();
         let mut returns = Vec::with_capacity(size as usize);
         unsafe {

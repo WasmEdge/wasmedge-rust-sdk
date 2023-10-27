@@ -40,9 +40,9 @@ impl From<Box<dyn Read + Send>> for WasiStdin {
         Self(value)
     }
 }
-impl Into<INode> for WasiStdin {
-    fn into(self) -> INode {
-        INode::Stdin(self)
+impl From<WasiStdin> for INode {
+    fn from(value: WasiStdin) -> Self {
+        INode::Stdin(value)
     }
 }
 impl WasiVirtualNode for WasiStdin {
@@ -171,9 +171,9 @@ impl From<Box<dyn Write + Send>> for WasiStdout {
         Self(value)
     }
 }
-impl Into<INode> for WasiStdout {
-    fn into(self) -> INode {
-        INode::Stdout(self)
+impl From<WasiStdout> for INode {
+    fn from(value: WasiStdout) -> Self {
+        INode::Stdout(value)
     }
 }
 impl WasiVirtualFile for WasiStdout {
@@ -304,9 +304,9 @@ impl From<Box<dyn Write + Send>> for WasiStderr {
         Self(value)
     }
 }
-impl Into<INode> for WasiStderr {
-    fn into(self) -> INode {
-        INode::Stderr(self)
+impl From<WasiStderr> for INode {
+    fn from(value: WasiStderr) -> INode {
+        INode::Stderr(value)
     }
 }
 impl WasiVirtualNode for WasiStderr {

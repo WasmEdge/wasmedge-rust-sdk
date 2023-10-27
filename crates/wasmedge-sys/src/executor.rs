@@ -164,7 +164,7 @@ impl Executor {
             .ty()
             .ok_or(WasmEdgeError::Func(wasmedge_types::error::FuncError::Type))?;
         let returns_len = func_ty.returns_len();
-        let mut returns = Vec::with_capacity(returns_len as usize);
+        let mut returns = Vec::with_capacity(returns_len);
 
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
@@ -176,7 +176,7 @@ impl Executor {
                 returns_len as u32,
             ))?;
 
-            returns.set_len(returns_len as usize);
+            returns.set_len(returns_len);
         }
 
         Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
@@ -199,7 +199,7 @@ impl Executor {
     #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
     pub fn call_func_with_timeout(
         &self,
-        func: &Function,
+        func: &mut Function,
         params: impl IntoIterator<Item = WasmValue>,
         timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
@@ -211,7 +211,7 @@ impl Executor {
             .ty()
             .ok_or(WasmEdgeError::Func(wasmedge_types::error::FuncError::Type))?;
         let returns_len = func_ty.returns_len();
-        let mut returns = Vec::with_capacity(returns_len as usize);
+        let mut returns = Vec::with_capacity(returns_len);
 
         unsafe {
             init_signal_listen();
@@ -259,7 +259,7 @@ impl Executor {
                 }
             })?;
 
-            returns.set_len(returns_len as usize);
+            returns.set_len(returns_len);
             Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
         }
     }
@@ -342,7 +342,7 @@ impl Executor {
         // get the length of the function's returns
         let func_ty = func_ref.ty().unwrap();
         let returns_len = func_ty.returns_len();
-        let mut returns = Vec::with_capacity(returns_len as usize);
+        let mut returns = Vec::with_capacity(returns_len);
 
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
@@ -353,7 +353,7 @@ impl Executor {
                 returns.as_mut_ptr(),
                 returns_len as u32,
             ))?;
-            returns.set_len(returns_len as usize);
+            returns.set_len(returns_len);
         }
 
         Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())

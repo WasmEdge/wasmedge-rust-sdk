@@ -164,12 +164,14 @@ impl AsyncWasiModule {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
                     let func_ty = FuncType::new(ty_args, ty_rets);
 
-                    let func = Function::create_sync_func(
-                        &func_ty,
-                        real_fn,
-                        async_wasi_module.0.get_host_data_mut(),
-                        0,
-                    )?;
+                    let func = unsafe {
+                        Function::create_sync_func(
+                            &func_ty,
+                            real_fn,
+                            async_wasi_module.0.get_host_data_mut(),
+                            0,
+                        )
+                    }?;
 
                     async_wasi_module.0.add_func(&name, func);
                 }
@@ -1772,6 +1774,7 @@ where
     Box::new(f(data, inst, frame, args))
 }
 
+#[allow(clippy::complexity)]
 fn wrap_future<
     'data,
     'inst,

@@ -140,16 +140,14 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
             Some(mod_name) => {
                 if let Some((inst, executor)) = self.store.get_instance_and_executor(mod_name) {
                     (inst.get_func_mut(func_name.as_ref())?, executor)
+                } else if let Some((wasm_mod, executor)) =
+                    self.store.get_named_wasm_and_executor(mod_name)
+                {
+                    (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
                 } else {
-                    if let Some((wasm_mod, executor)) =
-                        self.store.get_named_wasm_and_executor(mod_name)
-                    {
-                        (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
-                    } else {
-                        return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                            mod_name.into(),
-                        ))));
-                    }
+                    return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
+                        mod_name.into(),
+                    ))));
                 }
             }
             None => {
@@ -194,16 +192,14 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
             Some(mod_name) => {
                 if let Some((inst, executor)) = self.store.get_instance_and_executor(mod_name) {
                     (inst.get_func_mut(func_name.as_ref())?, executor)
+                } else if let Some((wasm_mod, executor)) =
+                    self.store.get_named_wasm_and_executor(mod_name)
+                {
+                    (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
                 } else {
-                    if let Some((wasm_mod, executor)) =
-                        self.store.get_named_wasm_and_executor(mod_name)
-                    {
-                        (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
-                    } else {
-                        return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                            mod_name.into(),
-                        ))));
-                    }
+                    return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
+                        mod_name.into(),
+                    ))));
                 }
             }
             None => {

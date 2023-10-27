@@ -39,7 +39,7 @@ impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
         let mut store = sys::Store::create()?;
         let mut executor = sys::Executor::create(config.map(|cfg| cfg.inner.as_ref()), None)?;
 
-        for (_k, v) in &instances {
+        for v in instances.values() {
             executor.register_import_module(&mut store, *v)?;
         }
 

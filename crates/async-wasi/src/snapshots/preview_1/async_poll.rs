@@ -104,7 +104,6 @@ async fn wait_fd(
     }
 }
 
-#[allow(clippy::needless_pass_by_ref_mut)]
 async fn poll_only_fd<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -179,7 +178,6 @@ async fn poll_only_fd<M: Memory>(
     Ok(())
 }
 
-#[allow(clippy::needless_pass_by_ref_mut)]
 async fn poll_fd_timeout<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -345,12 +343,16 @@ pub async fn poll_oneoff<M: Memory>(
     nsubscriptions: __wasi_size_t,
     revents_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    let r = poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await;
     #[cfg(feature = "serialize")]
     {
+        let r = poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await;
         ctx.io_state = IoState::Empty;
+        r
     }
-    r
+    #[cfg(not(feature = "serialize"))]
+    {
+        poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
+    }
 }
 
 async fn poll_oneoff_impl<M: Memory>(
