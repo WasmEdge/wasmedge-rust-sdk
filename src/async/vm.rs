@@ -188,7 +188,7 @@ impl<'inst, T: ?Sized + Send + AsyncInst> Vm<'inst, T> {
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(target_env = "musl")))]
     pub async fn run_func_with_timeout(
         &mut self,
         mod_name: Option<&str>,
