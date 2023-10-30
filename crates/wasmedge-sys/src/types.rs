@@ -146,8 +146,8 @@ impl From<WasmEdgeString> for &std::ffi::CStr {
 
 impl From<&ffi::WasmEdge_String> for String {
     fn from(s: &ffi::WasmEdge_String) -> Self {
-        let cstr: &std::ffi::CStr = s.into();
-        cstr.to_string_lossy().into_owned()
+        let cstr = unsafe { std::slice::from_raw_parts(s.Buf as *mut u8, s.Length as usize) };
+        String::from_utf8(cstr.to_vec()).unwrap_or_default()
     }
 }
 impl From<&ffi::WasmEdge_String> for &std::ffi::CStr {
