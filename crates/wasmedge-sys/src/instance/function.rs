@@ -512,7 +512,14 @@ impl Drop for Function {
 
             // delete the function instance
             if !self.inner.lock().0.is_null() {
-                unsafe { ffi::WasmEdge_FunctionInstanceDelete(self.inner.lock().0) };
+                unsafe {
+                    // drop host data
+                    let _ =
+                        Box::from_raw(ffi::WasmEdge_FunctionInstanceGetData(self.inner.lock().0)
+                            as *mut c_void);
+
+                    ffi::WasmEdge_FunctionInstanceDelete(self.inner.lock().0)
+                };
             }
         }
     }
