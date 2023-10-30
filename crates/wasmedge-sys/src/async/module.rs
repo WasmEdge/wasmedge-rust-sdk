@@ -151,13 +151,6 @@ impl AsyncWasiModule {
 
         let mut async_wasi_module = Self(AsyncImportObject::create(name, Box::new(wasi_ctx))?);
 
-        // let f = AsyncFunction::create_async_func(
-        //     &crate::FuncTypeOwn::create(vec![ValType::I32], vec![]).unwrap(),
-        //     sock_accept,
-        //     std::ptr::null_mut(),
-        //     0,
-        // );
-
         // add sync/async host functions to the module
         for wasi_func in wasi_impls() {
             match wasi_func {

@@ -3,11 +3,7 @@ pub use sys::AsInstance;
 use sys::Function;
 use wasmedge_sys::{self as sys};
 
-/// Creates a normal or wasi [import object](crate::ImportObject).
-///
-/// # Example
-///
-/// This example shows how to create a normal import object that contains a host function, a global variable, a memory and a table. The import object is named "extern".
+/// Creates a [import object](crate::ImportObject).
 ///
 #[derive(Debug)]
 pub struct ImportObjectBuilder<Data> {

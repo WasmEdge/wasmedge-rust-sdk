@@ -5,11 +5,7 @@ use sys::r#async::{
 };
 use wasmedge_sys::{self as sys};
 
-/// Creates a normal or wasi [import object](crate::ImportObject).
-///
-/// # Example
-///
-/// This example shows how to create a normal import object that contains a host function, a global variable, a memory and a table. The import object is named "extern".
+/// Creates a [async import object](sys::r#async::module::AsyncImportObject).
 ///
 #[derive(Debug)]
 pub struct ImportObjectBuilder<Data: Send> {

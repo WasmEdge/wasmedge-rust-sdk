@@ -20,7 +20,7 @@ impl CallingFrame {
         }
     }
 
-    /// Returns the [memory instance](crate::Memory) by the given index from the module instance of the current
+    /// Returns an immutable smart pointer borrowing the [memory instance](crate::Memory) by the given index from the module instance of the current
     /// calling frame. If the memory instance is not found, returns `None`.
     ///
     /// By default, a WASM module has only one memory instance after instantiation. Therefore, users can pass in `0` as
@@ -49,6 +49,17 @@ impl CallingFrame {
         }
     }
 
+    /// Returns an mutable smart pointer borrowing the [memory instance](crate::Memory) by the given index from the module instance of the current
+    /// calling frame. If the memory instance is not found, returns `None`.
+    ///
+    /// By default, a WASM module has only one memory instance after instantiation. Therefore, users can pass in `0` as
+    /// the index to get the memory instance in host function body. When the [MultiMemories](crate::Config::multi_memories)
+    /// config option is enabled, there would be more than one memory instances in the wasm module. Users can retrieve
+    /// the target memory instance by specifying the index of the memory instance in the wasm module instance.
+    ///
+    /// # Arguments
+    ///
+    /// * idx - The index of the memory instance.
     pub fn memory_mut(&mut self, idx: u32) -> Option<InnerRef<Memory, &mut Self>> {
         unsafe {
             let ctx = ffi::WasmEdge_CallingFrameGetMemoryInstance(self.inner.0, idx);

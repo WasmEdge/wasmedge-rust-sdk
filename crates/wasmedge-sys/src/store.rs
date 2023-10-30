@@ -12,7 +12,7 @@ use crate::{
 
 use wasmedge_types::error::{StoreError, WasmEdgeError};
 
-/// A [Store] represents all global state that can be manipulated by WebAssembly programs. It consists of the runtime representation of all instances of [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global).
+/// The [Store] is a collection of registered modules and assists wasm modules in finding the import modules they need.
 #[derive(Debug)]
 pub struct Store {
     pub(crate) inner: InnerStore,
