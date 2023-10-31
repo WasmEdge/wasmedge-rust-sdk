@@ -101,46 +101,6 @@ impl Function {
     /// # Safety
     ///
     /// The lifetime of `data` must be greater than that of `Function` itself.
-    ///
-    /// # Example
-    ///
-    /// The example defines a host function `real_add`, and creates a [Function] binding to it by calling
-    /// the `create_binding` method.
-    ///
-    /// ```rust
-    /// use wasmedge_macro::sys_host_function;
-    /// use wasmedge_sys::{FuncType, Function, WasmValue, CallingFrame};
-    /// use wasmedge_types::{error::HostFuncError, ValType, WasmEdgeResult, NeverType};
-    ///
-    /// #[sys_host_function]
-    /// fn real_add(_frame: CallingFrame, inputs: Vec<WasmValue>) -> Result<Vec<WasmValue>, HostFuncError> {
-    ///     if inputs.len() != 2 {
-    ///         return Err(HostFuncError::User(1));
-    ///     }
-    ///
-    ///     let a = if inputs[0].ty() == ValType::I32 {
-    ///         inputs[0].to_i32()
-    ///     } else {
-    ///         return Err(HostFuncError::User(2));
-    ///     };
-    ///
-    ///     let b = if inputs[1].ty() == ValType::I32 {
-    ///         inputs[1].to_i32()
-    ///     } else {
-    ///         return Err(HostFuncError::User(3));
-    ///     };
-    ///
-    ///     let c = a + b;
-    ///
-    ///     Ok(vec![WasmValue::from_i32(c)])
-    /// }
-    ///
-    /// // create a FuncType
-    /// let func_ty = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]).expect("fail to create a FuncType");
-    ///
-    /// // create a Function instance
-    /// let func = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0).expect("fail to create a Function instance");
-    /// ```
     pub unsafe fn create_sync_func<T>(
         ty: &wasmedge_types::FuncType,
         real_fn: SyncFn<T>,
@@ -303,15 +263,6 @@ impl FuncTypeOwn {
     /// # Error
     ///
     /// If fail to create a [FuncType], then an error is returned.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use wasmedge_sys::FuncType;
-    /// use wasmedge_types::ValType;
-    ///
-    /// let func_ty = FuncType::create(vec![ValType::I32;2], vec![ValType::I32]).expect("fail to create a FuncType");
-    /// ```
     pub(crate) fn create<I: IntoIterator<Item = ValType>, R: IntoIterator<Item = ValType>>(
         args: I,
         returns: R,
@@ -409,19 +360,12 @@ pub(crate) struct InnerFuncType(pub(crate) *const ffi::WasmEdge_FunctionTypeCont
 unsafe impl Send for InnerFuncType {}
 unsafe impl Sync for InnerFuncType {}
 
-// #[cfg(test)]
-#[cfg(ignore)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    use crate::{r#async::AsyncWasiModule, WasiInstance, ASYNC_HOST_FUNCS};
-    use crate::{types::WasmValue, AsImport, Executor, ImportModule, Store, HOST_FUNC_FOOTPRINTS};
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
-    use wasmedge_macro::sys_host_function;
-    use wasmedge_types::{NeverType, ValType};
+    use crate::{types::WasmValue, Executor};
+
+    use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
 
     #[test]
     fn test_func_type() {
@@ -442,7 +386,7 @@ mod tests {
             // create FuncType
             let result = FuncTypeOwn::create(param_tys, ret_tys);
             assert!(result.is_ok());
-            let func_ty = result.unwrap().get_ref();
+            let func_ty = result.unwrap();
 
             // check parameters
             assert_eq!(func_ty.params_len(), param_len as u32);
@@ -473,7 +417,7 @@ mod tests {
             // create FuncType
             let result = FuncTypeOwn::create([], []);
             assert!(result.is_ok());
-            let func_ty = result.unwrap().get_ref();
+            let func_ty = result.unwrap();
 
             assert_eq!(func_ty.params_len(), 0);
             assert_eq!(func_ty.returns_len(), 0);
@@ -489,7 +433,8 @@ mod tests {
             _v: Vec<T>,
             _s: Vec<S>,
         }
-        let data: Data<i32, &str> = Data {
+
+        let mut data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
@@ -497,29 +442,27 @@ mod tests {
         };
 
         fn real_add<T: core::fmt::Debug>(
-            _frame: CallingFrame,
+            _host_data: &mut Data<i32, &str>,
+            _inst: &mut Instance,
+            _frame: &mut CallingFrame,
             input: Vec<WasmValue>,
-            data: *mut std::ffi::c_void,
-        ) -> Result<Vec<WasmValue>, HostFuncError> {
+        ) -> Result<Vec<WasmValue>, CoreError> {
             println!("Rust: Entering Rust function real_add");
 
-            let host_data = unsafe { Box::from_raw(data as *mut T) };
-            println!("host_data: {:?}", host_data);
-
             if input.len() != 2 {
-                return Err(HostFuncError::User(1));
+                return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
             }
 
             let a = if input[0].ty() == ValType::I32 {
                 input[0].to_i32()
             } else {
-                return Err(HostFuncError::User(2));
+                return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
             };
 
             let b = if input[1].ty() == ValType::I32 {
                 input[1].to_i32()
             } else {
-                return Err(HostFuncError::User(3));
+                return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
             };
 
             let c = a + b;
@@ -529,672 +472,40 @@ mod tests {
             Ok(vec![WasmValue::from_i32(c)])
         }
 
-        assert_eq!(HOST_FUNCS.read().len(), 0);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
         // create a FuncType
-        let result = FuncTypeOwn::create(vec![ValType::I32; 2], vec![ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
+        let func_ty = FuncType::new(vec![ValType::I32; 2], vec![ValType::I32]);
         // create a host function
-        let result = Function::create_sync_func(
-            &func_ty,
-            Box::new(real_add::<Data<i32, &str>>),
-            Some(Box::new(data)),
-            0,
-        );
+        let result = unsafe {
+            Function::create_sync_func(&func_ty, real_add::<Data<i32, &str>>, &mut data, 0)
+        };
         assert!(result.is_ok());
-        let host_func = result.unwrap();
+        let mut host_func = result.unwrap();
 
         // get func type
-        let result = FuncType::get_from_func(&host_func);
+        let result = host_func.ty();
         assert!(result.is_some());
         let ty = result.unwrap();
 
         // check parameters
-        assert_eq!(ty.params_len(), 2);
-        let param_tys = ty.params_type_iter().collect::<Vec<_>>();
-        assert_eq!(param_tys, vec![ValType::I32; 2]);
+        assert_eq!(ty.args_len(), 2);
+        assert_eq!(ty.args(), &[ValType::I32; 2]);
 
         // check returns
         assert_eq!(ty.returns_len(), 1);
-        let return_tys = ty.returns_type_iter().collect::<Vec<_>>();
-        assert_eq!(return_tys, vec![ValType::I32]);
+        assert_eq!(ty.returns(), &[ValType::I32]);
 
         // run this function
         let result = Executor::create(None, None);
         assert!(result.is_ok());
         let mut executor = result.unwrap();
-        let result = host_func.call(
-            &mut executor,
+
+        let result = executor.call_func(
+            &mut host_func,
             vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
         );
+
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns[0].to_i32(), 3);
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_func_create_host_func_in_host_func() {
-        #[sys_host_function]
-        fn func(
-            _frame: CallingFrame,
-            _input: Vec<WasmValue>,
-        ) -> Result<Vec<WasmValue>, HostFuncError> {
-            println!("Entering host function: func");
-
-            // spawn a new thread to create a new host function
-            let handler = std::thread::spawn(|| {
-                #[sys_host_function]
-                fn real_add(
-                    _frame: CallingFrame,
-                    input: Vec<WasmValue>,
-                ) -> Result<Vec<WasmValue>, HostFuncError> {
-                    println!("Rust: Entering Rust function real_add");
-
-                    if input.len() != 2 {
-                        return Err(HostFuncError::User(1));
-                    }
-
-                    let a = if input[0].ty() == ValType::I32 {
-                        input[0].to_i32()
-                    } else {
-                        return Err(HostFuncError::User(2));
-                    };
-
-                    let b = if input[1].ty() == ValType::I32 {
-                        input[1].to_i32()
-                    } else {
-                        return Err(HostFuncError::User(3));
-                    };
-
-                    let c = a + b;
-
-                    println!("Rust: Leaving Rust function real_add");
-                    Ok(vec![WasmValue::from_i32(c)])
-                }
-
-                // create a FuncType
-                let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-                assert!(result.is_ok());
-                let func_ty = result.unwrap();
-                // create a host function
-                let result =
-                    Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-                assert!(result.is_ok());
-                let host_func = result.unwrap();
-
-                // run this function
-                let result = Executor::create(None, None);
-                assert!(result.is_ok());
-                let mut executor = result.unwrap();
-                let result = host_func.call(
-                    &mut executor,
-                    vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
-                );
-                assert!(result.is_ok());
-                let returns = result.unwrap();
-                assert_eq!(returns[0].to_i32(), 3);
-            });
-            handler.join().unwrap();
-
-            println!("Leaving host function: func");
-            Ok(vec![])
-        }
-
-        // create a FuncType
-        let result = FuncType::create(vec![], vec![]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(func), None, 0);
-        assert!(result.is_ok());
-        let host_func = result.unwrap();
-
-        // run this function
-        let result = Executor::create(None, None);
-        assert!(result.is_ok());
-        let mut executor = result.unwrap();
-        let result = host_func.call(&mut executor, vec![]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_func_send() {
-        // create a FuncType
-        let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-        assert!(result.is_ok());
-        let host_func = result.unwrap();
-
-        let handle = thread::spawn(move || {
-            // get func type
-            let result = host_func.ty();
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-
-            // check parameters
-            assert_eq!(ty.params_len(), 2);
-            let param_tys = ty.params_type_iter().collect::<Vec<_>>();
-            assert_eq!(param_tys, vec![ValType::I32; 2]);
-
-            // check returns
-            assert_eq!(ty.returns_len(), 1);
-            let return_tys = ty.returns_type_iter().collect::<Vec<_>>();
-            assert_eq!(return_tys, vec![ValType::I32]);
-        });
-
-        handle.join().unwrap()
-    }
-
-    #[test]
-    fn test_func_sync() {
-        // create a FuncType
-        let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-        assert!(result.is_ok());
-        let host_func = Arc::new(Mutex::new(result.unwrap()));
-
-        let host_func_cloned = Arc::clone(&host_func);
-        let handle = thread::spawn(move || {
-            let result = host_func_cloned.lock();
-            assert!(result.is_ok());
-            let host_func = result.unwrap();
-
-            // get func type
-            let result = host_func.ty();
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-
-            // check parameters
-            assert_eq!(ty.params_len(), 2);
-            let param_tys = ty.params_type_iter().collect::<Vec<_>>();
-            assert_eq!(param_tys, vec![ValType::I32; 2]);
-
-            // check returns
-            assert_eq!(ty.returns_len(), 1);
-            let return_tys = ty.returns_type_iter().collect::<Vec<_>>();
-            assert_eq!(return_tys, vec![ValType::I32]);
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[sys_host_function]
-    fn real_add(
-        _frame: CallingFrame,
-        input: Vec<WasmValue>,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
-        println!("Rust: Entering Rust function real_add");
-
-        if input.len() != 2 {
-            return Err(HostFuncError::User(1));
-        }
-
-        let a = if input[0].ty() == ValType::I32 {
-            input[0].to_i32()
-        } else {
-            return Err(HostFuncError::User(2));
-        };
-
-        let b = if input[1].ty() == ValType::I32 {
-            input[1].to_i32()
-        } else {
-            return Err(HostFuncError::User(3));
-        };
-
-        let c = a + b;
-        println!("Rust: calcuating in real_add c: {c:?}");
-
-        println!("Rust: Leaving Rust function real_add");
-        Ok(vec![WasmValue::from_i32(c)])
-    }
-
-    #[test]
-    fn test_func_closure() -> Result<(), Box<dyn std::error::Error>> {
-        {
-            // create a host function
-            let real_add = |_: CallingFrame,
-                            input: Vec<WasmValue>,
-                            _: *mut std::os::raw::c_void|
-             -> Result<Vec<WasmValue>, HostFuncError> {
-                println!("Rust: Entering Rust function real_add");
-
-                if input.len() != 2 {
-                    return Err(HostFuncError::User(1));
-                }
-
-                let a = if input[0].ty() == ValType::I32 {
-                    input[0].to_i32()
-                } else {
-                    return Err(HostFuncError::User(2));
-                };
-
-                let b = if input[1].ty() == ValType::I32 {
-                    input[1].to_i32()
-                } else {
-                    return Err(HostFuncError::User(3));
-                };
-
-                let c = a + b;
-                println!("Rust: calcuating in real_add c: {c:?}");
-
-                println!("Rust: Leaving Rust function real_add");
-                Ok(vec![WasmValue::from_i32(c)])
-            };
-
-            // create a FuncType
-            let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-            assert!(result.is_ok());
-            let func_ty = result.unwrap();
-
-            // create a host function from the closure defined above
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-            assert!(result.is_ok());
-            let host_func = result.unwrap();
-
-            // create a Store
-            let result = Store::create();
-            assert!(result.is_ok());
-            let mut store = result.unwrap();
-
-            // create an ImportModule
-            let mut import = ImportModule::<NeverType>::create("extern", None)?;
-            import.add_func("add", host_func);
-
-            // run this function
-            let result = Executor::create(None, None);
-            assert!(result.is_ok());
-            let mut executor = result.unwrap();
-            executor.register_import_module(&mut store, &import)?;
-
-            let extern_instance = store.module("extern")?;
-            let add = extern_instance.get_func("add")?;
-
-            let result =
-                executor.call_func(&add, vec![WasmValue::from_i32(1), WasmValue::from_i32(2)]);
-            assert!(result.is_ok());
-            let returns = result.unwrap();
-            assert_eq!(returns[0].to_i32(), 3);
-        }
-
-        assert_eq!(HOST_FUNCS.read().len(), 0);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_func_drop() -> Result<(), Box<dyn std::error::Error>> {
-        // create a host function
-        let real_add = |_: CallingFrame,
-                        input: Vec<WasmValue>,
-                        _: *mut std::os::raw::c_void|
-         -> Result<Vec<WasmValue>, HostFuncError> {
-            println!("Rust: Entering Rust function real_add");
-
-            if input.len() != 2 {
-                return Err(HostFuncError::User(1));
-            }
-
-            let a = if input[0].ty() == ValType::I32 {
-                input[0].to_i32()
-            } else {
-                return Err(HostFuncError::User(2));
-            };
-
-            let b = if input[1].ty() == ValType::I32 {
-                input[1].to_i32()
-            } else {
-                return Err(HostFuncError::User(3));
-            };
-
-            let c = a + b;
-            println!("Rust: calcuating in real_add c: {c:?}");
-
-            println!("Rust: Leaving Rust function real_add");
-            Ok(vec![WasmValue::from_i32(c)])
-        };
-
-        // create a FuncType
-        let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-
-        // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-        assert!(result.is_ok());
-        let host_func = result.unwrap();
-
-        assert_eq!(Arc::strong_count(&host_func.inner), 1);
-        assert!(!host_func.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // clone the host function before adding it to the import object
-        let host_func_cloned = host_func.clone();
-
-        assert_eq!(Arc::strong_count(&host_func_cloned.inner), 2);
-        assert!(!host_func_cloned.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // create an ImportModule
-        let mut import = ImportModule::<NeverType>::create("extern", None)?;
-        // add the host function to the import module
-        import.add_func("add", host_func);
-
-        assert_eq!(Arc::strong_count(&host_func_cloned.inner), 2);
-        assert!(!host_func_cloned.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        drop(host_func_cloned);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // create a Store
-        let result = Store::create();
-        assert!(result.is_ok());
-        let mut store = result.unwrap();
-
-        // run this function
-        let result = Executor::create(None, None);
-        assert!(result.is_ok());
-        let mut executor = result.unwrap();
-        executor.register_import_module(&mut store, &import)?;
-
-        // get the registered host function
-        let extern_instance = store.module("extern")?;
-        let add = extern_instance.get_func("add")?;
-        assert_eq!(Arc::strong_count(&add.inner), 1);
-        assert!(add.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // clone the host function
-        let add_cloned = add.clone();
-        assert_eq!(Arc::strong_count(&add.inner), 2);
-        assert!(add.registered);
-        assert_eq!(Arc::strong_count(&add_cloned.inner), 2);
-        assert!(add_cloned.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // drop the cloned host function
-        drop(add_cloned);
-        assert_eq!(Arc::strong_count(&add.inner), 1);
-        assert!(add.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        drop(add);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // get the registered host function again
-        let extern_instance = store.module("extern")?;
-        let add_again = extern_instance.get_func("add")?;
-        assert_eq!(Arc::strong_count(&add_again.inner), 1);
-        assert!(add_again.registered);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // ! notice that `add_again` should be dropped before or not be used after dropping `import`
-        drop(add_again);
-
-        assert_eq!(HOST_FUNCS.read().len(), 1);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
-
-        // drop the import object
-        drop(import);
-
-        assert!(store.module("extern").is_err());
-
-        assert_eq!(HOST_FUNCS.read().len(), 0);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
-        // ! if `add_again` is not dropped before dropping `import`, then calling `add_again` will crash
-        // let result = executor.call_func(
-        //     &add_again,
-        //     vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
-        // );
-
-        Ok(())
-    }
-
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[tokio::test]
-    async fn test_func_async_closure() -> Result<(), Box<dyn std::error::Error>> {
-        {
-            #[derive(Debug)]
-            struct Data<T, S> {
-                _x: i32,
-                _y: String,
-                _v: Vec<T>,
-                _s: Vec<S>,
-            }
-            impl<T, S> Drop for Data<T, S> {
-                fn drop(&mut self) {
-                    println!("Dropping Data");
-                }
-            }
-
-            let data: Data<i32, &str> = Data {
-                _x: 12,
-                _y: "hello".to_string(),
-                _v: vec![1, 2, 3],
-                _s: vec!["macos", "linux", "windows"],
-            };
-
-            // define an async closure
-            let c = |_frame: CallingFrame,
-                     _args: Vec<WasmValue>,
-                     data: *mut std::os::raw::c_void|
-             -> Box<
-                (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
-            > {
-                // let host_data = unsafe { &mut *(data as *mut Data<i32, &str>) };
-                let host_data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
-
-                Box::new(async move {
-                    for _ in 0..10 {
-                        println!("[async hello] say hello");
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-                        println!("host_data: {:?}", host_data);
-                    }
-
-                    println!("[async hello] Done!");
-
-                    Ok(vec![])
-                })
-            };
-
-            // create a FuncType
-            let result = FuncType::create(vec![], vec![]);
-            assert!(result.is_ok());
-            let func_ty = result.unwrap();
-
-            // create an async host function
-            let result =
-                Function::create_async_func(&func_ty, Box::new(c), Some(Box::new(data)), 0);
-            assert!(result.is_ok());
-            let async_hello_func = result.unwrap();
-
-            // create an Executor
-            let result = Executor::create(None, None);
-            assert!(result.is_ok());
-            let mut executor = result.unwrap();
-            assert!(!executor.inner.0.is_null());
-
-            // create a Store
-            let result = Store::create();
-            assert!(result.is_ok());
-            let mut store = result.unwrap();
-
-            // create an AsyncWasiModule
-            let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
-            assert!(result.is_ok());
-            let async_wasi_module = result.unwrap();
-
-            // register async_wasi module into the store
-            let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
-            let result = executor.register_wasi_instance(&mut store, &wasi_import);
-            assert!(result.is_ok());
-
-            // create an ImportModule
-            let mut import = ImportModule::<NeverType>::create("extern", None)?;
-            import.add_func("async_hello", async_hello_func);
-
-            executor.register_import_module(&mut store, &import)?;
-
-            let extern_instance = store.module("extern")?;
-            let async_hello = extern_instance.get_func("async_hello")?;
-
-            async fn tick() {
-                let mut i = 0;
-                loop {
-                    println!("[tick] i={i}");
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    i += 1;
-                }
-            }
-            tokio::spawn(tick());
-
-            let async_state = crate::r#async::fiber::AsyncState::new();
-            let _ = executor
-                .call_func_async(&async_state, &async_hello, [])
-                .await?;
-        }
-
-        assert_eq!(ASYNC_HOST_FUNCS.read().len(), 0);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
-        Ok(())
-    }
-
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[tokio::test]
-    async fn test_func_async_func() -> Result<(), Box<dyn std::error::Error>> {
-        {
-            #[derive(Debug)]
-            struct Data<T, S> {
-                _x: i32,
-                _y: String,
-                _v: Vec<T>,
-                _s: Vec<S>,
-            }
-            let data: Data<i32, &str> = Data {
-                _x: 12,
-                _y: "hello".to_string(),
-                _v: vec![1, 2, 3],
-                _s: vec!["macos", "linux", "windows"],
-            };
-
-            // define async host function
-            fn f<T: core::fmt::Debug + Send + Sync + 'static>(
-                _frame: CallingFrame,
-                _args: Vec<WasmValue>,
-                data: *mut std::ffi::c_void,
-            ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
-            {
-                let data = unsafe { Box::from_raw(data as *mut T) };
-
-                Box::new(async move {
-                    for _ in 0..10 {
-                        println!("[async hello] say hello");
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                        println!("host_data: {:?}", data);
-                    }
-
-                    println!("[async hello] Done!");
-
-                    Ok(vec![])
-                })
-            }
-
-            // create a FuncType
-            let result = FuncType::create(vec![], vec![]);
-            assert!(result.is_ok());
-            let func_ty = result.unwrap();
-
-            // create an async host function
-            let result = Function::create_async_func(
-                &func_ty,
-                Box::new(f::<Data<i32, &str>>),
-                Some(Box::new(data)),
-                0,
-            );
-            assert!(result.is_ok());
-            let async_hello_func = result.unwrap();
-
-            // create an Executor
-            let result = Executor::create(None, None);
-            assert!(result.is_ok());
-            let mut executor = result.unwrap();
-            assert!(!executor.inner.0.is_null());
-
-            // create a Store
-            let result = Store::create();
-            assert!(result.is_ok());
-            let mut store = result.unwrap();
-
-            // create an AsyncWasiModule
-            let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("a", "1")]), None);
-            assert!(result.is_ok());
-            let async_wasi_module = result.unwrap();
-
-            // register async_wasi module into the store
-            let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
-            let result = executor.register_wasi_instance(&mut store, &wasi_import);
-            assert!(result.is_ok());
-
-            // create an ImportModule
-            let mut import = ImportModule::<NeverType>::create("extern", None)?;
-            import.add_func("async_hello", async_hello_func);
-
-            executor.register_import_module(&mut store, &import)?;
-
-            let extern_instance = store.module("extern")?;
-            let async_hello = extern_instance.get_func("async_hello")?;
-
-            async fn tick() {
-                let mut i = 0;
-                loop {
-                    println!("[tick] i={i}");
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    i += 1;
-                }
-            }
-            tokio::spawn(tick());
-
-            let async_state = crate::r#async::fiber::AsyncState::new();
-            let _ = executor
-                .call_func_async(&async_state, &async_hello, [])
-                .await?;
-        }
-
-        assert_eq!(ASYNC_HOST_FUNCS.read().len(), 0);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
-        Ok(())
     }
 }

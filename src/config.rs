@@ -117,7 +117,7 @@ impl ConfigBuilder {
 ///
 /// ```rust
 ///
-/// use wasmedge_sdk::{config::{Config, ConfigBuilder, CommonConfigOptions, StatisticsConfigOptions, RuntimeConfigOptions, HostRegistrationConfigOptions}};
+/// use wasmedge_sdk::{config::{Config, ConfigBuilder, CommonConfigOptions, StatisticsConfigOptions, RuntimeConfigOptions}};
 /// use wasmedge_types::{CompilerOutputFormat, CompilerOptimizationLevel};
 ///
 /// let common_options = CommonConfigOptions::default()
@@ -136,13 +136,10 @@ impl ConfigBuilder {
 ///
 /// let runtime_options = RuntimeConfigOptions::default().max_memory_pages(1024);
 ///
-/// let host_options = HostRegistrationConfigOptions::default()
-///     .wasi(true);
 ///
 /// let result = ConfigBuilder::new(common_options)
 ///     .with_statistics_config(stat_options)
 ///     .with_runtime_config(runtime_options)
-///     .with_host_registration_config(host_options)
 ///     .build();
 /// assert!(result.is_ok());
 /// let config = result.unwrap();
@@ -754,13 +751,10 @@ mod tests {
 
         let runtime_options = RuntimeConfigOptions::default().max_memory_pages(1024);
 
-        let host_options = HostRegistrationConfigOptions::default().wasi(true);
-
         let result = ConfigBuilder::new(common_options)
             .with_statistics_config(stat_options)
             .with_compiler_config(compiler_options)
             .with_runtime_config(runtime_options)
-            .with_host_registration_config(host_options)
             .build();
         assert!(result.is_ok());
         let config = result.unwrap();
@@ -790,8 +784,6 @@ mod tests {
 
         // check runtime config options
         assert_eq!(config.max_memory_pages(), 1024);
-
-        assert!(config.wasi_enabled());
     }
 
     #[test]
@@ -803,13 +795,11 @@ mod tests {
             CompilerConfigOptions::default().optimization_level(CompilerOptimizationLevel::O0);
         let stat_config = StatisticsConfigOptions::default().measure_time(false);
         let runtime_config = RuntimeConfigOptions::default().max_memory_pages(1024);
-        let host_config = HostRegistrationConfigOptions::default().wasi(true);
 
         let result = ConfigBuilder::new(common_config)
             .with_statistics_config(stat_config)
             .with_compiler_config(compiler_config)
             .with_runtime_config(runtime_config)
-            .with_host_registration_config(host_config)
             .build();
         assert!(result.is_ok());
         let config = result.unwrap();
@@ -818,7 +808,6 @@ mod tests {
         assert_eq!(config.optimization_level(), CompilerOptimizationLevel::O0);
         assert!(!config.time_measuring_enabled());
         assert_eq!(config.max_memory_pages(), 1024);
-        assert!(config.wasi_enabled());
 
         // make a copy
         let config_copied = config.clone();
@@ -830,6 +819,5 @@ mod tests {
         );
         assert!(!config.time_measuring_enabled());
         assert_eq!(config_copied.max_memory_pages(), 1024);
-        assert!(config_copied.wasi_enabled());
     }
 }

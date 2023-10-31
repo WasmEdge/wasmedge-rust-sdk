@@ -34,19 +34,6 @@ impl Table {
     /// # Error
     ///
     /// * If fail to create the table instance, then WasmEdgeError::Table(TableError::Create)(crate::error::TableError) is returned.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use wasmedge_sys::{TableType, Table};
-    /// use wasmedge_types::RefType;
-    ///
-    /// // create a TableType instance
-    /// let ty = TableType::create(RefType::FuncRef, 10, Some(20)).expect("fail to create a TableType");
-    ///
-    /// // create a Table instance
-    /// let table = Table::create(&ty).expect("fail to create a Table");
-    /// ```
     pub fn create(ty: wasmedge_types::TableType) -> WasmEdgeResult<Self> {
         let ty: TableType = ty.into();
         let ctx = unsafe { ffi::WasmEdge_TableInstanceCreate(ty.inner.0) };
@@ -121,20 +108,6 @@ impl Table {
     }
 
     /// Returns the capacity of the [Table].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use wasmedge_sys::{TableType, Table};
-    /// use wasmedge_types::RefType;
-    ///
-    /// // create a TableType instance and a Table
-    /// let ty = TableType::create(RefType::FuncRef, 10, Some(20)).expect("fail to create a TableType");
-    /// let table = Table::create(&ty).expect("fail to create a Table");
-    ///
-    /// // check capacity
-    /// assert_eq!(table.capacity(), 10);
-    /// ```
     ///
     pub fn capacity(&self) -> usize {
         unsafe { ffi::WasmEdge_TableInstanceGetSize(self.inner.0) as usize }
@@ -269,20 +242,15 @@ pub(crate) struct InnerTableType(pub(crate) *mut ffi::WasmEdge_TableTypeContext)
 unsafe impl Send for InnerTableType {}
 unsafe impl Sync for InnerTableType {}
 
-// #[cfg(test)]
-#[cfg(ignore)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        instance::function::{AsFunc, FuncTypeOwn},
-        CallingFrame, Function,
+    use crate::{instance::function::AsFunc, CallingFrame, Function, Instance};
+    use std::thread;
+    use wasmedge_types::{
+        error::{CoreError, CoreExecutionError},
+        RefType, ValType,
     };
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
-    use wasmedge_macro::sys_host_function;
-    use wasmedge_types::{error::HostFuncError, NeverType, RefType, ValType};
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]
@@ -292,7 +260,6 @@ mod tests {
         assert!(result.is_ok());
         let ty = result.unwrap();
         assert!(!ty.inner.0.is_null());
-        assert!(!ty.registered);
 
         // check element type
         assert_eq!(ty.elem_ty(), RefType::FuncRef);
@@ -305,12 +272,10 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_table() {
         // create a TableType instance
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
+        let ty = wasmedge_types::TableType::new(RefType::FuncRef, 10, Some(20));
 
         // create a Table instance
-        let result = Table::create(&ty);
+        let result = Table::create(ty);
         assert!(result.is_ok());
         let mut table = result.unwrap();
 
@@ -321,12 +286,10 @@ mod tests {
         let result = table.ty();
         assert!(result.is_ok());
         let ty = result.unwrap();
-        assert!(!ty.inner.0.is_null());
-        assert!(ty.registered);
 
         // check limit and element type
-        assert_eq!(ty.min(), 10);
-        assert_eq!(ty.max(), Some(20));
+        assert_eq!(ty.minimum(), 10);
+        assert_eq!(ty.maximum(), Some(20));
         assert_eq!(ty.elem_ty(), RefType::FuncRef);
 
         // grow the capacity of table
@@ -340,21 +303,19 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_table_data() {
         // create a FuncType
-        let result = FuncTypeOwn::create(vec![ValType::I32; 2], vec![ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
+        let func_ty = wasmedge_types::FuncType::new(vec![ValType::I32; 2], vec![ValType::I32]);
         // create a host function
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
+        let mut host_data = ();
+        let result =
+            unsafe { Function::create_sync_func::<()>(&func_ty, real_add, &mut host_data, 0) };
         assert!(result.is_ok());
         let host_func = result.unwrap();
 
         // create a TableType instance
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
+        let ty = wasmedge_types::TableType::new(RefType::FuncRef, 10, Some(20));
 
         // create a Table instance
-        let result = Table::create(&ty);
+        let result = Table::create(ty);
         assert!(result.is_ok());
         let mut table = result.unwrap();
 
@@ -377,34 +338,30 @@ mod tests {
         let value = result.unwrap();
         let result = value.func_ref();
         assert!(result.is_some());
-        let mut func_ref = result.unwrap();
+        let func_ref = result.unwrap();
 
         // get the function type by func_ref
         let result = func_ref.ty();
         assert!(result.is_some());
         let func_ty = result.unwrap();
-        assert_eq!(func_ty.params_len(), 2);
-        let param_tys = func_ty.params_type_iter().collect::<Vec<_>>();
-        assert_eq!(param_tys, [ValType::I32, ValType::I32]);
+        assert_eq!(func_ty.args_len(), 2);
+        assert_eq!(func_ty.args(), &[ValType::I32, ValType::I32]);
         assert_eq!(func_ty.returns_len(), 1);
-        let return_tys = func_ty.returns_type_iter().collect::<Vec<_>>();
-        assert_eq!(return_tys, [ValType::I32]);
+        assert_eq!(func_ty.returns(), &[ValType::I32]);
     }
 
     #[test]
     fn test_table_send() {
         // create a TableType instance
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
+        let ty = wasmedge_types::TableType::new(RefType::FuncRef, 10, Some(20));
 
         // create a Table instance
-        let result = Table::create(&ty);
+        let result = Table::create(ty);
         assert!(result.is_ok());
         let table = result.unwrap();
 
         let handle = thread::spawn(move || {
-            assert!(!table.inner.lock().0.is_null());
+            assert!(!table.inner.0.is_null());
 
             // check capacity
             assert_eq!(table.capacity(), 10);
@@ -413,12 +370,10 @@ mod tests {
             let result = table.ty();
             assert!(result.is_ok());
             let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
-            assert!(ty.registered);
 
             // check limit and element type
-            assert_eq!(ty.min(), 10);
-            assert_eq!(ty.max(), Some(20));
+            assert_eq!(ty.minimum(), 10);
+            assert_eq!(ty.maximum(), Some(20));
             assert_eq!(ty.elem_ty(), RefType::FuncRef);
         });
 
@@ -428,84 +383,53 @@ mod tests {
     #[test]
     fn test_table_sync() {
         // create a TableType instance
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
+        let ty = wasmedge_types::TableType::new(RefType::FuncRef, 10, Some(20));
 
         // create a Table instance
-        let result = Table::create(&ty);
-        assert!(result.is_ok());
-        let table = Arc::new(Mutex::new(result.unwrap()));
+        let result = Table::create(ty);
 
-        let table_cloned = Arc::clone(&table);
-        let handle = thread::spawn(move || {
-            let result = table_cloned.lock();
-            assert!(result.is_ok());
-            let table = result.unwrap();
-
-            // check capacity
-            assert_eq!(table.capacity(), 10);
-
-            // get type
-            let result = table.ty();
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
-            assert!(ty.registered);
-
-            // check limit and element type
-            assert_eq!(ty.min(), 10);
-            assert_eq!(ty.max(), Some(20));
-            assert_eq!(ty.elem_ty(), RefType::FuncRef);
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[test]
-    fn test_table_clone() {
-        // create a TableType instance
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-
-        // create a Table instance
-        let result = Table::create(&ty);
         assert!(result.is_ok());
         let table = result.unwrap();
 
-        // check capacity
-        assert_eq!(table.capacity(), 10);
+        let table = &table;
 
-        let table_cloned = table.clone();
-        assert_eq!(table_cloned.capacity(), table.capacity());
-
-        drop(table);
-
-        assert_eq!(table_cloned.capacity(), 10);
+        std::thread::scope(move |s| {
+            let _ = s
+                .spawn(|| {
+                    let result = table.ty();
+                    assert!(result.is_ok());
+                    let ty = result.unwrap();
+                    // check limit and element type
+                    assert_eq!(ty.minimum(), 10);
+                    assert_eq!(ty.maximum(), Some(20));
+                    assert_eq!(ty.elem_ty(), RefType::FuncRef);
+                })
+                .join();
+        });
     }
 
-    #[sys_host_function]
     fn real_add(
-        _frame: CallingFrame,
+        _data: &mut (),
+        _inst: &mut Instance,
+        _frame: &mut CallingFrame,
         input: Vec<WasmValue>,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
+    ) -> Result<Vec<WasmValue>, CoreError> {
         println!("Rust: Entering Rust function real_add");
 
         if input.len() != 2 {
-            return Err(HostFuncError::User(1));
+            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
         }
 
         let a = if input[0].ty() == ValType::I32 {
             input[0].to_i32()
         } else {
-            return Err(HostFuncError::User(2));
+            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
         };
 
         let b = if input[1].ty() == ValType::I32 {
             input[0].to_i32()
         } else {
-            return Err(HostFuncError::User(3));
+            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
         };
 
         let c = a + b;

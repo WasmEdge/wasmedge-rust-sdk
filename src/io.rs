@@ -65,11 +65,11 @@ mod test_wasm_val_type {
 /// Describes the mapping of a tuple of Rust types to Wasm types.
 ///
 /// ```rust
-/// use wasmedge_sdk::{FuncRef, types::ExternRef, ValType, WasmValTypeList};
+/// use wasmedge_sdk::{types::ExternRef, ValType, WasmValTypeList};
 ///
 /// assert_eq!(
-///      <(i32, i64, f32, f64, FuncRef, ExternRef)>::wasm_types(),
-///      [ValType::I32, ValType::I64, ValType::F32, ValType::F64, ValType::FuncRef, ValType::ExternRef]
+///      <(i32, i64, f32, f64, ExternRef)>::wasm_types(),
+///      [ValType::I32, ValType::I64, ValType::F32, ValType::F64, ValType::ExternRef]
 /// );
 /// ```
 pub trait WasmValTypeList

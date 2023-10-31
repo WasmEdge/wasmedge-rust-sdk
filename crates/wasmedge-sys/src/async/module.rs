@@ -2442,21 +2442,13 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
     }
 }
 
-// #[cfg(test)]
-#[cfg(ignore)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        r#async::fiber::AsyncState, Config, Executor, Loader, Store, Validator, WasiInstance,
-    };
+    use crate::{r#async::fiber::AsyncState, Executor, Loader, Store, Validator};
 
     #[tokio::test]
     async fn test_async_wasi_module() -> Result<(), Box<dyn std::error::Error>> {
-        // create a Config
-        let mut config = Config::create()?;
-        config.wasi(true);
-        assert!(config.wasi_enabled());
-
         // create an Executor
         let result = Executor::create(None, None);
         assert!(result.is_ok());
@@ -2471,11 +2463,10 @@ mod tests {
         // create an AsyncWasiModule
         let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
         assert!(result.is_ok());
-        let async_wasi_module = result.unwrap();
+        let mut async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
-        let result = executor.register_wasi_instance(&mut store, &wasi_import);
+        let result = executor.register_import_module(&mut store, async_wasi_module.as_mut());
         assert!(result.is_ok());
 
         let wasm_file = std::env::current_dir()
@@ -2486,8 +2477,8 @@ mod tests {
             .join("examples/wasmedge-sys/async_hello.wasm");
         let module = Loader::create(None)?.from_file(&wasm_file)?;
         Validator::create(None)?.validate(&module)?;
-        let instance = executor.register_active_module(&mut store, &module)?;
-        let fn_start = instance.get_func("_start")?;
+        let mut instance = executor.register_active_module(&mut store, &module)?;
+        let mut fn_start = instance.get_func_mut("_start")?;
 
         async fn tick() {
             let mut i = 0;
@@ -2501,7 +2492,7 @@ mod tests {
 
         let async_state = AsyncState::new();
         let _ = executor
-            .call_func_async(&async_state, &fn_start, [])
+            .call_func_async(&async_state, &mut fn_start, [])
             .await?;
 
         Ok(())

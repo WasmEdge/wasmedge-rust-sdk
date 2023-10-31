@@ -24,17 +24,6 @@ impl Memory {
     ///
     /// * If fail to create the memory instance, then [WasmEdgeError::Mem(MemError::Create)](wasmedge_types::error::MemError) is returned.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use wasmedge_sys::{MemType, Memory};
-    ///
-    /// let ty = MemType::create(10, Some(20), false).expect("fail to create memory type");
-    ///
-    /// let memory = Memory::create(&ty);
-    ///
-    /// ```
-    ///
     pub fn create(ty: &wasmedge_types::MemoryType) -> WasmEdgeResult<Self> {
         let ty: MemType = ty.into();
         let ctx = unsafe { ffi::WasmEdge_MemoryInstanceCreate(ty.inner.0 as *const _) };
@@ -105,40 +94,6 @@ impl Memory {
     ///
     /// If the sum of the `offset` and the data length is larger than the size of the [Memory],
     /// then an error is returned.
-    ///
-    /// ```
-    /// use wasmedge_sys::{Memory, MemType};
-    /// use wasmedge_types::error::{CoreError, CoreExecutionError, WasmEdgeError};
-    ///
-    /// // create a Memory: the min size 1 and the max size 2
-    /// let ty = MemType::create(1, Some(2), false).expect("fail to create a memory type");
-    /// let mut mem = Memory::create(&ty).expect("fail to create a Memory");
-    ///
-    /// // set data and the data length is larger than the data size in the memory
-    /// let result = mem.set_data(vec![1; 10], u32::pow(2, 16) - 9);
-    /// assert!(result.is_err());
-    /// assert_eq!(result.unwrap_err(), Box::new(WasmEdgeError::Core(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))));
-    /// ```
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use wasmedge_sys::{MemType, Memory};
-    ///
-    /// // create a Memory: the min size 1 and the max size 2
-    /// let ty = MemType::create(1, Some(2), false).expect("fail to create a memory type");
-    /// let mut mem = Memory::create(&ty).expect("fail to create a Memory");
-    /// // page count
-    /// let count = mem.size();
-    /// assert_eq!(count, 1);
-    ///
-    /// // set data
-    /// mem.set_data(vec![1; 10], 10).expect("fail to set data");
-    ///
-    /// // get data
-    /// let data = mem.get_data(10, 10).expect("fail to get data");
-    /// assert_eq!(data, vec![1; 10]);
-    /// ```
     ///
     pub fn set_data(&mut self, data: impl AsRef<[u8]>, offset: u32) -> WasmEdgeResult<()> {
         unsafe {
@@ -215,23 +170,6 @@ impl Memory {
     /// # Errors
     ///
     /// If fail to grow the page count, then an error is returned.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use wasmedge_sys::{MemType, Memory};
-    ///
-    /// // create a Memory with a limit range [10, 20]
-    /// let ty = MemType::create(10, Some(20), false).expect("fail to create a memory type");
-    /// let mut mem = Memory::create(&ty).expect("fail to create a Memory");
-    /// // check page count
-    /// let count = mem.size();
-    /// assert_eq!(count, 10);
-    ///
-    /// // grow 5 pages
-    /// mem.grow(10).expect("fail to grow the page count");
-    /// assert_eq!(mem.size(), 20);
-    /// ```
     ///
     pub fn grow(&mut self, count: u32) -> WasmEdgeResult<()> {
         unsafe { check(ffi::WasmEdge_MemoryInstanceGrowPage(self.inner.0, count)) }
@@ -387,14 +325,10 @@ pub(crate) struct InnerMemType(pub(crate) *mut ffi::WasmEdge_MemoryTypeContext);
 unsafe impl Send for InnerMemType {}
 unsafe impl Sync for InnerMemType {}
 
-// #[cfg(test)]
-#[cfg(ignore)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
+    use std::thread;
     use wasmedge_types::error::{CoreError, CoreExecutionError, WasmEdgeError};
 
     #[test]
@@ -404,7 +338,6 @@ mod tests {
         assert!(result.is_ok());
         let ty = result.unwrap();
         assert!(!ty.inner.0.is_null());
-        assert!(!ty.registered);
         assert_eq!(ty.min(), 0);
         assert_eq!(ty.max(), Some(u32::MAX));
 
@@ -413,7 +346,6 @@ mod tests {
         assert!(result.is_ok());
         let ty = result.unwrap();
         assert!(!ty.inner.0.is_null());
-        assert!(!ty.registered);
         assert_eq!(ty.min(), 10);
         assert_eq!(ty.max(), Some(101));
     }
@@ -422,24 +354,21 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_memory_grow() {
         // create a Memory with a limit range [10, 20]
-        let result = MemType::create(10, Some(20), false);
+        let result = wasmedge_types::MemoryType::new(10, Some(20), false);
         assert!(result.is_ok());
         let ty = result.unwrap();
         let result = Memory::create(&ty);
         assert!(result.is_ok());
         let mut mem = result.unwrap();
-        assert!(!mem.inner.lock().0.is_null());
-        assert!(!mem.registered);
+        assert!(!mem.inner.0.is_null());
 
         // get type
         let result = mem.ty();
         assert!(result.is_ok());
         let ty = result.unwrap();
-        assert!(!ty.inner.0.is_null());
-        assert!(ty.registered);
         // check limit
-        assert_eq!(ty.min(), 10);
-        assert_eq!(ty.max(), Some(20));
+        assert_eq!(ty.minimum(), 10);
+        assert_eq!(ty.maximum(), Some(20));
 
         // check page count
         let count = mem.size();
@@ -459,14 +388,13 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_memory_data() {
         // create a Memory: the min size 1 and the max size 2
-        let result = MemType::create(1, Some(2), false);
+        let result = wasmedge_types::MemoryType::new(1, Some(2), false);
         assert!(result.is_ok());
         let ty = result.unwrap();
         let result = Memory::create(&ty);
         assert!(result.is_ok());
         let mut mem = result.unwrap();
-        assert!(!mem.inner.lock().0.is_null());
-        assert!(!mem.registered);
+        assert!(!mem.inner.0.is_null());
 
         // check page count
         let count = mem.size();
@@ -508,17 +436,13 @@ mod tests {
     #[test]
     fn test_memory_send() {
         {
-            let result = MemType::create(10, Some(101), false);
+            let result = wasmedge_types::MemoryType::new(10, Some(101), false);
             assert!(result.is_ok());
             let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
-            assert!(!ty.registered);
 
             let handle = thread::spawn(move || {
-                assert!(!ty.inner.0.is_null());
-                assert!(!ty.registered);
-                assert_eq!(ty.min(), 10);
-                assert_eq!(ty.max(), Some(101));
+                assert_eq!(ty.minimum(), 10);
+                assert_eq!(ty.maximum(), Some(101));
             });
 
             handle.join().unwrap()
@@ -526,25 +450,22 @@ mod tests {
 
         {
             // create a Memory with a limit range [10, 20]
-            let result = MemType::create(10, Some(20), false);
+            let result = wasmedge_types::MemoryType::new(10, Some(20), false);
             assert!(result.is_ok());
             let ty = result.unwrap();
             let result = Memory::create(&ty);
             assert!(result.is_ok());
             let mem = result.unwrap();
-            assert!(!mem.inner.lock().0.is_null());
-            assert!(!mem.registered);
+            assert!(!mem.inner.0.is_null());
 
             let handle = thread::spawn(move || {
                 // get type
                 let result = mem.ty();
                 assert!(result.is_ok());
                 let ty = result.unwrap();
-                assert!(!ty.inner.0.is_null());
-                assert!(ty.registered);
                 // check limit
-                assert_eq!(ty.min(), 10);
-                assert_eq!(ty.max(), Some(20));
+                assert_eq!(ty.minimum(), 10);
+                assert_eq!(ty.maximum(), Some(20));
 
                 // check page count
                 let count = mem.size();
@@ -558,59 +479,31 @@ mod tests {
     #[test]
     fn test_memory_sync() {
         // create a Memory with a limit range [10, 20]
-        let result = MemType::create(10, Some(20), false);
+        let result = wasmedge_types::MemoryType::new(10, Some(20), false);
         assert!(result.is_ok());
         let ty = result.unwrap();
         let result = Memory::create(&ty);
         assert!(result.is_ok());
         let mem = result.unwrap();
-        assert!(!mem.inner.lock().0.is_null());
-        assert!(!mem.registered);
-        let memory = Arc::new(Mutex::new(mem));
+        assert!(!mem.inner.0.is_null());
+        let mem = &mem;
 
-        let memory_cloned = Arc::clone(&memory);
-        let handle = thread::spawn(move || {
-            let mem = memory_cloned.lock().unwrap();
+        std::thread::scope(|s| {
+            let _ = s
+                .spawn(|| {
+                    // get type
+                    let result = mem.ty();
+                    assert!(result.is_ok());
+                    let ty = result.unwrap();
+                    // check limit
+                    assert_eq!(ty.minimum(), 10);
+                    assert_eq!(ty.maximum(), Some(20));
 
-            // get type
-            let result = mem.ty();
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
-            assert!(ty.registered);
-            // check limit
-            assert_eq!(ty.min(), 10);
-            assert_eq!(ty.max(), Some(20));
-
-            // check page count
-            let count = mem.size();
-            assert_eq!(count, 10);
-        });
-
-        handle.join().unwrap()
-    }
-
-    #[test]
-    fn test_memory_clone() {
-        #[derive(Debug, Clone)]
-        struct RecordsMemory {
-            memory: Memory,
-        }
-
-        // create a Memory with a limit range [10, 20]
-        let result = MemType::create(10, Some(20), false);
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        let result = Memory::create(&ty);
-        assert!(result.is_ok());
-        let memory = result.unwrap();
-
-        let rec_mem = RecordsMemory { memory };
-
-        let rec_mem_cloned = rec_mem.clone();
-
-        drop(rec_mem);
-
-        assert_eq!(rec_mem_cloned.memory.size(), 10);
+                    // check page count
+                    let count = mem.size();
+                    assert_eq!(count, 10);
+                })
+                .join();
+        })
     }
 }

@@ -128,140 +128,105 @@ impl AsMut<Function> for AsyncFunction {
     }
 }
 
-#[cfg(ignore)]
-/// Defines the signature of a host function.
-pub(crate) type HostFn<T> = fn(
-    CallingFrame,
-    Vec<WasmValue>,
-    Option<&'static mut T>,
-) -> Result<Vec<WasmValue>, HostFuncError>;
-
-#[cfg(ignore)]
-extern "C" fn wrap_sync_wasi_fn<T: 'static>(
-    key_ptr: *mut std::ffi::c_void,
-    data: *mut std::ffi::c_void,
-    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
-    params: *const ffi::WasmEdge_Value,
-    param_len: u32,
-    returns: *mut ffi::WasmEdge_Value,
-    return_len: u32,
-) -> ffi::WasmEdge_Result {
-    let frame = CallingFrame::create(call_frame_ctx);
-
-    // recover the async host function
-    let real_func: HostFn<T> = unsafe { std::mem::transmute(key_ptr) };
-
-    // recover the context data
-    let data = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<NeverType>() {
-        None
-    } else {
-        let data: &'static mut T = unsafe { &mut *(data as *mut T) };
-        Some(data)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        instance::function::AsFunc, r#async::fiber::AsyncState, types::WasmValue, Executor,
     };
 
-    // input arguments
-    let input = {
-        let raw_input = unsafe {
-            std::slice::from_raw_parts(
-                params,
-                param_len
-                    .try_into()
-                    .expect("len of params should not greater than usize"),
-            )
-        };
-        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
-    };
+    use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
 
-    // returns
-    let return_len = return_len
-        .try_into()
-        .expect("len of returns should not greater than usize");
-    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
-
-    match real_func(frame, input, data) {
-        Ok(returns) => {
-            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}", return_len, returns.len());
-            for (idx, wasm_value) in returns.into_iter().enumerate() {
-                raw_returns[idx] = wasm_value.as_raw();
-            }
-            ffi::WasmEdge_Result { Code: 0 }
+    #[tokio::test]
+    async fn test_func_basic() {
+        #[derive(Debug)]
+        struct Data<T, S> {
+            _x: i32,
+            _y: String,
+            _v: Vec<T>,
+            _s: Vec<S>,
         }
-        Err(err) => match err {
-            HostFuncError::User(code) => unsafe {
-                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
-            },
-            HostFuncError::Runtime(code) => unsafe {
-                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
-            },
-        },
-    }
-}
-#[cfg(ignore)]
-extern "C" fn wrap_async_wasi_fn<T: 'static>(
-    key_ptr: *mut std::ffi::c_void,
-    data: *mut std::ffi::c_void,
-    call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
-    params: *const ffi::WasmEdge_Value,
-    param_len: u32,
-    returns: *mut ffi::WasmEdge_Value,
-    return_len: u32,
-) -> ffi::WasmEdge_Result {
-    let frame = CallingFrame::create(call_frame_ctx);
 
-    // recover the async host function
-    let real_func: AsyncHostFn<T> = unsafe { std::mem::transmute(key_ptr) };
-
-    // recover the context data
-    let data = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<NeverType>() {
-        None
-    } else {
-        let data: &'static mut T = unsafe { &mut *(data as *mut T) };
-        Some(data)
-    };
-
-    // arguments
-    let input = {
-        let raw_input = unsafe {
-            std::slice::from_raw_parts(
-                params,
-                param_len
-                    .try_into()
-                    .expect("len of params should not greater than usize"),
-            )
+        let mut data: Data<i32, &str> = Data {
+            _x: 12,
+            _y: "hello".to_string(),
+            _v: vec![1, 2, 3],
+            _s: vec!["macos", "linux", "windows"],
         };
-        raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
-    };
 
-    // returns
-    let return_len = return_len
-        .try_into()
-        .expect("len of returns should not greater than usize");
-    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
+        fn real_add<T: core::fmt::Debug>(
+            _host_data: &mut Data<i32, &str>,
+            _inst: &mut AsyncInstance,
+            _frame: &mut CallingFrame,
+            input: Vec<WasmValue>,
+        ) -> Box<dyn Future<Output = Result<Vec<WasmValue>, CoreError>> + Send> {
+            Box::new(async move {
+                println!("Rust: Entering Rust function real_add");
 
-    let async_cx = AsyncCx::new();
-    let mut future = Pin::from(real_func(frame, input, data));
-    let result = match unsafe { async_cx.block_on(future.as_mut()) } {
-        Ok(Ok(ret)) => Ok(ret),
-        Ok(Err(err)) => Err(err),
-        Err(_err) => Err(HostFuncError::Runtime(0x07)),
-    };
+                if input.len() != 2 {
+                    return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                }
 
-    // parse result
-    match result {
-        Ok(returns) => {
-            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}", return_len, returns.len());
-            for (idx, wasm_value) in returns.into_iter().enumerate() {
-                raw_returns[idx] = wasm_value.as_raw();
-            }
-            ffi::WasmEdge_Result { Code: 0 }
+                let a = if input[0].ty() == ValType::I32 {
+                    input[0].to_i32()
+                } else {
+                    return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                };
+
+                let b = if input[1].ty() == ValType::I32 {
+                    input[1].to_i32()
+                } else {
+                    return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                };
+
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+                let c = a + b;
+                println!("Rust: calcuating in real_add c: {c:?}");
+
+                println!("Rust: Leaving Rust function real_add");
+                Ok(vec![WasmValue::from_i32(c)])
+            })
         }
-        Err(err) => match err {
-            HostFuncError::User(code) => unsafe {
-                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_UserLevelError, code)
-            },
-            HostFuncError::Runtime(code) => unsafe {
-                ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code)
-            },
-        },
+
+        // create a FuncType
+        let func_ty = FuncType::new(vec![ValType::I32; 2], vec![ValType::I32]);
+        // create a host function
+        let result =
+            AsyncFunction::create_async_func(&func_ty, real_add::<Data<i32, &str>>, &mut data, 0);
+        assert!(result.is_ok());
+        let mut host_func = result.unwrap();
+
+        // get func type
+        let result = host_func.ty();
+        assert!(result.is_some());
+        let ty = result.unwrap();
+
+        // check parameters
+        assert_eq!(ty.args_len(), 2);
+        assert_eq!(ty.args(), &[ValType::I32; 2]);
+
+        // check returns
+        assert_eq!(ty.returns_len(), 1);
+        assert_eq!(ty.returns(), &[ValType::I32]);
+
+        // run this function
+        let result = Executor::create(None, None);
+        assert!(result.is_ok());
+        let mut executor = result.unwrap();
+
+        let async_state = AsyncState::new();
+
+        let result = executor
+            .call_func_async(
+                &async_state,
+                host_func.as_mut(),
+                vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let returns = result.unwrap();
+        assert_eq!(returns[0].to_i32(), 3);
     }
 }

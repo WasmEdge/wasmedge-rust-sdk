@@ -276,29 +276,21 @@ impl<'inst, T: ?Sized + Send + AsyncInst> Vm<'inst, T> {
     }
 }
 
-// #[cfg(test)]
-#[cfg(ignore)]
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        config::{
-            CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions,
-            StatisticsConfigOptions,
-        },
-        error::HostFuncError,
-        io::WasmVal,
-        params,
-        types::Val,
-        wat2wasm, CallingFrame, Global, GlobalType, ImportObjectBuilder, Memory, MemoryType,
-        Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
-    };
+    use std::collections::HashMap;
 
-    #[test]
-    fn test_vm_run_func_from_file() {
+    use wasmedge_types::wat2wasm;
+
+    use super::*;
+    use crate::{io::WasmVal, params};
+
+    #[tokio::test]
+    async fn test_vm_run_func_from_file() {
         // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let mut vm = result.unwrap();
+        let mut vm = Vm::new(
+            Store::new(None, HashMap::<String, &mut (dyn AsyncInst + Send)>::new()).unwrap(),
+        );
 
         // register a wasm module from a specified wasm file
         let file = std::env::current_dir()
@@ -306,19 +298,21 @@ mod tests {
             .join("examples/wasmedge-sys/data/fibonacci.wat");
 
         // run `fib` function from the wasm file
-        let result = vm.run_func_from_file(file, "fib", params!(10));
+        let fib_module = Module::from_file(None, file).unwrap();
+        vm.register_module(None, fib_module).unwrap();
+        let result = vm.run_func(None, "fib", params!(10)).await;
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns.len(), 1);
         assert_eq!(returns[0].to_i32(), 89);
     }
 
-    #[test]
-    fn test_vm_run_func_from_bytes() {
+    #[tokio::test]
+    async fn test_vm_run_func_from_bytes() {
         // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let mut vm = result.unwrap();
+        let mut vm = Vm::new(
+            Store::new(None, HashMap::<String, &mut (dyn AsyncInst + Send)>::new()).unwrap(),
+        );
 
         // register a wasm module from the given in-memory wasm bytes
         // load wasm module
@@ -359,74 +353,21 @@ mod tests {
         let wasm_bytes = result.unwrap();
 
         // run `fib` function from the wasm bytes
-        let result = vm.run_func_from_bytes(&wasm_bytes, "fib", params!(10));
+        let fib_module = Module::from_bytes(None, wasm_bytes).unwrap();
+        vm.register_module(None, fib_module).unwrap();
+        let result = vm.run_func(None, "fib", params!(10)).await;
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns.len(), 1);
         assert_eq!(returns[0].to_i32(), 89);
     }
 
-    #[test]
-    fn test_vm_run_func_from_module() {
+    #[tokio::test]
+    async fn test_vm_run_func_in_named_module_instance() {
         // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let mut vm = result.unwrap();
-
-        // load wasm module
-        let result = wat2wasm(
-            br#"(module
-            (export "fib" (func $fib))
-            (func $fib (param $n i32) (result i32)
-             (if
-              (i32.lt_s
-               (get_local $n)
-               (i32.const 2)
-              )
-              (return
-               (i32.const 1)
-              )
-             )
-             (return
-              (i32.add
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 2)
-                )
-               )
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 1)
-                )
-               )
-              )
-             )
-            )
-           )
-        "#,
+        let mut vm = Vm::new(
+            Store::new(None, HashMap::<String, &mut (dyn AsyncInst + Send)>::new()).unwrap(),
         );
-        assert!(result.is_ok());
-        let wasm_bytes = result.unwrap();
-        let result = Module::from_bytes(None, wasm_bytes);
-        assert!(result.is_ok());
-        let module = result.unwrap();
-
-        // run `fib` function from the compiled module
-        let result = vm.run_func_from_module(module, "fib", params!(10));
-        assert!(result.is_ok());
-        let returns = result.unwrap();
-        assert_eq!(returns.len(), 1);
-        assert_eq!(returns[0].to_i32(), 89);
-    }
-
-    #[test]
-    fn test_vm_run_func_in_named_module_instance() {
-        // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let vm = result.unwrap();
 
         // register a wasm module from the given in-memory wasm bytes
         // load wasm module
@@ -465,474 +406,13 @@ mod tests {
         );
         assert!(result.is_ok());
         let wasm_bytes = result.unwrap();
-        let result = vm.register_module_from_bytes("extern", wasm_bytes);
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
+        let fib_module = Module::from_bytes(None, wasm_bytes).unwrap();
+        vm.register_module(Some("extern"), fib_module).unwrap();
         // run `fib` function in the named module instance
-        let result = vm.run_func(Some("extern"), "fib", params!(10));
+        let result = vm.run_func(Some("extern"), "fib", params!(10)).await;
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns.len(), 1);
         assert_eq!(returns[0].to_i32(), 89);
-    }
-
-    #[test]
-    fn test_vm_run_func_in_active_module_instance() {
-        // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // load wasm module
-        let result = wat2wasm(
-            br#"(module
-            (export "fib" (func $fib))
-            (func $fib (param $n i32) (result i32)
-             (if
-              (i32.lt_s
-               (get_local $n)
-               (i32.const 2)
-              )
-              (return
-               (i32.const 1)
-              )
-             )
-             (return
-              (i32.add
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 2)
-                )
-               )
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 1)
-                )
-               )
-              )
-             )
-            )
-           )
-        "#,
-        );
-        assert!(result.is_ok());
-        let wasm_bytes = result.unwrap();
-        let result = Module::from_bytes(None, wasm_bytes);
-        assert!(result.is_ok());
-        let module = result.unwrap();
-
-        // register the wasm module into vm
-        let result = vm.register_module(None, module);
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // run `fib` function in the active module instance
-        let result = vm.run_func(None, "fib", params!(10));
-        assert!(result.is_ok());
-        let returns = result.unwrap();
-        assert_eq!(returns.len(), 1);
-        assert_eq!(returns[0].to_i32(), 89);
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_vm_create() {
-        {
-            let result = VmBuilder::new().build();
-            assert!(result.is_ok());
-        }
-
-        {
-            // create a Config
-            let result = ConfigBuilder::new(CommonConfigOptions::default()).build();
-            assert!(result.is_ok());
-            let config = result.unwrap();
-
-            // create a Vm context
-            let result = VmBuilder::new().with_config(config).build();
-            assert!(result.is_ok());
-            let _vm = result.unwrap();
-        }
-    }
-
-    #[test]
-    fn test_vm_wasi_module() {
-        let host_reg_options = HostRegistrationConfigOptions::default().wasi(true);
-        let result = ConfigBuilder::new(CommonConfigOptions::default())
-            .with_host_registration_config(host_reg_options)
-            .build();
-        assert!(result.is_ok());
-        let config = result.unwrap();
-
-        // create a vm with the config settings
-        let result = VmBuilder::new().with_config(config).build();
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // get the wasi module
-        let result = vm.wasi_module();
-        assert!(result.is_some());
-        let wasi_instance = result.unwrap();
-
-        assert_eq!(wasi_instance.name(), "wasi_snapshot_preview1");
-    }
-
-    #[test]
-    fn test_vm_statistics() {
-        // set config options related to Statistics
-        let stat_config_options = StatisticsConfigOptions::new()
-            .measure_cost(true)
-            .measure_time(true)
-            .count_instructions(true);
-        // create a Config
-        let result = ConfigBuilder::new(CommonConfigOptions::default())
-            .with_statistics_config(stat_config_options)
-            .build();
-        assert!(result.is_ok());
-        let config = result.unwrap();
-
-        // create a Vm context
-        let result = VmBuilder::new().with_config(config).build();
-        assert!(result.is_ok());
-        let _vm = result.unwrap();
-
-        // get the statistics
-        // let _stat = vm.statistics_mut();
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_vm_register_module_from_file() {
-        {
-            // create a Vm context
-            let result = VmBuilder::new().build();
-            assert!(result.is_ok());
-            let vm = result.unwrap();
-
-            // register a wasm module from a specified wasm file
-            let file = std::env::current_dir()
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
-            let result = vm.register_module_from_file("extern", file);
-            assert!(result.is_ok());
-            let vm = result.unwrap();
-
-            assert!(vm.named_instance_count() >= 1);
-            assert!(vm.instance_names().iter().any(|x| x == "extern"));
-        }
-
-        {
-            // create a Vm context
-            let result = VmBuilder::new().build();
-            assert!(result.is_ok());
-            let vm = result.unwrap();
-
-            // register a wasm module from a specified wasm file
-            let file = std::env::current_dir()
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
-            let result = vm.register_module_from_file("extern", file);
-            assert!(result.is_ok());
-            let vm = result.unwrap();
-
-            assert!(vm.named_instance_count() >= 1);
-            assert!(vm.instance_names().iter().any(|x| x == "extern"));
-        }
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_vm_register_module_from_bytes() {
-        // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // register a wasm module from the given in-memory wasm bytes
-        // load wasm module
-        let result = wat2wasm(
-            br#"(module
-            (export "fib" (func $fib))
-            (func $fib (param $n i32) (result i32)
-             (if
-              (i32.lt_s
-               (get_local $n)
-               (i32.const 2)
-              )
-              (return
-               (i32.const 1)
-              )
-             )
-             (return
-              (i32.add
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 2)
-                )
-               )
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 1)
-                )
-               )
-              )
-             )
-            )
-           )
-        "#,
-        );
-        assert!(result.is_ok());
-        let wasm_bytes = result.unwrap();
-        let result = vm.register_module_from_bytes("extern", wasm_bytes);
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        assert!(vm.named_instance_count() >= 1);
-        assert!(vm.instance_names().iter().any(|x| x == "extern"));
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_vm_register_import_module() {
-        // create a Const global instance
-        let result = Global::new(
-            GlobalType::new(ValType::F32, Mutability::Const),
-            Val::F32(3.5),
-        );
-        assert!(result.is_ok());
-        let global_const = result.unwrap();
-
-        // create a memory instance
-        let result = MemoryType::new(10, None, false);
-        assert!(result.is_ok());
-        let memory_type = result.unwrap();
-        let result = Memory::new(memory_type);
-        assert!(result.is_ok());
-        let memory = result.unwrap();
-
-        // create a table instance
-        let result = Table::new(TableType::new(RefType::FuncRef, 5, None));
-        assert!(result.is_ok());
-        let table = result.unwrap();
-
-        // create an ImportModule instance
-        let result = ImportObjectBuilder::new()
-            .with_func::<(i32, i32), i32, NeverType>("add", real_add, None)
-            .expect("failed to add host function")
-            .with_global("global", global_const)
-            .with_memory("mem", memory)
-            .with_table("table", table)
-            .build::<NeverType>("extern-module", None);
-        assert!(result.is_ok());
-        let import = result.unwrap();
-
-        // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let mut vm = result.unwrap();
-
-        // register an import module into vm
-        let result = vm.register_import_module(&import);
-        assert!(result.is_ok());
-
-        assert!(vm.named_instance_count() >= 1);
-        assert!(vm.instance_names().iter().any(|x| x == "extern-module"));
-
-        // get active module instance
-        let result = vm.named_module("extern-module");
-        assert!(result.is_ok());
-        let instance = result.unwrap();
-        assert!(instance.name().is_some());
-        assert_eq!(instance.name().unwrap(), "extern-module");
-
-        let result = instance.global("global");
-        assert!(result.is_ok());
-        let global = result.unwrap();
-        let ty = global.ty();
-        assert_eq!(*ty, GlobalType::new(ValType::F32, Mutability::Const));
-    }
-
-    #[test]
-    fn test_vm_register_named_module() {
-        // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // load wasm module
-        let result = wat2wasm(
-            br#"(module
-            (export "fib" (func $fib))
-            (func $fib (param $n i32) (result i32)
-             (if
-              (i32.lt_s
-               (get_local $n)
-               (i32.const 2)
-              )
-              (return
-               (i32.const 1)
-              )
-             )
-             (return
-              (i32.add
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 2)
-                )
-               )
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 1)
-                )
-               )
-              )
-             )
-            )
-           )
-        "#,
-        );
-        assert!(result.is_ok());
-        let wasm_bytes = result.unwrap();
-        let result = Module::from_bytes(None, wasm_bytes);
-        assert!(result.is_ok());
-        let module = result.unwrap();
-
-        // register the wasm module into vm
-        let result = vm.register_module(Some("extern"), module);
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // check the exported functions in the "extern" module
-        assert!(vm.named_instance_count() >= 1);
-        let result = vm.named_module("extern");
-        assert!(result.is_ok());
-        let instance = result.unwrap();
-
-        assert_eq!(instance.func_count(), 1);
-        let result = instance.func_names();
-        assert!(result.is_some());
-        let func_names = result.unwrap();
-        assert_eq!(func_names, ["fib"]);
-
-        // get host_func
-        let result = instance.func("fib");
-        assert!(result.is_ok());
-        let fib = result.unwrap();
-
-        // check the type of host_func
-        let ty = fib.ty();
-        assert!(ty.args().is_some());
-        assert_eq!(ty.args().unwrap(), [ValType::I32]);
-        assert!(ty.returns().is_some());
-        assert_eq!(ty.returns().unwrap(), [ValType::I32]);
-    }
-
-    #[test]
-    fn test_vm_register_active_module() {
-        // create a Vm context
-        let result = VmBuilder::new().build();
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // load wasm module
-        let result = wat2wasm(
-            br#"(module
-            (export "fib" (func $fib))
-            (func $fib (param $n i32) (result i32)
-             (if
-              (i32.lt_s
-               (get_local $n)
-               (i32.const 2)
-              )
-              (return
-               (i32.const 1)
-              )
-             )
-             (return
-              (i32.add
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 2)
-                )
-               )
-               (call $fib
-                (i32.sub
-                 (get_local $n)
-                 (i32.const 1)
-                )
-               )
-              )
-             )
-            )
-           )
-        "#,
-        );
-        assert!(result.is_ok());
-        let wasm_bytes = result.unwrap();
-        let result = Module::from_bytes(None, wasm_bytes);
-        assert!(result.is_ok());
-        let module = result.unwrap();
-
-        // register the wasm module into vm
-        let result = vm.register_module(None, module);
-        assert!(result.is_ok());
-        let vm = result.unwrap();
-
-        // check the exported functions in the "extern" module
-        let result = vm.active_module();
-        assert!(result.is_ok());
-        let instance = result.unwrap();
-
-        assert_eq!(instance.func_count(), 1);
-        let result = instance.func_names();
-        assert!(result.is_some());
-        let func_names = result.unwrap();
-        assert_eq!(func_names, ["fib"]);
-
-        // get host_func
-        let result = instance.func("fib");
-        assert!(result.is_ok());
-        let fib = result.unwrap();
-
-        // check the type of host_func
-        let ty = fib.ty();
-        assert!(ty.args().is_some());
-        assert_eq!(ty.args().unwrap(), [ValType::I32]);
-        assert!(ty.returns().is_some());
-        assert_eq!(ty.returns().unwrap(), [ValType::I32]);
-    }
-
-    fn real_add(
-        _frame: CallingFrame,
-        inputs: Vec<WasmValue>,
-        _data: *mut std::os::raw::c_void,
-    ) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-        if inputs.len() != 2 {
-            return Err(HostFuncError::User(1));
-        }
-
-        let a = if inputs[0].ty() == ValType::I32 {
-            inputs[0].to_i32()
-        } else {
-            return Err(HostFuncError::User(2));
-        };
-
-        let b = if inputs[1].ty() == ValType::I32 {
-            inputs[1].to_i32()
-        } else {
-            return Err(HostFuncError::User(3));
-        };
-
-        let c = a + b;
-
-        Ok(vec![WasmValue::from_i32(c)])
     }
 }

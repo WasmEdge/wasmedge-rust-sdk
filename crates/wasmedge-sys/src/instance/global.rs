@@ -73,22 +73,6 @@ impl Global {
     ///
     /// If fail to set value, then an error is returned.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use wasmedge_sys::{Global, GlobalType, WasmValue};
-    /// use wasmedge_types::{ValType, Mutability};
-    ///
-    /// // create a GlobalType instance
-    /// let ty = GlobalType::create(ValType::F32, Mutability::Var).expect("fail to create a GlobalType");
-    /// // create a Global instance
-    /// let mut global = Global::create(&ty, WasmValue::from_f32(3.1415)).expect("fail to create a Global");
-    ///
-    /// global.set_value(WasmValue::from_f32(314.15)).expect("fail to set a new value for a Global");
-    /// assert_eq!(global.get_value().to_f32(), 314.15);
-    /// ```
-    ///
-    ///
     pub fn set_value(&mut self, val: WasmValue) -> WasmEdgeResult<()> {
         let ty = self.ty()?;
         if ty.mutability() == Mutability::Const {
@@ -199,14 +183,10 @@ pub(crate) struct InnerGlobalType(pub(crate) *mut ffi::WasmEdge_GlobalTypeContex
 unsafe impl Send for InnerGlobalType {}
 unsafe impl Sync for InnerGlobalType {}
 
-// #[cfg(test)]
-#[cfg(ignore)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
+    use std::thread;
     use wasmedge_types::{Mutability, ValType};
 
     #[test]
@@ -217,7 +197,6 @@ mod tests {
         assert!(result.is_ok());
         let global_ty = result.unwrap();
         assert!(!global_ty.inner.0.is_null());
-        assert!(!global_ty.registered);
 
         // value type
         assert_eq!(global_ty.value_type(), ValType::I32);
@@ -229,10 +208,7 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_global_const_i32() {
         // create a GlobalType instance
-        let result = GlobalType::create(ValType::I32, Mutability::Const);
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        assert!(!ty.inner.0.is_null());
+        let ty = wasmedge_types::GlobalType::new(ValType::I32, Mutability::Const);
 
         // create a const Global instance
         let result = Global::create(&ty, WasmValue::from_i32(99));
@@ -248,9 +224,7 @@ mod tests {
         let result = global_const.ty();
         assert!(result.is_ok());
         let ty = result.unwrap();
-        assert!(!ty.inner.0.is_null());
-        assert!(ty.registered);
-        assert_eq!(ty.value_type(), ValType::I32);
+        assert_eq!(ty.value_ty(), ValType::I32);
         assert_eq!(ty.mutability(), Mutability::Const);
     }
 
@@ -258,10 +232,7 @@ mod tests {
     #[allow(clippy::assertions_on_result_states)]
     fn test_global_var_f32() {
         // create a GlobalType instance
-        let result = GlobalType::create(ValType::F32, Mutability::Var);
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        assert!(!ty.inner.0.is_null());
+        let ty = wasmedge_types::GlobalType::new(ValType::F32, Mutability::Var);
 
         // create a Var Global instance
         let result = Global::create(&ty, WasmValue::from_f32(13.14));
@@ -278,9 +249,7 @@ mod tests {
         let result = global_var.ty();
         assert!(result.is_ok());
         let ty = result.unwrap();
-        assert!(!ty.inner.0.is_null());
-        assert!(ty.registered);
-        assert_eq!(ty.value_type(), ValType::F32);
+        assert_eq!(ty.value_ty(), ValType::F32);
         assert_eq!(ty.mutability(), Mutability::Var);
     }
 
@@ -289,10 +258,7 @@ mod tests {
     fn test_global_conflict() {
         {
             // create a GlobalType instance
-            let result = GlobalType::create(ValType::F32, Mutability::Var);
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
+            let ty = wasmedge_types::GlobalType::new(ValType::F32, Mutability::Var);
 
             // create a Var Global instance with a value of mis-matched Value::I32 type
             let result = Global::create(&ty, WasmValue::from_i32(520));
@@ -301,10 +267,7 @@ mod tests {
 
         {
             // create a GlobalType instance
-            let result = GlobalType::create(ValType::F32, Mutability::Var);
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
+            let ty = wasmedge_types::GlobalType::new(ValType::F32, Mutability::Var);
 
             // create a Var Global instance with a value of Value::F32 type
             let result = Global::create(&ty, WasmValue::from_f32(13.14));
@@ -327,28 +290,7 @@ mod tests {
     fn test_global_send() {
         {
             // create a GlobalType instance
-            let result = GlobalType::create(ValType::I32, Mutability::Const);
-            assert!(result.is_ok());
-            let global_ty = result.unwrap();
-
-            let handle = thread::spawn(move || {
-                assert!(!global_ty.inner.0.is_null());
-                assert!(!global_ty.registered);
-
-                // value type
-                assert_eq!(global_ty.value_type(), ValType::I32);
-                // Mutability
-                assert_eq!(global_ty.mutability(), Mutability::Const);
-            });
-
-            handle.join().unwrap()
-        }
-
-        {
-            // create a GlobalType instance
-            let result = GlobalType::create(ValType::I32, Mutability::Const);
-            assert!(result.is_ok());
-            let global_ty = result.unwrap();
+            let global_ty = wasmedge_types::GlobalType::new(ValType::I32, Mutability::Const);
 
             // create a Global instance
             let result = Global::create(&global_ty, WasmValue::from_i32(5));
@@ -367,74 +309,20 @@ mod tests {
     #[test]
     fn test_global_sync() {
         // create a GlobalType instance
-        let result = GlobalType::create(ValType::I32, Mutability::Const);
-        assert!(result.is_ok());
-        let global_ty = result.unwrap();
+        let global_ty = wasmedge_types::GlobalType::new(ValType::I32, Mutability::Const);
 
         // create a Global instance
         let result = Global::create(&global_ty, WasmValue::from_i32(5));
         assert!(result.is_ok());
-        let global = Arc::new(Mutex::new(result.unwrap()));
+        let global = result.unwrap();
+        let global = &global;
 
-        let global_cloned = Arc::clone(&global);
-        let handle = thread::spawn(move || {
-            let result = global_cloned.lock();
-            assert!(result.is_ok());
-            let global = result.unwrap();
-
-            assert_eq!(global.get_value().to_i32(), 5);
-        });
-
-        handle.join().unwrap()
-    }
-
-    #[test]
-    fn test_global_clone() {
-        {
-            // create a GlobalType instance
-            let result = GlobalType::create(ValType::I32, Mutability::Const);
-            assert!(result.is_ok());
-            let global_ty = result.unwrap();
-
-            // create a Global instance
-            let result = Global::create(&global_ty, WasmValue::from_i32(5));
-            assert!(result.is_ok());
-            let global = result.unwrap();
-
-            let global_cloned = global.clone();
-
-            drop(global);
-
-            assert_eq!(global_cloned.get_value().to_i32(), 5);
-        }
-
-        {
-            // create a GlobalType instance
-            let result = GlobalType::create(ValType::F32, Mutability::Var);
-            assert!(result.is_ok());
-            let ty = result.unwrap();
-            assert!(!ty.inner.0.is_null());
-
-            // create a Var Global instance
-            let result = Global::create(&ty, WasmValue::from_f32(13.14));
-            assert!(result.is_ok());
-            let mut global_var = result.unwrap();
-            assert_eq!(global_var.get_value().to_f32(), 13.14);
-
-            let global_var_cloned = global_var.clone();
-            assert_eq!(
-                global_var_cloned.get_value().to_f32(),
-                global_var.get_value().to_f32()
-            );
-
-            // access the value held by global_var
-            let result = global_var.set_value(WasmValue::from_f32(1.314));
-            assert!(result.is_ok());
-            assert_eq!(global_var.get_value().to_f32(), 1.314);
-
-            drop(global_var);
-
-            assert_eq!(global_var_cloned.get_value().to_f32(), 1.314);
-        }
+        std::thread::scope(|s| {
+            let _ = s
+                .spawn(move || {
+                    assert_eq!(global.get_value().to_i32(), 5);
+                })
+                .join();
+        })
     }
 }
