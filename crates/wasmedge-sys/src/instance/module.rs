@@ -1,13 +1,13 @@
 //! Defines WasmEdge Instance and other relevant types.
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-use crate::r#async::AsyncWasiModule;
 use crate::{
     ffi,
     instance::{function::InnerFunc, global::InnerGlobal, memory::InnerMemory, table::InnerTable},
     types::WasmEdgeString,
-    Function, Global, Memory, Table, WasmEdgeResult,
+    Function, Global, Memory, Table, WasmEdgeResult, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
 };
+#[cfg(all(feature = "async", target_os = "linux"))]
+use crate::{r#async::AsyncWasiModule, ASYNC_HOST_FUNCS};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use wasmedge_types::error::{InstanceError, WasmEdgeError};
@@ -400,7 +400,38 @@ impl<T: ?Sized + Send + Sync + Clone> Drop for ImportModule<T> {
             }
 
             // drop the registered host functions
-            self.funcs.drain(..);
+            for func in self.funcs.iter() {
+                if func.registered && Arc::strong_count(&func.inner) == 1 {
+                    // remove the real_func from HOST_FUNCS
+                    let footprint = func.inner.lock().0 as usize;
+                    if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
+                        let mut map_host_func = HOST_FUNCS.write();
+                        if map_host_func.contains_key(&key) {
+                            map_host_func.remove(&key).expect(
+                                "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
+                            );
+                        }
+
+                        #[cfg(all(feature = "async", target_os = "linux"))]
+                        {
+                            let mut map_host_func = ASYNC_HOST_FUNCS.write();
+                            if map_host_func.contains_key(&key) {
+                                map_host_func.remove(&key).expect(
+                                "[wasmedge-sys] Failed to remove the host function from ASYNC_HOST_FUNCS container",
+                            );
+                            }
+                        }
+
+                        unsafe {
+                            // drop host data
+                            let _ = Box::from_raw(ffi::WasmEdge_FunctionInstanceGetData(
+                                func.inner.lock().0,
+                            )
+                                as *mut std::ffi::c_void);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -461,6 +492,7 @@ impl<T: ?Sized + Send + Sync + Clone> AsImport for ImportModule<T> {
     fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
         self.funcs.push(func);
         let f = self.funcs.last_mut().unwrap();
+        f.registered = true;
 
         let func_name: WasmEdgeString = name.into();
         unsafe {
@@ -470,8 +502,6 @@ impl<T: ?Sized + Send + Sync + Clone> AsImport for ImportModule<T> {
                 f.inner.lock().0,
             );
         }
-
-        // ! Notice that, `f.inner.lock().0` is not set to null here as the pointer will be used in `Function::drop`.
     }
 
     fn add_table(&mut self, name: impl AsRef<str>, table: Table) {

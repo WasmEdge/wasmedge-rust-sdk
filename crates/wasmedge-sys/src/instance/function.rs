@@ -506,8 +506,6 @@ impl Drop for Function {
                     );
                     }
                 }
-
-                self.inner.lock().0 = std::ptr::null_mut();
             }
 
             // delete the function instance
@@ -518,7 +516,7 @@ impl Drop for Function {
                         Box::from_raw(ffi::WasmEdge_FunctionInstanceGetData(self.inner.lock().0)
                             as *mut c_void);
 
-                    ffi::WasmEdge_FunctionInstanceDelete(self.inner.lock().0)
+                    ffi::WasmEdge_FunctionInstanceDelete(self.inner.lock().0);
                 };
             }
         }
@@ -837,7 +835,8 @@ mod tests {
         ) -> Result<Vec<WasmValue>, HostFuncError> {
             println!("Rust: Entering Rust function real_add");
 
-            let host_data = unsafe { Box::from_raw(data as *mut T) };
+            // Do not use `Box::from_raw`: let host_data = unsafe { Box::from_raw(data as *mut T) };
+            let host_data = unsafe { &mut *(data as *mut T) };
             println!("host_data: {:?}", host_data);
 
             if input.len() != 2 {
@@ -1167,7 +1166,7 @@ mod tests {
     }
 
     #[test]
-    fn test_func_drop() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_func_drop_v1() -> Result<(), Box<dyn std::error::Error>> {
         // create a host function
         let real_add = |_: CallingFrame,
                         input: Vec<WasmValue>,
@@ -1314,6 +1313,80 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_func_drop_v2() {
+        #[derive(Debug)]
+        struct Data<T, S> {
+            _x: i32,
+            _y: String,
+            _v: Vec<T>,
+            _s: Vec<S>,
+        }
+        let data: Data<i32, &str> = Data {
+            _x: 12,
+            _y: "hello".to_string(),
+            _v: vec![1, 2, 3],
+            _s: vec!["macos", "linux", "windows"],
+        };
+
+        fn real_add<T: core::fmt::Debug>(
+            _frame: CallingFrame,
+            input: Vec<WasmValue>,
+            data: *mut std::ffi::c_void,
+        ) -> Result<Vec<WasmValue>, HostFuncError> {
+            println!("Rust: Entering Rust function real_add");
+
+            // Do not use `Box::from_raw`: let host_data = unsafe { Box::from_raw(data as *mut T) };
+            let host_data = unsafe { &mut *(data as *mut T) };
+            println!("host_data: {:?}", host_data);
+
+            if input.len() != 2 {
+                return Err(HostFuncError::User(1));
+            }
+
+            let a = if input[0].ty() == ValType::I32 {
+                input[0].to_i32()
+            } else {
+                return Err(HostFuncError::User(2));
+            };
+
+            let b = if input[1].ty() == ValType::I32 {
+                input[1].to_i32()
+            } else {
+                return Err(HostFuncError::User(3));
+            };
+
+            let c = a + b;
+            println!("Rust: calcuating in real_add c: {c:?}");
+
+            println!("Rust: Leaving Rust function real_add");
+            Ok(vec![WasmValue::from_i32(c)])
+        }
+
+        assert_eq!(HOST_FUNCS.read().len(), 0);
+        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
+
+        // create a FuncType
+        let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
+        assert!(result.is_ok());
+        let func_ty = result.unwrap();
+        // create a host function
+        let result = Function::create_sync_func(
+            &func_ty,
+            Box::new(real_add::<Data<i32, &str>>),
+            Some(Box::new(data)),
+            0,
+        );
+        assert!(result.is_ok());
+        let host_func = result.unwrap();
+
+        let host_func_cloned = host_func.clone();
+
+        drop(host_func);
+
+        drop(host_func_cloned);
+    }
+
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[tokio::test]
     async fn test_func_async_closure() -> Result<(), Box<dyn std::error::Error>> {
@@ -1345,8 +1418,8 @@ mod tests {
              -> Box<
                 (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
             > {
-                // let host_data = unsafe { &mut *(data as *mut Data<i32, &str>) };
-                let host_data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
+                // Do not use `Box::from_raw`: let host_data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
+                let host_data = unsafe { &mut *(data as *mut Data<i32, &str>) };
 
                 Box::new(async move {
                     for _ in 0..10 {
@@ -1450,7 +1523,8 @@ mod tests {
                 data: *mut std::ffi::c_void,
             ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
             {
-                let data = unsafe { Box::from_raw(data as *mut T) };
+                // Do not use `Box::from_raw`: let data = unsafe { Box::from_raw(data as *mut T) };
+                let data = unsafe { &mut *(data as *mut T) };
 
                 Box::new(async move {
                     for _ in 0..10 {
@@ -1479,6 +1553,9 @@ mod tests {
             );
             assert!(result.is_ok());
             let async_hello_func = result.unwrap();
+
+            assert_eq!(ASYNC_HOST_FUNCS.read().len(), 1);
+            assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
             // create an Executor
             let result = Executor::create(None, None);
@@ -1524,6 +1601,11 @@ mod tests {
             let _ = executor
                 .call_func_async(&async_state, &async_hello, [])
                 .await?;
+
+            assert_eq!(ASYNC_HOST_FUNCS.read().len(), 1);
+            assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
+
+            drop(import);
         }
 
         assert_eq!(ASYNC_HOST_FUNCS.read().len(), 0);
