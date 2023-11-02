@@ -515,16 +515,20 @@ impl<T: Sized> ImportModule<T> {
 }
 
 /// A [WasiModule] is a module instance for the WASI specification.
-#[derive(Debug, Clone)]
-pub struct WasiModule {
-    pub(crate) inner: InnerInstance,
-}
+#[derive(Debug)]
+pub struct WasiModule(Instance);
 
-impl Drop for WasiModule {
-    fn drop(&mut self) {
-        unsafe { ffi::WasmEdge_ModuleInstanceDelete(self.inner.0) };
+impl AsRef<Instance> for WasiModule {
+    fn as_ref(&self) -> &Instance {
+        &self.0
     }
 }
+impl AsMut<Instance> for WasiModule {
+    fn as_mut(&mut self) -> &mut Instance {
+        &mut self.0
+    }
+}
+
 impl WasiModule {
     /// Creates a WASI host module which contains the WASI host functions, and initializes it with the given parameters.
     ///
@@ -592,9 +596,9 @@ impl WasiModule {
         };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ImportObjCreate)),
-            false => Ok(Self {
+            false => Ok(Self(Instance {
                 inner: InnerInstance(ctx),
-            }),
+            })),
         }
     }
 
@@ -656,7 +660,7 @@ impl WasiModule {
 
         unsafe {
             ffi::WasmEdge_ModuleInstanceInitWASI(
-                self.inner.0,
+                self.0.as_ptr() as *mut _,
                 p_args.as_ptr(),
                 p_args_len as u32,
                 p_envs.as_ptr(),
@@ -671,7 +675,7 @@ impl WasiModule {
     ///
     /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
     pub fn exit_code(&self) -> u32 {
-        unsafe { ffi::WasmEdge_ModuleInstanceWASIGetExitCode(self.inner.0 as *const _) }
+        unsafe { ffi::WasmEdge_ModuleInstanceWASIGetExitCode(self.0.as_ptr()) }
     }
 
     /// Returns the native handler from the mapped FD/Handler.
@@ -687,7 +691,7 @@ impl WasiModule {
         let mut handler: u64 = 0;
         let code: u32 = unsafe {
             ffi::WasmEdge_ModuleInstanceWASIGetNativeHandler(
-                self.inner.0 as *const _,
+                self.0.as_ptr(),
                 fd,
                 &mut handler as *mut u64,
             )
