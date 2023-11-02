@@ -1003,8 +1003,10 @@ mod tests {
         Mutability, NeverType, RefType, Table, TableType, ValType, WasmValue,
     };
 
-    #[cfg(target_os = "linux")]
+    #[ignore]
     #[test]
+    #[cfg(target_os = "linux")]
+    // To enable this test function, please install `wasi_crypto` plugin first.
     fn test_vmbuilder() -> Result<(), Box<dyn std::error::Error>> {
         use crate::{
             config::{CommonConfigOptions, ConfigBuilder, HostRegistrationConfigOptions},
