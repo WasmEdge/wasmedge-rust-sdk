@@ -166,6 +166,7 @@ extern "C" fn wrap_async_fn(
 pub struct Function {
     pub(crate) inner: Arc<Mutex<InnerFunc>>,
     pub(crate) registered: bool,
+    pub(crate) data_owner: bool,
 }
 impl Function {
     /// Creates a [host function](crate::Function) with the given function type.
@@ -231,12 +232,12 @@ impl Function {
         data: Option<Box<T>>,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        let data = match data {
-            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
-            None => std::ptr::null_mut(),
+        let (data, data_owner) = match data {
+            Some(d) => (Box::into_raw(d) as *mut std::ffi::c_void, true),
+            None => (std::ptr::null_mut(), false),
         };
 
-        unsafe { Self::create_with_data(ty, real_fn, data, cost) }
+        unsafe { Self::create_with_data(ty, real_fn, data, data_owner, cost) }
     }
 
     /// Creates a [host function](crate::Function) with the given function type.
@@ -251,6 +252,8 @@ impl Function {
     ///
     /// * `data` - The pointer to the host context data used in this function.
     ///
+    /// * `data_owner` - Whether the host context data is owned by the host function.
+    ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
     /// # Error
@@ -261,6 +264,7 @@ impl Function {
         ty: &FuncType,
         real_fn: BoxedFn,
         data: *mut c_void,
+        data_owner: bool,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let mut map_host_func = HOST_FUNCS.write();
@@ -292,6 +296,7 @@ impl Function {
             false => Ok(Self {
                 inner: Arc::new(Mutex::new(InnerFunc(ctx))),
                 registered: false,
+                data_owner,
             }),
         }
     }
@@ -320,9 +325,9 @@ impl Function {
         data: Option<Box<T>>,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        let data = match data {
-            Some(d) => Box::into_raw(d) as *mut std::ffi::c_void,
-            None => std::ptr::null_mut(),
+        let (data, data_owner) = match data {
+            Some(d) => (Box::into_raw(d) as *mut std::ffi::c_void, true),
+            None => (std::ptr::null_mut(), false),
         };
 
         let mut map_host_func = ASYNC_HOST_FUNCS.write();
@@ -356,6 +361,7 @@ impl Function {
             false => Ok(Self {
                 inner: Arc::new(Mutex::new(InnerFunc(ctx))),
                 registered: false,
+                data_owner,
             }),
         }
     }
@@ -372,6 +378,8 @@ impl Function {
     ///
     /// * `data` - The pointer to the host context data used in this function.
     ///
+    /// * `data_owner` - Whether the host context data is owned by the host function.
+    ///
     /// * `cost` - The function cost in the [Statistics](crate::Statistics). Pass 0 if the calculation is not needed.
     ///
     /// # Error
@@ -387,6 +395,7 @@ impl Function {
         fn_wrapper: CustomFnWrapper,
         real_fn: *mut c_void,
         data: *mut c_void,
+        data_owner: bool,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let ctx = ffi::WasmEdge_FunctionInstanceCreateBinding(
@@ -402,6 +411,7 @@ impl Function {
             false => Ok(Self {
                 inner: Arc::new(Mutex::new(InnerFunc(ctx))),
                 registered: false,
+                data_owner,
             }),
         }
     }
@@ -486,6 +496,7 @@ impl Function {
 }
 impl Drop for Function {
     fn drop(&mut self) {
+        dbg!("func registered: {}", self.registered);
         if !self.registered && Arc::strong_count(&self.inner) == 1 {
             // remove the real_func from HOST_FUNCS
             let footprint = self.inner.lock().0 as usize;
@@ -493,8 +504,8 @@ impl Drop for Function {
                 let mut map_host_func = HOST_FUNCS.write();
                 if map_host_func.contains_key(&key) {
                     map_host_func.remove(&key).expect(
-                        "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
-                    );
+                    "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
+                );
                 }
 
                 #[cfg(all(feature = "async", target_os = "linux"))]
@@ -502,20 +513,26 @@ impl Drop for Function {
                     let mut map_host_func = ASYNC_HOST_FUNCS.write();
                     if map_host_func.contains_key(&key) {
                         map_host_func.remove(&key).expect(
-                        "[wasmedge-sys] Failed to remove the host function from ASYNC_HOST_FUNCS container",
-                    );
+                    "[wasmedge-sys] Failed to remove the host function from ASYNC_HOST_FUNCS container",
+                );
                     }
                 }
+            } else {
+                panic!("[wasmedge-sys] Failed to remove the host function from HOST_FUNC_FOOTPRINTS container");
+            }
+
+            // drop host data
+            if self.data_owner {
+                let _ = unsafe {
+                    Box::from_raw(
+                        ffi::WasmEdge_FunctionInstanceGetData(self.inner.lock().0) as *mut c_void
+                    )
+                };
             }
 
             // delete the function instance
             if !self.inner.lock().0.is_null() {
                 unsafe {
-                    // drop host data
-                    let _ =
-                        Box::from_raw(ffi::WasmEdge_FunctionInstanceGetData(self.inner.lock().0)
-                            as *mut c_void);
-
                     ffi::WasmEdge_FunctionInstanceDelete(self.inner.lock().0);
                 };
             }
@@ -527,6 +544,7 @@ impl Clone for Function {
         Self {
             inner: self.inner.clone(),
             registered: self.registered,
+            data_owner: self.data_owner,
         }
     }
 }
@@ -1291,12 +1309,14 @@ mod tests {
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // ! notice that `add_again` should be dropped before or not be used after dropping `import`
+        dbg!("drop add_again");
         drop(add_again);
 
         assert_eq!(HOST_FUNCS.read().len(), 1);
         assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 1);
 
         // drop the import object
+        dbg!("drop import");
         drop(import);
 
         assert!(store.module("extern").is_err());

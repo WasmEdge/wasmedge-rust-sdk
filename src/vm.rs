@@ -502,9 +502,14 @@ impl Vm {
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         match mod_name {
             Some(mod_name) => match self.named_instances.get(mod_name) {
-                Some(named_instance) => named_instance
-                    .func(func_name.as_ref())?
-                    .run(self.executor(), args),
+                Some(named_instance) => {
+                    let named_func = named_instance.func(func_name.as_ref())?;
+                    let res = named_func.run(self.executor(), args);
+                    dbg!("drop named_func");
+                    drop(named_func);
+                    dbg!("DONE! drop anmed_func");
+                    res
+                }
                 None => Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
                     mod_name.into(),
                 )))),

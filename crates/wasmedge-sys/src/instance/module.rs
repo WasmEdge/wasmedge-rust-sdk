@@ -69,6 +69,7 @@ impl Instance {
             false => Ok(Function {
                 inner: Arc::new(Mutex::new(InnerFunc(func_ctx))),
                 registered: true,
+                data_owner: false, // it doesn't matter to set this field to false
             }),
         }
     }
@@ -393,41 +394,59 @@ pub struct ImportModule<T: ?Sized + Send + Sync + Clone> {
 }
 impl<T: ?Sized + Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
+        dbg!("import module registered: {}", self.registered);
+        dbg!(
+            "import module strong count: {}",
+            Arc::strong_count(&self.inner)
+        );
+
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             // free the module instance
             unsafe {
                 ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
 
-            // drop the registered host functions
+            dbg!("len of funcs: {}", self.funcs.len());
+
+            // cleanup the stuff belonging to each host function before really dropping the host function
             for func in self.funcs.iter() {
-                if func.registered && Arc::strong_count(&func.inner) == 1 {
-                    // remove the real_func from HOST_FUNCS
-                    let footprint = func.inner.lock().0 as usize;
-                    if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
-                        let mut map_host_func = HOST_FUNCS.write();
-                        if map_host_func.contains_key(&key) {
-                            map_host_func.remove(&key).expect(
-                                "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
-                            );
-                        }
+                assert_eq!(Arc::strong_count(&func.inner), 1, "[wasmedge-sys] The host function is still in use while dropping the import module");
+                assert!(func.registered, "[wasmedge-sys] Trying to drop a non-registered host function while dropping the import module");
 
-                        #[cfg(all(feature = "async", target_os = "linux"))]
-                        {
-                            let mut map_host_func = ASYNC_HOST_FUNCS.write();
-                            if map_host_func.contains_key(&key) {
-                                map_host_func.remove(&key).expect(
-                                "[wasmedge-sys] Failed to remove the host function from ASYNC_HOST_FUNCS container",
-                            );
-                            }
-                        }
+                // remove the real_func from HOST_FUNCS
+                let footprint = func.inner.lock().0 as usize;
 
+                dbg!("footprint: {}", footprint);
+
+                if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
+                    dbg!("remove the host function from HOST_FUNCS container");
+
+                    if func.data_owner {
+                        dbg!(func.inner.lock().0);
                         unsafe {
                             // drop host data
-                            let _ = Box::from_raw(ffi::WasmEdge_FunctionInstanceGetData(
-                                func.inner.lock().0,
-                            )
-                                as *mut std::ffi::c_void);
+                            dbg!("drop host data while dropping the import module");
+                            let p = ffi::WasmEdge_FunctionInstanceGetData(func.inner.lock().0);
+                            dbg!("start box::from_raw");
+                            let _ = Box::from_raw(p as *mut std::ffi::c_void);
+                            dbg!("Done! drop host data while dropping the import module");
+                        }
+                    }
+
+                    let mut map_host_func = HOST_FUNCS.write();
+                    if map_host_func.contains_key(&key) {
+                        map_host_func.remove(&key).expect(
+                                "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
+                            );
+                    }
+
+                    #[cfg(all(feature = "async", target_os = "linux"))]
+                    {
+                        let mut map_host_func = ASYNC_HOST_FUNCS.write();
+                        if map_host_func.contains_key(&key) {
+                            map_host_func.remove(&key).expect(
+                                "[wasmedge-sys] Failed to remove the host function from ASYNC_HOST_FUNCS container",
+                            );
                         }
                     }
                 }
@@ -493,6 +512,7 @@ impl<T: ?Sized + Send + Sync + Clone> AsImport for ImportModule<T> {
         self.funcs.push(func);
         let f = self.funcs.last_mut().unwrap();
         f.registered = true;
+        dbg!(f.data_owner);
 
         let func_name: WasmEdgeString = name.into();
         unsafe {
