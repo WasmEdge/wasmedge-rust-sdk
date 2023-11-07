@@ -394,48 +394,27 @@ pub struct ImportModule<T: ?Sized + Send + Sync + Clone> {
 }
 impl<T: ?Sized + Send + Sync + Clone> Drop for ImportModule<T> {
     fn drop(&mut self) {
-        dbg!("import module registered: {}", self.registered);
-        dbg!(
-            "import module strong count: {}",
-            Arc::strong_count(&self.inner)
-        );
-
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            // free the module instance
-            unsafe {
-                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
-            }
-
-            dbg!("len of funcs: {}", self.funcs.len());
-
             // cleanup the stuff belonging to each host function before really dropping the host function
             for func in self.funcs.iter() {
                 assert_eq!(Arc::strong_count(&func.inner), 1, "[wasmedge-sys] The host function is still in use while dropping the import module");
                 assert!(func.registered, "[wasmedge-sys] Trying to drop a non-registered host function while dropping the import module");
 
+                if func.data_owner {
+                    unsafe {
+                        // drop host data
+                        let p = ffi::WasmEdge_FunctionInstanceGetData(func.inner.lock().0);
+                        let _ = Box::from_raw(p as *mut std::ffi::c_void);
+                    }
+                }
+
                 // remove the real_func from HOST_FUNCS
                 let footprint = func.inner.lock().0 as usize;
 
-                dbg!("footprint: {}", footprint);
-
                 if let Some(key) = HOST_FUNC_FOOTPRINTS.lock().remove(&footprint) {
-                    dbg!("remove the host function from HOST_FUNCS container");
-
-                    if func.data_owner {
-                        dbg!(func.inner.lock().0);
-                        unsafe {
-                            // drop host data
-                            dbg!("drop host data while dropping the import module");
-                            let p = ffi::WasmEdge_FunctionInstanceGetData(func.inner.lock().0);
-                            dbg!("start box::from_raw");
-                            let _ = Box::from_raw(p as *mut std::ffi::c_void);
-                            dbg!("Done! drop host data while dropping the import module");
-                        }
-                    }
-
                     let mut map_host_func = HOST_FUNCS.write();
                     if map_host_func.contains_key(&key) {
-                        map_host_func.remove(&key).expect(
+                        let _ = map_host_func.remove(&key).expect(
                                 "[wasmedge-sys] Failed to remove the host function from HOST_FUNCS_NEW container",
                             );
                     }
@@ -450,6 +429,11 @@ impl<T: ?Sized + Send + Sync + Clone> Drop for ImportModule<T> {
                         }
                     }
                 }
+            }
+
+            // free the module instance
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
             }
         }
     }
@@ -512,7 +496,6 @@ impl<T: ?Sized + Send + Sync + Clone> AsImport for ImportModule<T> {
         self.funcs.push(func);
         let f = self.funcs.last_mut().unwrap();
         f.registered = true;
-        dbg!(f.data_owner);
 
         let func_name: WasmEdgeString = name.into();
         unsafe {
@@ -1474,6 +1457,7 @@ mod tests {
 
             drop(import);
             assert_eq!(Arc::strong_count(&import_clone.inner), 1);
+
             drop(import_clone);
         }
 
@@ -1561,5 +1545,70 @@ mod tests {
         assert!(result.is_some());
         let host_data = result.unwrap();
         assert_eq!(host_data.radius, 10);
+    }
+
+    #[test]
+    fn test_instance_valgrind_memory_check() {
+        // define host data
+        #[derive(Clone, Debug)]
+        struct Circle {
+            radius: i32,
+        }
+        impl Drop for Circle {
+            fn drop(&mut self) {
+                println!("dropping circle: {}", self.radius);
+            }
+        }
+
+        #[sys_host_function]
+        fn real_add_new(
+            _frame: CallingFrame,
+            inputs: Vec<WasmValue>,
+            data: &mut Circle,
+        ) -> Result<Vec<WasmValue>, HostFuncError> {
+            println!("radius of circle: {}", data.radius);
+
+            if inputs.len() != 2 {
+                return Err(HostFuncError::User(1));
+            }
+
+            let a = if inputs[0].ty() == ValType::I32 {
+                inputs[0].to_i32()
+            } else {
+                return Err(HostFuncError::User(2));
+            };
+
+            let b = if inputs[1].ty() == ValType::I32 {
+                inputs[1].to_i32()
+            } else {
+                return Err(HostFuncError::User(3));
+            };
+
+            let c = a + b;
+
+            Ok(vec![WasmValue::from_i32(c)])
+        }
+
+        // create an import module
+        let host_name = "extern";
+        let result = ImportModule::<NeverType>::create(host_name, None);
+        assert!(result.is_ok());
+        let mut import = result.unwrap();
+
+        // create a host function
+        let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
+        assert!(result.is_ok());
+        let func_ty = result.unwrap();
+        let result = Function::create_sync_func::<Circle>(
+            &func_ty,
+            Box::new(real_add_new),
+            Some(Box::new(Circle { radius: 10 })),
+            0,
+        );
+        let host_func = result.unwrap();
+
+        // add the host function
+        import.add_func("func-add", host_func);
+        drop(import);
     }
 }
