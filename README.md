@@ -16,6 +16,7 @@ This crate depends on the WasmEdge C API. In linux/macOS the crate can download 
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+  | 0.13.0        | 0.13.5        | 0.17.3        | 0.4.4         | 0.6.1         | 0.1.0     |
   | 0.12.2        | 0.13.4        | 0.17.2        | 0.4.4         | 0.6.1         | 0.1.0     |
   | 0.12.1        | 0.13.4        | 0.17.1        | 0.4.4         | 0.6.1         | 0.1.0     |
   | 0.12.0        | 0.13.4        | 0.17.0        | 0.4.4         | 0.6.1         | 0.1.0     |
@@ -58,7 +59,7 @@ The following architectures are supported for automatic downloads:
 
 This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 
-**Notice:** The minimum supported Rust version is 1.70.
+**Notice:** The minimum supported Rust version is 1.71.
 
 ## API Reference
 
