@@ -136,7 +136,7 @@ fn main() {
             .clang_arg(format!("-I{inc_dir}"))
             .prepend_enum_name(false) // The API already prepends the name.
             .dynamic_link_require_all(true)
-            .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+            .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
             .generate()
             .expect("failed to generate bindings")
             .write_to_file(out_file)
