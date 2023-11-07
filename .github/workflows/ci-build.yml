@@ -166,7 +166,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11, macos-12]
+        os: [macos-12, macos-13]
         rust: [1.73, 1.72, 1.71]
 
     steps:
