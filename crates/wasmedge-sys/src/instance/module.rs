@@ -393,6 +393,7 @@ pub struct ImportModule<T: ?Sized + Send + Sync + Clone> {
     data: Option<Box<T>>,
 }
 impl<T: ?Sized + Send + Sync + Clone> Drop for ImportModule<T> {
+    #[allow(clippy::from_raw_with_void_ptr)]
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
             // cleanup the stuff belonging to each host function before really dropping the host function

@@ -495,6 +495,7 @@ impl Function {
     }
 }
 impl Drop for Function {
+    #[allow(clippy::from_raw_with_void_ptr)]
     fn drop(&mut self) {
         if !self.registered && Arc::strong_count(&self.inner) == 1 {
             // remove the real_func from HOST_FUNCS
