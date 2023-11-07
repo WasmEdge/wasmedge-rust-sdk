@@ -671,7 +671,8 @@ mod tests {
          -> Box<
             (dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send),
         > {
-            let data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
+            // Do not use `Box::from_raw`: let data = unsafe { Box::from_raw(data as *mut Data<i32, &str>) };
+            let data = unsafe { &mut *(data as *mut Data<i32, &str>) };
 
             Box::new(async move {
                 for _ in 0..10 {
