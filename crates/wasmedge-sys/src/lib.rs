@@ -142,7 +142,7 @@ pub(crate) type BoxedFn = Box<
 >;
 
 lazy_static! {
-    pub static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
+    pub(crate) static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
         RwLock::new(HashMap::new());
 }
 
@@ -165,7 +165,8 @@ lazy_static! {
 
 // Stores the mapping from the address of each host function pointer to the key of the `HOST_FUNCS`.
 lazy_static! {
-    pub static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> = Mutex::new(HashMap::new());
+    pub(crate) static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> =
+        Mutex::new(HashMap::new());
 }
 
 /// The object that is used to perform a [host function](crate::Function) is required to implement this trait.

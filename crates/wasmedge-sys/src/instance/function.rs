@@ -496,7 +496,6 @@ impl Function {
 }
 impl Drop for Function {
     fn drop(&mut self) {
-        dbg!("func registered: {}", self.registered);
         if !self.registered && Arc::strong_count(&self.inner) == 1 {
             // remove the real_func from HOST_FUNCS
             let footprint = self.inner.lock().0 as usize;
