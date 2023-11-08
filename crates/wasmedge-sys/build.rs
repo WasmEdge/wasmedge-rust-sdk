@@ -18,14 +18,14 @@ const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = ph
     // The value is a tuple containing the sha256sum of the archive, and the platform slug as it appears in the archive name:
     //  * The archive name is WasmEdge-{version}-{slug}.tar.gz
 
-    "macos/aarch64"                => ("97f92a16c658eb3516f6cece8b9af97a33a349a4617d037b633adb64e5a51d83", "darwin_arm64"),
-    "macos/x86_64"                 => ("5a94300d9864b2a4bf828771cc7c1a7aba5e1b9fd10917399213cce35cdd9d24", "darwin_x86_64"),
-    "linux/aarch64/gnu"            => ("a3be7e47b1783cf306833b8e6f84baa1c4f2df1f5c00489963efea8047c67619", "manylinux2014_aarch64"),
-    "linux/x86_64/gnu"             => ("618a68538360c15fca39cafe643b468d3112a09e2a0ef6b1f1f050480451091a", "manylinux2014_x86_64"),
-    "linux/aarch64/gnu/static"     => ("e1f7e0e4af70896938e1feaf1b9b344480705355b1129408eac651f412e96d0b", "debian11_aarch64_static"),
-    "linux/x86_64/gnu/static"      => ("6edc597529f6a8e6d85f16fb154af467c26250e865fd742c9587167a8108d9dc", "debian11_x86_64_static"),
-    "linux/aarch64/musl/static"    => ("ecea83b49f785e616e738b08a3caea644e0e07398c448e9b6f1f199bbede915e", "alpine3.16_aarch64_static"),
-    "linux/x86_64/musl/static"     => ("536e03af5d92c2d0788c40fbad3f8000553fd9c9dd6f0599b541b69c2e39fb96", "alpine3.16_x86_64_static"),
+    "macos/aarch64"                => ("acc93721210294ced0887352f360e42e46dcc05332e6dd78c1452fb3a35d5255", "darwin_arm64"),
+    "macos/x86_64"                 => ("b7fdfaf59805951241f47690917b501ddfa06d9b6f7e0262e44e784efe4a7b33", "darwin_x86_64"),
+    "linux/aarch64/gnu"            => ("472de88e0257c539c120b33fdd1805e1e95063121acc2df1d5626e4676b93529", "manylinux2014_aarch64"),
+    "linux/x86_64/gnu"             => ("3686e0226871bf17b62ec57e1c15778c2947834b90af0dfad14f2e0202bf9284", "manylinux2014_x86_64"),
+    "linux/aarch64/gnu/static"     => ("a8a355a7cebf65d4134593e0c2f5af0721798efcd257cf8a18dfd8775c2d0b30", "debian11_aarch64_static"),
+    "linux/x86_64/gnu/static"      => ("57ec3d36ee58488d4bb798f7517fce15be81fb4e113a5e1804bca34600b1ade3", "debian11_x86_64_static"),
+    "linux/aarch64/musl/static"    => ("0670afb18aad8fb54a72829d5c14e68e631a66fd3b468516a15a0826f2c5dd9e", "alpine3.16_aarch64_static"),
+    "linux/x86_64/musl/static"     => ("6ef5be580febb09218caca87f2d73e7c830fb98239ec02a2994617aaed9e7bd9", "alpine3.16_x86_64_static"),
 };
 
 lazy_static! {
