@@ -513,6 +513,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_plugin_wasmedge_process() {
+        use crate::AsInstance;
+
         use super::*;
 
         PluginManager::load_plugins_from_default_paths();
@@ -560,6 +562,8 @@ mod tests {
     #[cfg(all(target_os = "linux", feature = "wasi_crypto", not(feature = "static")))]
     #[test]
     fn test_plugin_wasi_crypto() {
+        use crate::AsInstance;
+
         use super::*;
 
         PluginManager::load_plugins_from_default_paths();
@@ -571,7 +575,7 @@ mod tests {
 
         // get `wasmedge_process` plugin
         let result = PluginManager::find("wasi_crypto");
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let plugin = result.unwrap();
         assert_eq!(plugin.name(), "wasi_crypto");
         assert_eq!(plugin.mod_count(), 5);
@@ -589,7 +593,7 @@ mod tests {
         // get `wasi_crypto_asymmetric_common` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_asymmetric_common");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(
                 instance.name().unwrap(),
@@ -626,7 +630,7 @@ mod tests {
         // get `wasi_crypto_common` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_common");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_common");
             assert_eq!(instance.func_len(), 10);
@@ -650,7 +654,7 @@ mod tests {
         // get `wasi_crypto_kx` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_kx");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_kx");
             assert_eq!(instance.func_len(), 3);
@@ -663,7 +667,7 @@ mod tests {
         // get `wasi_crypto_signatures` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_signatures");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_signatures");
             assert_eq!(instance.func_len(), 11);
@@ -688,7 +692,7 @@ mod tests {
         // get `wasi_crypto_symmetric` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_symmetric");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_symmetric");
             assert_eq!(instance.func_len(), 28);
