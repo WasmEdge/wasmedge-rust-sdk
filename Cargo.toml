@@ -17,7 +17,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 thiserror = "1.0.30"
 wasmedge-macro.workspace = true
-wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.17", default-features = false }
+wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.17.4", default-features = false }
 wasmedge-types.workspace = true
 
 [workspace.dependencies]
