@@ -270,6 +270,51 @@ mod tests {
     use super::*;
     use crate::{params, WasmVal};
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_vmbuilder() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{params, plugin::PluginManager};
+
+        // load plugins from the default plugin path
+        PluginManager::load(None)?;
+
+        PluginManager::names().iter().for_each(|name| {
+            println!("plugin name: {}", name);
+        });
+
+        let wasm_app_file = "examples/wasmedge-sys/data/test_crypto.wasm";
+
+        let mut wasi = crate::wasi::WasiModule::create(None, None, None).unwrap();
+        let mut wasi_crypto_asymmetric_common =
+            PluginManager::load_wasi_crypto_asymmetric_common().unwrap();
+        let mut wasi_crypto_signatures = PluginManager::load_wasi_crypto_signatures().unwrap();
+        let mut wasi_crypto_symmetric = PluginManager::load_wasi_crypto_symmetric().unwrap();
+
+        let mut instances = HashMap::new();
+        instances.insert(wasi.name().to_string(), wasi.as_mut());
+        instances.insert(
+            wasi_crypto_asymmetric_common.name().unwrap(),
+            &mut wasi_crypto_asymmetric_common,
+        );
+        instances.insert(
+            wasi_crypto_signatures.name().unwrap(),
+            &mut wasi_crypto_signatures,
+        );
+        instances.insert(
+            wasi_crypto_symmetric.name().unwrap(),
+            &mut wasi_crypto_symmetric,
+        );
+
+        let mut vm = Vm::new(Store::new(None, instances).unwrap());
+
+        let module = Module::from_file(None, &wasm_app_file).unwrap();
+
+        vm.register_module(Some("wasm-app"), module).unwrap();
+        vm.run_func(Some("wasm-app"), "_start", params!())?;
+
+        Ok(())
+    }
+
     #[test]
     fn test_vm_run_func_from_file() {
         // create a Vm context
