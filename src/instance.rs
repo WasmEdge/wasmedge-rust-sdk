@@ -352,7 +352,7 @@ mod tests {
             assert_eq!(instance.func_count(), 1);
             assert_eq!(instance.table_count(), 0);
             assert_eq!(instance.global_count(), 0);
-            assert_eq!(instance.memory_count(), 0);
+            assert_eq!(instance.memory_count(), 1);
 
             // check the exported host function
             let result = instance.func("fib");
