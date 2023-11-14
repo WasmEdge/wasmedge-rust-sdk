@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.1] - 2023-11-14
+
+- Update the `wat` dep. This update is to fix [#88](https://github.com/WasmEdge/wasmedge-rust-sdk/issues/88).
+
 ## [0.13.0] - 2023-11-07
 
 ### ⛰️  Features
