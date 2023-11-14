@@ -10,6 +10,96 @@ pub mod ffi {
     };
 }
 
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+#[derive(Debug)]
+pub struct NNPreload {
+    /// The alias of the model in the WASI-NN environment.
+    pub alias: String,
+    /// The inference backend.
+    pub backend: NNBackend,
+    /// The execution target, on which the inference runs.
+    pub target: ExecutionTarget,
+    /// The path to the model file. Note that the path is the guest path instead of the host path.
+    pub path: std::path::PathBuf,
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl NNPreload {
+    pub fn new(
+        alias: impl AsRef<str>,
+        backend: NNBackend,
+        target: ExecutionTarget,
+        path: impl AsRef<std::path::Path>,
+    ) -> Self {
+        Self {
+            alias: alias.as_ref().to_owned(),
+            backend,
+            target,
+            path: path.as_ref().to_owned(),
+        }
+    }
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl std::fmt::Display for NNPreload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{alias}:{backend}:{target}:{path}",
+            alias = self.alias,
+            backend = self.backend,
+            target = self.target,
+            path = self.path.to_string_lossy().into_owned()
+        )
+    }
+}
+
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(non_camel_case_types)]
+pub enum NNBackend {
+    PyTorch,
+    TensorFlowLite,
+    OpenVINO,
+    GGML,
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl std::fmt::Display for NNBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NNBackend::PyTorch => write!(f, "PyTorch"),
+            NNBackend::TensorFlowLite => write!(f, "TensorFlowLite"),
+            NNBackend::OpenVINO => write!(f, "OpenVINO"),
+            NNBackend::GGML => write!(f, "GGML"),
+        }
+    }
+}
+
+/// Define where the graph should be executed.
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(non_camel_case_types)]
+pub enum ExecutionTarget {
+    CPU,
+    GPU,
+    TPU,
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl std::fmt::Display for ExecutionTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionTarget::CPU => write!(f, "CPU"),
+            ExecutionTarget::GPU => write!(f, "GPU"),
+            ExecutionTarget::TPU => write!(f, "TPU"),
+        }
+    }
+}
+
 /// Defines the API to manage plugins.
 #[derive(Debug)]
 pub struct PluginManager {}
@@ -41,6 +131,19 @@ impl PluginManager {
                 Ok(())
             }
         }
+    }
+
+    #[cfg(feature = "wasi_nn")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+    pub fn nn_preload(preloads: Vec<NNPreload>) {
+        let mut nn_preloads = Vec::new();
+        for preload in preloads {
+            nn_preloads.push(preload.to_string());
+        }
+
+        let nn_preloads_str: Vec<&str> = nn_preloads.iter().map(|s| s.as_str()).collect();
+
+        sys::plugin::PluginManager::nn_preload(nn_preloads_str);
     }
 
     /// Returns the count of loaded plugins.

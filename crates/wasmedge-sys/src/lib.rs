@@ -8,7 +8,7 @@
 //!
 //! For developers, it is strongly recommended that the APIs in `wasmedge-sys` are used to construct high-level libraries, while `wasmedge-sdk` is for building up business applications.
 //!
-//! * Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.69 or above** in the **stable** channel.
+//! * Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.70 or above** in the **stable** channel.
 //!
 
 //! ## Build
@@ -19,6 +19,7 @@
 //!
 //!   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
 //!   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+//!   | 0.12.2        | 0.13.4        | 0.17.2        | 0.4.4         | 0.6.1         | 0.1.0     |
 //!   | 0.12.1        | 0.13.4        | 0.17.1        | 0.4.4         | 0.6.1         | 0.1.0     |
 //!   | 0.12.0        | 0.13.4        | 0.17.0        | 0.4.4         | 0.6.1         | 0.1.0     |
 //!   | 0.11.2        | 0.13.3        | 0.16.2        | 0.4.3         | 0.6.1         | 0.1.0     |

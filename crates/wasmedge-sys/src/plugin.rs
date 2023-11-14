@@ -43,6 +43,18 @@ impl PluginManager {
         Ok(())
     }
 
+    #[cfg(feature = "wasi_nn")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+    pub fn nn_preload(preloads: Vec<&str>) {
+        let c_args: Vec<CString> = preloads
+            .iter()
+            .map(|&x| std::ffi::CString::new(x).unwrap())
+            .collect();
+        let c_strs: Vec<*const i8> = c_args.iter().map(|x| x.as_ptr()).collect();
+        let len = c_strs.len() as u32;
+        unsafe { ffi::WasmEdge_PluginInitWASINN(c_strs.as_ptr(), len) }
+    }
+
     /// Returns the count of loaded plugins.
     pub fn count() -> u32 {
         unsafe { ffi::WasmEdge_PluginListPluginsLength() }
