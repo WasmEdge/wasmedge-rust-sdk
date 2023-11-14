@@ -3,6 +3,9 @@
 use crate::{instance::Instance, WasmEdgeResult};
 use wasmedge_sys::{self as sys};
 
+#[cfg(feature = "wasi_nn")]
+use wasmedge_types::error::WasmEdgeError;
+
 /// Defines low-level types used in Plugin development.
 pub mod ffi {
     pub use wasmedge_sys::ffi::{
@@ -17,7 +20,7 @@ pub struct NNPreload {
     /// The alias of the model in the WASI-NN environment.
     pub alias: String,
     /// The inference backend.
-    pub backend: NNBackend,
+    pub backend: GraphEncoding,
     /// The execution target, on which the inference runs.
     pub target: ExecutionTarget,
     /// The path to the model file. Note that the path is the guest path instead of the host path.
@@ -28,7 +31,7 @@ pub struct NNPreload {
 impl NNPreload {
     pub fn new(
         alias: impl AsRef<str>,
-        backend: NNBackend,
+        backend: GraphEncoding,
         target: ExecutionTarget,
         path: impl AsRef<std::path::Path>,
     ) -> Self {
@@ -55,25 +58,53 @@ impl std::fmt::Display for NNPreload {
     }
 }
 
+/// Describes the encoding of the graph.
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(non_camel_case_types)]
-pub enum NNBackend {
+pub enum GraphEncoding {
+    OpenVINO,
+    ONNX,
+    TensorFlow,
     PyTorch,
     TensorFlowLite,
-    OpenVINO,
+    Autodetect,
     GGML,
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
-impl std::fmt::Display for NNBackend {
+impl std::fmt::Display for GraphEncoding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NNBackend::PyTorch => write!(f, "PyTorch"),
-            NNBackend::TensorFlowLite => write!(f, "TensorFlowLite"),
-            NNBackend::OpenVINO => write!(f, "OpenVINO"),
-            NNBackend::GGML => write!(f, "GGML"),
+            GraphEncoding::PyTorch => write!(f, "PyTorch"),
+            GraphEncoding::TensorFlowLite => write!(f, "TensorflowLite"),
+            GraphEncoding::TensorFlow => write!(f, "Tensorflow"),
+            GraphEncoding::OpenVINO => write!(f, "OpenVINO"),
+            GraphEncoding::GGML => write!(f, "GGML"),
+            GraphEncoding::ONNX => write!(f, "ONNX"),
+            GraphEncoding::Autodetect => write!(f, "Autodetect"),
+        }
+    }
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl std::str::FromStr for GraphEncoding {
+    type Err = WasmEdgeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "openvino" => Ok(GraphEncoding::OpenVINO),
+            "onnx" => Ok(GraphEncoding::ONNX),
+            "tensorflow" => Ok(GraphEncoding::TensorFlow),
+            "pytorch" => Ok(GraphEncoding::PyTorch),
+            "tensorflowlite" => Ok(GraphEncoding::TensorFlowLite),
+            "autodetect" => Ok(GraphEncoding::Autodetect),
+            "ggml" => Ok(GraphEncoding::GGML),
+            _ => Err(WasmEdgeError::Operation(format!(
+                "Failed to convert to NNBackend value. Unknown NNBackend type: {}",
+                s
+            ))),
         }
     }
 }
@@ -87,6 +118,7 @@ pub enum ExecutionTarget {
     CPU,
     GPU,
     TPU,
+    AUTO,
 }
 #[cfg(feature = "wasi_nn")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
@@ -96,6 +128,25 @@ impl std::fmt::Display for ExecutionTarget {
             ExecutionTarget::CPU => write!(f, "CPU"),
             ExecutionTarget::GPU => write!(f, "GPU"),
             ExecutionTarget::TPU => write!(f, "TPU"),
+            ExecutionTarget::AUTO => write!(f, "AUTO"),
+        }
+    }
+}
+#[cfg(feature = "wasi_nn")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
+impl std::str::FromStr for ExecutionTarget {
+    type Err = WasmEdgeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "CPU" => Ok(ExecutionTarget::CPU),
+            "GPU" => Ok(ExecutionTarget::GPU),
+            "TPU" => Ok(ExecutionTarget::TPU),
+            "AUTO" => Ok(ExecutionTarget::AUTO),
+            _ => Err(WasmEdgeError::Operation(format!(
+                "Failed to convert to ExecutionTarget value. Unknown ExecutionTarget type: {}",
+                s
+            ))),
         }
     }
 }
