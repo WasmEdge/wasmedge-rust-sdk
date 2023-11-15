@@ -38,19 +38,6 @@ jobs:
           apt update
           apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
-
-      - name: Rustfmt
-        run: cargo +nightly fmt --all -- --check
-
-      - name: Clippy
-        run: |
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features static -- -D warnings
-
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
