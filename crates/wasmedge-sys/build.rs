@@ -98,7 +98,7 @@ fn main() {
         // Tell cargo to tell rustc to link our `wasmedge` library. Cargo will
         // automatically know it must look for a `libwasmedge.a` file.
         println!("cargo:rustc-link-lib=static=wasmedge");
-        for dep in ["rt", "dl", "pthread", "m", "stdc++"] {
+        for dep in ["rt", "dl", "pthread", "m", "zstd", "stdc++"] {
             link_lib(dep);
         }
     } else {
