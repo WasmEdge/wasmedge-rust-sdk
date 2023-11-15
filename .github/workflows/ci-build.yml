@@ -9,10 +9,12 @@ on:
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
+      - ".github/workflows/rust-static-lib.yml"
   pull_request:
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
+      - ".github/workflows/rust-static-lib.yml"
 
 jobs:
   build_ubuntu:

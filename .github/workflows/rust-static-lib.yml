@@ -6,22 +6,15 @@ concurrency:
 
 on:
   push:
-    branches:
-      - master
-      - "rust/*"
-    paths:
-      - ".github/workflows/rust-static-lib.yml"
-      - "bindings/rust/**"
-      - "include/api/wasmedge/**"
-      - "lib/api/**"
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/ci-build.yml"
   pull_request:
-    branches:
-      - master
-    paths:
-      - ".github/workflows/rust-static-lib.yml"
-      - "bindings/rust/**"
-      - "include/api/wasmedge/**"
-      - "lib/api/**"
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/ci-build.yml"
 
 jobs:
   build_ubuntu:
@@ -30,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        rust: [1.69, 1.68]
+        rust: [1.73, 1.72, 1.71]
     container:
       image: wasmedge/wasmedge:latest
 
