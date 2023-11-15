@@ -36,7 +36,7 @@ jobs:
         run: |
           apt update
           apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=OFF -DWASMEDGE_BUILD_STATIC_LIB=ON -DWASMEDGE_LINK_TOOLS_STATIC=ON -DWASMEDGE_BUILD_PLUGINS=OFF .
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=OFF -DWASMEDGE_BUILD_STATIC_LIB=ON -DWASMEDGE_BUILD_TOOLS=OFF -DWASMEDGE_BUILD_PLUGINS=OFF .
           cmake --build build
 
       - name: Install Rust-nightly
