@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.2] - 2023-11-15
+
+### 🐛 Bug Fixes
+
+- Fix the static build to link against `zstd` ([#91](https://github.com/orhun/git-cliff/issues/91))
+
 ## [0.13.1] - 2023-11-14
 
 - Update the `wat` dep. This update is to fix [#88](https://github.com/WasmEdge/wasmedge-rust-sdk/issues/88).
