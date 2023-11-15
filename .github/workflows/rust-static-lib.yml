@@ -6,22 +6,15 @@ concurrency:
 
 on:
   push:
-    branches:
-      - master
-      - "rust/*"
-    paths:
-      - ".github/workflows/rust-static-lib.yml"
-      - "bindings/rust/**"
-      - "include/api/wasmedge/**"
-      - "lib/api/**"
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/ci-build.yml"
   pull_request:
-    branches:
-      - master
-    paths:
-      - ".github/workflows/rust-static-lib.yml"
-      - "bindings/rust/**"
-      - "include/api/wasmedge/**"
-      - "lib/api/**"
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/ci-build.yml"
 
 jobs:
   build_ubuntu:
@@ -30,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        rust: [1.69, 1.68]
+        rust: [1.73, 1.72, 1.71]
     container:
       image: wasmedge/wasmedge:latest
 
@@ -39,12 +32,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build WasmEdge with Release mode
+      - name: Install dependencies
         run: |
           apt update
           apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
-          cmake cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=OFF -DWASMEDGE_BUILD_STATIC_LIB=ON -DWASMEDGE_LINK_TOOLS_STATIC=ON -DWASMEDGE_BUILD_PLUGINS=OFF .
-          cmake --build build
+
+      # - name: Build WasmEdge with Release mode
+      #   run: |
+      #     cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=OFF -DWASMEDGE_BUILD_STATIC_LIB=ON -DWASMEDGE_BUILD_TOOLS=OFF -DWASMEDGE_BUILD_PLUGINS=OFF .
+      #     cmake --build build
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
