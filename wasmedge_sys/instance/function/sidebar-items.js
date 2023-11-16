@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FuncRef","FuncType","Function"],"type":["CustomFnWrapper"]};

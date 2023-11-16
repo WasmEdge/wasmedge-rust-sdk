@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["wasi_clock_res_get","wasi_clock_time_get"]};

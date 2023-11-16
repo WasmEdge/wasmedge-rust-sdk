@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CoreCommonError","CoreError","CoreExecutionError","CoreInstantiationError","CoreLoadError","CoreValidationError","ExportError","FuncError","GlobalError","HostFuncError","ImportError","InstanceError","MemError","PluginError","StoreError","TableError","VmError","WasmEdgeError"]};

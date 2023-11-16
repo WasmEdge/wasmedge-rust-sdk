@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["async_host_function","host_function"]};

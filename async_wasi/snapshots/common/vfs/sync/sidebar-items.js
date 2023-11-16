@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["INode"],"struct":["WasiDir","WasiFile","WasiPreOpenDir","WasiStderr","WasiStdin","WasiStdout"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Advice","SystemTimeSpec"],"mod":["sync"],"struct":["FdFlags","FdStat","FileType","Filestat","Lookupflags","OFlags","ReaddirEntity","RiFlags","RoFlags","SdFlags","SiFlags","WASIRights"]};

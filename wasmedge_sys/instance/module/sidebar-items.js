@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WasiInstance"],"struct":["ImportModule","Instance"],"trait":["AsImport","AsInstance"]};
