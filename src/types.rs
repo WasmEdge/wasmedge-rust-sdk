@@ -58,17 +58,8 @@ impl From<WasmValue> for Val {
             wasmedge_types::ValType::F64 => Val::F64(value.to_f64()),
             wasmedge_types::ValType::V128 => Val::V128(value.to_v128()),
             wasmedge_types::ValType::FuncRef => {
-                if value.is_null_ref() {
-                    // Val::FuncRef(None)
-                    todo!()
-                } else {
-                    // let inner = value
-                    //     .func_ref()
-                    //     .expect("[wasmedge] Failed to convert a WasmValue to a FuncRef.");
-                    // let ty: FuncType = inner.ty().unwrap().into();
-                    // Val::FuncRef(Some(FuncRef { inner, ty }))
-                    todo!()
-                }
+                // Waiting for the fun-ref related proposals to stabilize
+                Val::ExternRef(None)
             }
             wasmedge_types::ValType::ExternRef => {
                 if value.is_null_ref() {
