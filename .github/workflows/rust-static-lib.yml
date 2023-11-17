@@ -6,22 +6,15 @@ concurrency:
 
 on:
   push:
-    branches:
-      - master
-      - "rust/*"
-    paths:
-      - ".github/workflows/rust-static-lib.yml"
-      - "bindings/rust/**"
-      - "include/api/wasmedge/**"
-      - "lib/api/**"
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/ci-build.yml"
   pull_request:
-    branches:
-      - master
-    paths:
-      - ".github/workflows/rust-static-lib.yml"
-      - "bindings/rust/**"
-      - "include/api/wasmedge/**"
-      - "lib/api/**"
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/ci-build.yml"
 
 jobs:
   build_ubuntu:
@@ -30,49 +23,30 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        rust: [1.69, 1.68]
+        rust: [1.73, 1.72, 1.71]
     container:
-      image: wasmedge/wasmedge:latest
+      image: wasmedge/wasmedge:ubuntu-build-clang
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Build WasmEdge with Release mode
+      - name: Install dependencies
         run: |
           apt update
-          apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build
-          cmake cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=OFF -DWASMEDGE_BUILD_STATIC_LIB=ON -DWASMEDGE_LINK_TOOLS_STATIC=ON -DWASMEDGE_BUILD_PLUGINS=OFF .
-          cmake --build build
-
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
-
-      - name: Rustfmt
-        working-directory: bindings/rust/
-        run: cargo +nightly fmt --all -- --check
-
-      - name: Clippy
-        working-directory: bindings/rust/
-        run: |
-          export WASMEDGE_DIR="$(pwd)/../../"
-          export WASMEDGE_BUILD_DIR="$(pwd)/../../build"
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features static -- -D warnings
+          apt install -y software-properties-common llvm-15-dev liblld-15-dev ninja-build
 
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Test Rust Bindings
-        working-directory: bindings/rust/
+      - name: Test Rust SDK
         run: |
-          export WASMEDGE_DIR="$(pwd)/../../"
-          export WASMEDGE_BUILD_DIR="$(pwd)/../../build"
-          cargo +nightly -Z sparse-registry update
-          cargo test --workspace --features static --locked -- --test-threads=1
-          cargo test --examples --features static --locked -- --test-threads=1
+          cargo test -p wasmedge-sdk --all --examples --features static,aot,wasmedge_process,ffi -- --nocapture --test-threads=1
+
+      - name: Test Rust SDK with async feature
+        run: |
+          cargo test -p wasmedge-sdk --all --examples --features static,aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1

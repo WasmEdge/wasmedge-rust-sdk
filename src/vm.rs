@@ -270,8 +270,9 @@ mod tests {
     use super::*;
     use crate::{params, WasmVal};
 
-    #[cfg(target_os = "linux")]
     #[test]
+    #[cfg(target_os = "linux")]
+    // To enable this test function, please install `wasi_crypto` plugin first.
     fn test_vmbuilder() -> Result<(), Box<dyn std::error::Error>> {
         use crate::{params, plugin::PluginManager};
 

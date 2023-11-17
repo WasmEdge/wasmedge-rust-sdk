@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.2] - 2023-11-15
+
+### 🐛 Bug Fixes
+
+- Fix the static build to link against `zstd` ([#91](https://github.com/orhun/git-cliff/issues/91))
+
+## [0.13.1] - 2023-11-14
+
+- Update the `wat` dep. This update is to fix [#88](https://github.com/WasmEdge/wasmedge-rust-sdk/issues/88).
+
+## [0.13.0] - 2023-11-07
+
+### ⛰️  Features
+
+- New API `PluginManager::nn_preload`. This API is used to initialize the `wasi_nn` plug-in with given preloads ([#74](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/74))
+
+- Implement `FromStr` trait for `NNPreload` struct ([#81](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/81))
+
+### 🚜 Refactor
+
+- [BREAKING] Update the argument types ([#82](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/82)):
+  - `VmBuilder::with_plugin`
+  - `VmBuilder::with_plugin_wasi_nn`
+  - `VmBuilder::with_plugin_wasi_crypto`
+  - `VmBuilder::with_plugin_wasmedge_process`
+
+- [BREAKING] Update the argument types ([#76](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/76)):
+  - `Executor::run_func_with_timeout` and `Executor::run_func_async_with_timeout`
+  - `Vm::run_func_with_timeout` and `Vm::run_func_async_with_timeout`
+  - `Func::run_with_timeout` and `Func::run_async_with_timeout`
+
+### 🐛 Bug Fixes
+
+- Introduce new C-API `WasmEdge_FunctionInstanceGetData` to fix the memory leak issue caused by host data ([#84](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/84))
+
+### Ci
+
+- Support `macos-13` and remove `macos-11` from the `ci-build` and `standalone` workflows ([#84](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/84))
+
 ## [0.12.2] - 2023-09-22
 
 ### 🚜 Refactor

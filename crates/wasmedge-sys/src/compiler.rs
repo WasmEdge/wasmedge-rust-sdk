@@ -184,7 +184,7 @@ mod tests {
                 .ancestors()
                 .nth(2)
                 .unwrap()
-                .join("examples/wasmedge-sys/data/test.wat");
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot.so");
             #[cfg(target_os = "macos")]
@@ -223,7 +223,7 @@ mod tests {
                 .ancestors()
                 .nth(2)
                 .unwrap()
-                .join("examples/wasmedge-sys/data/test.wat");
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_from_file.so");
             #[cfg(target_os = "macos")]
