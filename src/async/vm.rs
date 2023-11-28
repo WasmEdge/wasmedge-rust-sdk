@@ -1,14 +1,18 @@
 //! Defines WasmEdge Vm struct.
 use crate::{
     error::{VmError, WasmEdgeError},
-    ImportObject, Instance, Module, Store, WasmEdgeResult, WasmValue,
+    vm::SyncInst,
+    Instance, Module, Store, WasmEdgeResult, WasmValue,
 };
-use sys::AsInstance;
+use sys::{r#async::fiber::AsyncState, AsInstance};
 use wasmedge_sys as sys;
 
-pub trait SyncInst: AsInstance {}
-impl<T> SyncInst for ImportObject<T> {}
-impl SyncInst for Instance {}
+use super::import::ImportObject;
+
+pub trait AsyncInst: AsInstance {}
+
+impl<T: Send> AsyncInst for ImportObject<T> {}
+impl<T: Send + SyncInst> AsyncInst for T {}
 
 /// A [Vm] defines a virtual environment for managing WebAssembly programs.
 ///
@@ -17,69 +21,76 @@ impl SyncInst for Instance {}
 /// The example below presents how to register a module as named module in a Vm instance and run a target wasm function.
 ///
 /// ```rust
-/// use std::collections::HashMap;
-/// use wasmedge_sdk::{params, Store, Module, WasmVal, wat2wasm, ValType, NeverType, Vm, vm::SyncInst};
+/// // If the version of rust used is less than v1.63, please uncomment the follow attribute.
+/// // #![feature(explicit_generic_args_with_impl_trait)]
+/// #[cfg(not(feature = "async"))]
+/// use wasmedge_sdk::{params, VmBuilder, WasmVal, wat2wasm, ValType, NeverType};
 ///
-/// // create a Vm context
-/// let mut vm =
-///     Vm::new(Store::new(None, HashMap::<String, &mut dyn SyncInst>::new()).unwrap());
-/// // register a wasm module from the given in-memory wasm bytes
-/// // load wasm module
-/// let result = wat2wasm(
-///     br#"(module
-///     (export "fib" (func $fib))
-///     (func $fib (param $n i32) (result i32)
-///      (if
-///       (i32.lt_s
-///        (local.get $n)
-///        (i32.const 2)
-///       )
-///       (then
-///         (return i32.const 1)
-///       )
-///      )
-///      (return
-///       (i32.add
-///        (call $fib
-///         (i32.sub
-///          (local.get $n)
-///          (i32.const 2)
-///         )
-///        )
-///        (call $fib
-///         (i32.sub
-///          (local.get $n)
-///          (i32.const 1)
-///         )
-///        )
-///       )
-///      )
-///     )
-///    )
-/// "#,
-/// );
-/// assert!(result.is_ok());
-/// let wasm_bytes = result.unwrap();
-/// // run `fib` function from the wasm bytes
-/// let fib_module = Module::from_bytes(None, wasm_bytes).unwrap();
-/// vm.register_module(None, fib_module).unwrap();
-/// let result = vm.run_func(None, "fib", params!(10i32));
-/// assert!(result.is_ok());
-/// let returns = result.unwrap();
-/// assert_eq!(returns.len(), 1);
-/// assert_eq!(returns[0].to_i32(), 89);
+/// #[cfg_attr(test, test)]
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     #[cfg(not(feature = "async"))]
+///     {
+///         // create a Vm context
+///         let vm = VmBuilder::new().build()?;
+///
+///         // register a wasm module from the given in-memory wasm bytes
+///         let wasm_bytes = wat2wasm(
+///             br#"(module
+///             (export "fib" (func $fib))
+///             (func $fib (param $n i32) (result i32)
+///              (if
+///               (i32.lt_s
+///                (local.get $n)
+///                (i32.const 2)
+///               )
+///               (then
+///                (return (i32.const 1))
+///               )
+///              )
+///              (return
+///               (i32.add
+///                (call $fib
+///                 (i32.sub
+///                  (local.get $n)
+///                  (i32.const 2)
+///                 )
+///                )
+///                (call $fib
+///                 (i32.sub
+///                  (local.get $n)
+///                  (i32.const 1)
+///                 )
+///                )
+///               )
+///              )
+///             )
+///            )
+///         "#,
+///         )?;
+///         let mut vm = vm.register_module_from_bytes("extern", wasm_bytes)?;
+///
+///         // run `fib` function in the named module instance
+///         let returns = vm.run_func(Some("extern"), "fib", params!(10))?;
+///         assert_eq!(returns.len(), 1);
+///         assert_eq!(returns[0].to_i32(), 89);
+///     }
+///
+///     Ok(())
+/// }
 /// ```
 #[derive(Debug)]
-pub struct Vm<'inst, T: ?Sized + SyncInst> {
+pub struct Vm<'inst, T: ?Sized + Send + AsyncInst> {
     store: Store<'inst, T>,
     active_instance: Option<sys::Instance>,
+    async_state: AsyncState,
 }
-impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
+impl<'inst, T: ?Sized + Send + AsyncInst> Vm<'inst, T> {
     pub fn new(store: Store<'inst, T>) -> Self {
         // create a Vm instance
-        Vm {
+        Self {
             store,
             active_instance: None,
+            async_state: AsyncState::new(),
         }
     }
 
@@ -125,11 +136,11 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
     /// # Error
     ///
     /// If fail to run the wasm function, then an error is returned.
-    pub fn run_func(
+    pub async fn run_func(
         &mut self,
         mod_name: Option<&str>,
         func_name: impl AsRef<str>,
-        args: impl IntoIterator<Item = WasmValue>,
+        args: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         let (mut func, executor) = match mod_name {
             Some(mod_name) => {
@@ -157,7 +168,9 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
                 )
             }
         };
-        executor.call_func(&mut func, args)
+        executor
+            .call_func_async(&self.async_state, &mut func, args)
+            .await
     }
 
     /// Runs an exported wasm function in a (named or active) [module instance](crate::Instance) with a timeout setting
@@ -176,11 +189,11 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
     ///
     /// If fail to run the wasm function, then an error is returned.
     #[cfg(all(target_os = "linux", not(target_env = "musl")))]
-    pub fn run_func_with_timeout(
+    pub async fn run_func_with_timeout(
         &mut self,
         mod_name: Option<&str>,
         func_name: impl AsRef<str>,
-        args: impl IntoIterator<Item = WasmValue>,
+        args: impl IntoIterator<Item = WasmValue> + Send,
         timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         let (mut func, executor) = match mod_name {
@@ -209,7 +222,9 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
                 )
             }
         };
-        executor.call_func_with_timeout(&mut func, args, timeout)
+        executor
+            .call_func_async_with_timeout(&self.async_state, &mut func, args, timeout)
+            .await
     }
 
     /// Returns a reference to the internal [store](crate::Store) from this vm.
@@ -268,59 +283,14 @@ mod tests {
     use wasmedge_types::wat2wasm;
 
     use super::*;
-    use crate::{params, WasmVal};
+    use crate::{io::WasmVal, params};
 
-    #[test]
-    #[cfg(target_os = "linux")]
-    // To enable this test function, please install `wasi_crypto` plugin first.
-    fn test_vmbuilder() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{params, plugin::PluginManager};
-
-        // load plugins from the default plugin path
-        PluginManager::load(None)?;
-
-        PluginManager::names().iter().for_each(|name| {
-            println!("plugin name: {}", name);
-        });
-
-        let wasm_app_file = "examples/wasmedge-sys/data/test_crypto.wasm";
-
-        let mut wasi = crate::wasi::WasiModule::create(None, None, None).unwrap();
-        let mut wasi_crypto_asymmetric_common =
-            PluginManager::load_wasi_crypto_asymmetric_common().unwrap();
-        let mut wasi_crypto_signatures = PluginManager::load_wasi_crypto_signatures().unwrap();
-        let mut wasi_crypto_symmetric = PluginManager::load_wasi_crypto_symmetric().unwrap();
-
-        let mut instances = HashMap::new();
-        instances.insert(wasi.name().to_string(), wasi.as_mut());
-        instances.insert(
-            wasi_crypto_asymmetric_common.name().unwrap(),
-            &mut wasi_crypto_asymmetric_common,
-        );
-        instances.insert(
-            wasi_crypto_signatures.name().unwrap(),
-            &mut wasi_crypto_signatures,
-        );
-        instances.insert(
-            wasi_crypto_symmetric.name().unwrap(),
-            &mut wasi_crypto_symmetric,
-        );
-
-        let mut vm = Vm::new(Store::new(None, instances).unwrap());
-
-        let module = Module::from_file(None, &wasm_app_file).unwrap();
-
-        vm.register_module(Some("wasm-app"), module).unwrap();
-        vm.run_func(Some("wasm-app"), "_start", params!())?;
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_vm_run_func_from_file() {
+    #[tokio::test]
+    async fn test_vm_run_func_from_file() {
         // create a Vm context
-        let mut vm =
-            Vm::new(Store::new(None, HashMap::<String, &mut dyn SyncInst>::new()).unwrap());
+        let mut vm = Vm::new(
+            Store::new(None, HashMap::<String, &mut (dyn AsyncInst + Send)>::new()).unwrap(),
+        );
 
         // register a wasm module from a specified wasm file
         let file = std::env::current_dir()
@@ -330,18 +300,19 @@ mod tests {
         // run `fib` function from the wasm file
         let fib_module = Module::from_file(None, file).unwrap();
         vm.register_module(None, fib_module).unwrap();
-        let result = vm.run_func(None, "fib", params!(10i32));
+        let result = vm.run_func(None, "fib", params!(10)).await;
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns.len(), 1);
         assert_eq!(returns[0].to_i32(), 89);
     }
 
-    #[test]
-    fn test_vm_run_func_from_bytes() {
+    #[tokio::test]
+    async fn test_vm_run_func_from_bytes() {
         // create a Vm context
-        let mut vm =
-            Vm::new(Store::new(None, HashMap::<String, &mut dyn SyncInst>::new()).unwrap());
+        let mut vm = Vm::new(
+            Store::new(None, HashMap::<String, &mut (dyn AsyncInst + Send)>::new()).unwrap(),
+        );
 
         // register a wasm module from the given in-memory wasm bytes
         // load wasm module
@@ -384,18 +355,19 @@ mod tests {
         // run `fib` function from the wasm bytes
         let fib_module = Module::from_bytes(None, wasm_bytes).unwrap();
         vm.register_module(None, fib_module).unwrap();
-        let result = vm.run_func(None, "fib", params!(10i32));
+        let result = vm.run_func(None, "fib", params!(10)).await;
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns.len(), 1);
         assert_eq!(returns[0].to_i32(), 89);
     }
 
-    #[test]
-    fn test_vm_run_func_in_named_module_instance() {
+    #[tokio::test]
+    async fn test_vm_run_func_in_named_module_instance() {
         // create a Vm context
-        let mut vm =
-            Vm::new(Store::new(None, HashMap::<String, &mut dyn SyncInst>::new()).unwrap());
+        let mut vm = Vm::new(
+            Store::new(None, HashMap::<String, &mut (dyn AsyncInst + Send)>::new()).unwrap(),
+        );
 
         // register a wasm module from the given in-memory wasm bytes
         // load wasm module
@@ -437,7 +409,7 @@ mod tests {
         let fib_module = Module::from_bytes(None, wasm_bytes).unwrap();
         vm.register_module(Some("extern"), fib_module).unwrap();
         // run `fib` function in the named module instance
-        let result = vm.run_func(Some("extern"), "fib", params!(10));
+        let result = vm.run_func(Some("extern"), "fib", params!(10)).await;
         assert!(result.is_ok());
         let returns = result.unwrap();
         assert_eq!(returns.len(), 1);

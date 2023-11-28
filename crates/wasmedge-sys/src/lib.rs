@@ -8,7 +8,7 @@
 //!
 //! For developers, it is strongly recommended that the APIs in `wasmedge-sys` are used to construct high-level libraries, while `wasmedge-sdk` is for building up business applications.
 //!
-//! * Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.70 or above** in the **stable** channel.
+//! * Notice that [wasmedge-sys](https://crates.io/crates/wasmedge-sys) requires **Rust v1.71 or above** in the **stable** channel.
 //!
 
 //! ## Build
@@ -19,6 +19,9 @@
 //!
 //!   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
 //!   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+//!   | 0.13.2        | 0.13.5        | 0.17.5        | 0.4.4         | 0.6.1         | 0.1.0     |
+//!   | 0.13.1        | 0.13.5        | 0.17.4        | 0.4.4         | 0.6.1         | 0.1.0     |
+//!   | 0.13.0        | 0.13.5        | 0.17.3        | 0.4.4         | 0.6.1         | 0.1.0     |
 //!   | 0.12.2        | 0.13.4        | 0.17.2        | 0.4.4         | 0.6.1         | 0.1.0     |
 //!   | 0.12.1        | 0.13.4        | 0.17.1        | 0.4.4         | 0.6.1         | 0.1.0     |
 //!   | 0.12.0        | 0.13.4        | 0.17.0        | 0.4.4         | 0.6.1         | 0.1.0     |
@@ -51,12 +54,6 @@
 
 #![deny(rust_2018_idioms, unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-
-#[macro_use]
-extern crate lazy_static;
-
-use parking_lot::{Mutex, RwLock};
-use std::{collections::HashMap, sync::Arc};
 
 #[allow(warnings)]
 /// Foreign function interfaces generated from WasmEdge C-API.
@@ -104,15 +101,15 @@ pub use executor::Executor;
 #[doc(inline)]
 pub use frame::CallingFrame;
 #[doc(inline)]
-#[cfg(not(feature = "async"))]
 pub use instance::module::WasiModule;
 #[doc(inline)]
 pub use instance::{
-    function::{FuncRef, FuncType, Function},
-    global::{Global, GlobalType},
-    memory::{MemType, Memory},
-    module::{AsImport, AsInstance, ImportModule, Instance, WasiInstance},
-    table::{Table, TableType},
+    function::{FuncRef, Function, SyncFn},
+    global::Global,
+    memory::Memory,
+    module::{AsInstance, ImportModule, Instance},
+    table::Table,
+    FuncType, GlobalType, MemoryType, TableType,
 };
 #[doc(inline)]
 pub use loader::Loader;
@@ -124,84 +121,10 @@ pub use store::Store;
 pub use types::WasmValue;
 #[doc(inline)]
 pub use validator::Validator;
-use wasmedge_types::{error::HostFuncError, WasmEdgeResult};
+
+use wasmedge_types::WasmEdgeResult;
 
 /// Type of wasi context that is used to configure the wasi environment.
 #[cfg(all(feature = "async", target_os = "linux"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
 pub type WasiCtx = ::async_wasi::snapshots::WasiCtx;
-
-pub(crate) type BoxedFn = Box<
-    dyn Fn(
-            CallingFrame,
-            Vec<WasmValue>,
-            *mut std::os::raw::c_void,
-        ) -> Result<Vec<WasmValue>, HostFuncError>
-        + Send
-        + Sync,
->;
-
-lazy_static! {
-    pub(crate) static ref HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedFn>>>> =
-        RwLock::new(HashMap::new());
-}
-
-/// Type alias for a boxed native function. This type is used in thread-safe cases.
-pub(crate) type BoxedAsyncFn = Box<
-    dyn Fn(
-            CallingFrame,
-            Vec<WasmValue>,
-            *mut std::os::raw::c_void,
-        )
-            -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>
-        + Send
-        + Sync,
->;
-
-lazy_static! {
-    pub(crate) static ref ASYNC_HOST_FUNCS: RwLock<HashMap<usize, Arc<Mutex<BoxedAsyncFn>>>> =
-        RwLock::new(HashMap::new());
-}
-
-// Stores the mapping from the address of each host function pointer to the key of the `HOST_FUNCS`.
-lazy_static! {
-    pub(crate) static ref HOST_FUNC_FOOTPRINTS: Mutex<HashMap<usize, usize>> =
-        Mutex::new(HashMap::new());
-}
-
-/// The object that is used to perform a [host function](crate::Function) is required to implement this trait.
-pub trait Engine {
-    /// Runs a host function instance and returns the results.
-    ///
-    /// # Arguments
-    ///
-    /// * `func` - The function instance to run.
-    ///
-    /// * `params` - The arguments to pass to the function.
-    ///
-    /// # Errors
-    ///
-    /// If fail to run the host function, then an error is returned.
-    fn run_func(
-        &self,
-        func: &Function,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>>;
-
-    /// Runs a host function instance by calling its reference and returns the results.
-    ///
-    /// # Arguments
-    ///
-    /// * `func_ref` - A reference to the target host function instance.
-    ///
-    /// * `params` - The arguments to pass to the function.
-    ///
-    /// # Errors
-    ///
-    /// If fail to run the host function, then an error is returned.
-    fn run_func_ref(
-        &self,
-        func_ref: &FuncRef,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>>;
-}

@@ -8,7 +8,7 @@ license = "Apache-2.0"
 name = "wasmedge-sdk"
 readme = "README.md"
 repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
-version = "0.12.3-dev"
+version = "0.13.2"
 
 [dependencies]
 anyhow = "1.0"
@@ -17,7 +17,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 thiserror = "1.0.30"
 wasmedge-macro.workspace = true
-wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.17", default-features = false }
+wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.17.5", default-features = false }
 wasmedge-types.workspace = true
 
 [workspace.dependencies]
@@ -26,7 +26,7 @@ cfg-if = "1.0.0"
 parking_lot = "0.12.1"
 wasmedge-macro = { path = "crates/wasmedge-macro", version = "0.6" }
 wasmedge-types = { path = "crates/wasmedge-types", version = "0.4" }
-wat = "=1.0.67"
+wat = "1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 async-wasi = { workspace = true, optional = true }
@@ -34,7 +34,7 @@ async-wasi = { workspace = true, optional = true }
 [features]
 aot = ["wasmedge-sys/aot"]
 async = ["wasmedge-sys/async", "dep:async-wasi"]
-default = []
+default = ["async"]
 ffi = ["wasmedge-sys/ffi"]
 standalone = ["wasmedge-sys/standalone"]
 static = ["wasmedge-sys/static"]

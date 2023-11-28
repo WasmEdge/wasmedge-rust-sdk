@@ -148,7 +148,7 @@ unsafe impl Sync for InnerCompiler {}
 mod tests {
     use super::*;
     use crate::{
-        AsImport, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
+        AsInstance, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
         Loader, Store, Validator, WasmValue,
     };
     use std::{
@@ -156,10 +156,9 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_macro::sys_host_function;
     use wasmedge_types::{
-        error::{CoreError, CoreLoadError, HostFuncError},
-        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, NeverType,
+        error::{CoreError, CoreLoadError},
+        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
     };
 
     #[test]
@@ -185,7 +184,7 @@ mod tests {
                 .ancestors()
                 .nth(2)
                 .unwrap()
-                .join("examples/wasmedge-sys/data/test.wat");
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot.so");
             #[cfg(target_os = "macos")]
@@ -224,7 +223,7 @@ mod tests {
                 .ancestors()
                 .nth(2)
                 .unwrap()
-                .join("examples/wasmedge-sys/data/test.wat");
+                .join("examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_from_file.so");
             #[cfg(target_os = "macos")]
@@ -257,24 +256,24 @@ mod tests {
                     (func $fib (param $n i32) (result i32)
                      (if
                       (i32.lt_s
-                       (get_local $n)
+                       (local.get $n)
                        (i32.const 2)
                       )
-                      (return
-                       (i32.const 1)
+                      (then
+                        (return (i32.const 1))
                       )
                      )
                      (return
                       (i32.add
                        (call $fib
                         (i32.sub
-                         (get_local $n)
+                         (local.get $n)
                          (i32.const 2)
                         )
                        )
                        (call $fib
                         (i32.sub
-                         (get_local $n)
+                         (local.get $n)
                          (i32.const 1)
                         )
                        )
@@ -460,11 +459,11 @@ mod tests {
             // register the wasm module as named module
             let extern_module = Loader::create(Some(&config))?.from_file(&out_path)?;
             Validator::create(Some(&config))?.validate(&extern_module)?;
-            let extern_instance =
+            let mut extern_instance =
                 executor.register_named_module(&mut store, &extern_module, "extern")?;
 
-            let fib = extern_instance.get_func("fib")?;
-            let returns = executor.call_func(&fib, [WasmValue::from_i32(5)])?;
+            let mut fib = extern_instance.get_func_mut("fib")?;
+            let returns = executor.call_func(&mut fib, [WasmValue::from_i32(5)])?;
             assert_eq!(returns[0].to_i32(), 8);
         }
 
@@ -472,10 +471,11 @@ mod tests {
             // register the wasm module as active module
             let active_module = Loader::create(Some(&config))?.from_file(&out_path)?;
             Validator::create(Some(&config))?.validate(&active_module)?;
-            let active_instance = executor.register_active_module(&mut store, &active_module)?;
+            let mut active_instance =
+                executor.register_active_module(&mut store, &active_module)?;
 
-            let fib = active_instance.get_func("fib")?;
-            let returns = executor.call_func(&fib, [WasmValue::from_i32(5)])?;
+            let mut fib = active_instance.get_func_mut("fib")?;
+            let returns = executor.call_func(&mut fib, [WasmValue::from_i32(5)])?;
             assert_eq!(returns[0].to_i32(), 8);
         }
 
@@ -486,18 +486,17 @@ mod tests {
     }
 
     #[cfg(feature = "aot")]
-    fn create_spec_test_module() -> ImportModule<NeverType> {
+    fn create_spec_test_module() -> ImportModule<()> {
         // create an ImportObj module
-        let result = ImportModule::<NeverType>::create("spectest", None);
+        let result = ImportModule::create("spectest", Box::new(()));
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
         // create a host function
-        let result = FuncType::create([], []);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        let result =
-            Function::create_sync_func::<NeverType>(&func_ty, Box::new(spec_test_print), None, 0);
+        let func_ty = FuncType::new(vec![], vec![]);
+        let result = unsafe {
+            Function::create_sync_func(&func_ty, spec_test_print, import.get_host_data_mut(), 0)
+        };
         assert!(result.is_ok());
         let host_func = result.unwrap();
         // add host function "print"
@@ -506,11 +505,12 @@ mod tests {
     }
 
     #[cfg(feature = "aot")]
-    #[sys_host_function]
     fn spec_test_print(
-        _frame: CallingFrame,
+        _data: &mut (),
+        _inst: &mut crate::Instance,
+        _frame: &mut CallingFrame,
         _inputs: Vec<WasmValue>,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
+    ) -> Result<Vec<WasmValue>, CoreError> {
         Ok(vec![])
     }
 }

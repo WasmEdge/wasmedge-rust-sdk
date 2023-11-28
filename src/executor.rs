@@ -1,7 +1,8 @@
 //! Defines Executor struct.
 
 #[cfg(all(feature = "async", target_os = "linux"))]
-use crate::wasi::r#async::AsyncState;
+use crate::executor::sys::r#async::fiber::AsyncState;
+
 use crate::{config::Config, Func, FuncRef, Statistics, WasmEdgeResult, WasmValue};
 use wasmedge_sys as sys;
 
@@ -268,24 +269,24 @@ mod tests {
             (func $fib (param $n i32) (result i32)
              (if
               (i32.lt_s
-               (get_local $n)
+               (local.get $n)
                (i32.const 2)
               )
-              (return
-               (i32.const 1)
+              (then
+                (return (i32.const 1))
               )
              )
              (return
               (i32.add
                (call $fib
                 (i32.sub
-                 (get_local $n)
+                 (local.get $n)
                  (i32.const 2)
                 )
                )
                (call $fib
                 (i32.sub
-                 (get_local $n)
+                 (local.get $n)
                  (i32.const 1)
                 )
                )

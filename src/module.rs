@@ -1,7 +1,7 @@
 //! Defines WasmEdge AST Module, ImportType, and ExportType.
 
 use crate::{config::Config, ExternalInstanceType, WasmEdgeResult};
-use std::{borrow::Cow, marker::PhantomData, path::Path};
+use std::{borrow::Cow, marker::PhantomData, path::Path, sync::Arc};
 use wasmedge_sys as sys;
 
 /// Defines compiled in-memory representation of an input WASM binary.
@@ -9,7 +9,7 @@ use wasmedge_sys as sys;
 /// A [Module] is a compiled in-memory representation of an input WebAssembly binary. In the instantiation process, a [Module] is instatiated to a module [instance](crate::Instance), from which the exported [function](crate::Func), [table](crate::Table), [memory](crate::Memory), and [global](crate::Global) instances can be fetched.
 #[derive(Debug, Clone)]
 pub struct Module {
-    pub(crate) inner: sys::Module,
+    pub(crate) inner: Arc<sys::Module>,
 }
 impl Module {
     /// Returns a validated module from a file.
@@ -24,7 +24,7 @@ impl Module {
     ///
     /// If fail to load and valiate a module from a file, returns an error.
     pub fn from_file(config: Option<&Config>, file: impl AsRef<Path>) -> WasmEdgeResult<Self> {
-        let inner_config = config.map(|cfg| &cfg.inner);
+        let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
         // load module
         let inner_module = sys::Loader::create(inner_config)?.from_file(file.as_ref())?;
@@ -49,7 +49,7 @@ impl Module {
     ///
     /// If fail to load and valiate the WebAssembly module from the given in-memory bytes, returns an error.
     pub fn from_bytes(config: Option<&Config>, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Self> {
-        let inner_config = config.map(|cfg| &cfg.inner);
+        let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
         // load module
         let inner_module = sys::Loader::create(inner_config)?.from_bytes(bytes.as_ref())?;
@@ -88,7 +88,7 @@ impl Module {
     /// Returns the [export types](crate::ExportType) of all exported WasmEdge instances (including funcs, tables, globals and memories) from the [module](crate::Module).
     pub fn exports(&self) -> Vec<ExportType> {
         let mut exports = Vec::new();
-        for inner_export in self.inner.exports() {
+        for inner_export in self.inner.export() {
             let export = ExportType {
                 inner: inner_export,
                 _marker: PhantomData,
@@ -212,24 +212,24 @@ mod tests {
             (func $fib (param $n i32) (result i32)
              (if
               (i32.lt_s
-               (get_local $n)
+               (local.get $n)
                (i32.const 2)
               )
-              (return
-               (i32.const 1)
+              (then
+                (return (i32.const 1))
               )
              )
              (return
               (i32.add
                (call $fib
                 (i32.sub
-                 (get_local $n)
+                 (local.get $n)
                  (i32.const 2)
                 )
                )
                (call $fib
                 (i32.sub
-                 (get_local $n)
+                 (local.get $n)
                  (i32.const 1)
                 )
                )
@@ -265,24 +265,24 @@ mod tests {
             (func $fib (param $n i32) (result i32)
              (if
               (i32.lt_s
-               (get_local $n)
+               (local.get $n)
                (i32.const 2)
               )
-              (return
-               (i32.const 1)
+              (then
+                (return (i32.const 1))
               )
              )
              (return
               (i32.add
                (call $fib
                 (i32.sub
-                 (get_local $n)
+                 (local.get $n)
                  (i32.const 2)
                 )
                )
                (call $fib
                 (i32.sub
-                 (get_local $n)
+                 (local.get $n)
                  (i32.const 1)
                 )
                )

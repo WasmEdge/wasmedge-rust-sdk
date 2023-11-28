@@ -25,6 +25,9 @@
 //!
 //! | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
 //! | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+//! | 0.13.2        | 0.13.5        | 0.17.5        | 0.4.4         | 0.6.1         | 0.1.0     |
+//! | 0.13.1        | 0.13.5        | 0.17.4        | 0.4.4         | 0.6.1         | 0.1.0     |
+//! | 0.13.0        | 0.13.5        | 0.17.3        | 0.4.4         | 0.6.1         | 0.1.0     |
 //! | 0.12.2        | 0.13.4        | 0.17.2        | 0.4.4         | 0.6.1         | 0.1.0     |
 //! | 0.12.1        | 0.13.4        | 0.17.1        | 0.4.4         | 0.6.1         | 0.1.0     |
 //! | 0.12.0        | 0.13.4        | 0.17.0        | 0.4.4         | 0.6.1         | 0.1.0     |
@@ -67,7 +70,7 @@
 //!
 //! This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 //!
-//! **Notice:** The minimum supported Rust version is 1.70.
+//! **Notice:** The minimum supported Rust version is 1.71.
 //!
 //! ## API Reference
 //!
@@ -88,15 +91,14 @@
 //!
 
 #[doc(hidden)]
-pub mod caller;
-#[doc(hidden)]
 #[cfg(feature = "aot")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 mod compiler;
 pub mod config;
+
+#[cfg(feature = "dock")]
 pub mod dock;
-mod executor;
-mod externals;
+
 mod import;
 mod instance;
 #[doc(hidden)]
@@ -111,20 +113,18 @@ pub mod types;
 pub mod utils;
 #[doc(hidden)]
 pub mod vm;
-pub mod wasi;
 
-pub use caller::Caller;
+#[cfg(all(feature = "async", target_os = "linux"))]
+pub mod r#async;
+
 #[doc(inline)]
 #[cfg(feature = "aot")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 pub use compiler::Compiler;
+
 #[doc(inline)]
-pub use executor::Executor;
-#[doc(inline)]
-pub use externals::{Func, FuncRef, FuncTypeBuilder, Global, Memory, Table};
-#[doc(inline)]
-pub use import::{ImportObject, ImportObjectBuilder};
-pub use instance::{AsInstance, Instance};
+pub use import::{AsInstance, ImportObject, ImportObjectBuilder};
+pub use instance::Instance;
 #[doc(inline)]
 pub use io::{WasmVal, WasmValType, WasmValTypeList};
 #[doc(inline)]
@@ -136,7 +136,7 @@ pub use statistics::Statistics;
 #[doc(inline)]
 pub use store::Store;
 #[doc(inline)]
-pub use vm::{Vm, VmBuilder};
+pub use vm::Vm;
 
 pub use wasmedge_types::{
     error, wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType,
@@ -158,39 +158,6 @@ pub type NeverType = wasmedge_types::NeverType;
 #[doc(hidden)]
 pub type CallingFrame = wasmedge_sys::CallingFrame;
 
-/// The object that is used to perform a [host function](crate::Func) is required to implement this trait.
-pub trait Engine {
-    /// Runs a host function instance and returns the results.
-    ///
-    /// # Arguments
-    ///
-    /// * `func` - The function instance to run.
-    ///
-    /// * `params` - The arguments to pass to the function.
-    ///
-    /// # Errors
-    ///
-    /// If fail to run the host function, then an error is returned.
-    fn run_func(
-        &self,
-        func: &Func,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>>;
-
-    /// Runs a host function instance by calling its reference and returns the results.
-    ///
-    /// # Arguments
-    ///
-    /// * `func_ref` - A reference to the target host function instance.
-    ///
-    /// * `params` - The arguments to pass to the function.
-    ///
-    /// # Errors
-    ///
-    /// If fail to run the host function, then an error is returned.
-    fn run_func_ref(
-        &self,
-        func_ref: &FuncRef,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>>;
+pub mod wasi {
+    pub use wasmedge_sys::WasiModule;
 }

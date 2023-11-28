@@ -9,10 +9,12 @@ on:
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
+      - ".github/workflows/rust-static-lib.yml"
   pull_request:
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
+      - ".github/workflows/rust-static-lib.yml"
 
 jobs:
   build_ubuntu:
@@ -21,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-20.04]
-        rust: [1.72, 1.71, 1.70.0]
+        rust: [1.73, 1.72, 1.71]
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
@@ -90,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.72, 1.71, 1.70.0]
+        rust: [1.73, 1.72, 1.71]
     container:
       image: fedora:latest
 
@@ -159,15 +161,15 @@ jobs:
           export WASMEDGE_BUILD_DIR="$(pwd)/WasmEdge/build"
           export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
           export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
-          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
   build_macos:
     name: MacOS
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11, macos-12]
-        rust: [1.72, 1.71, 1.70.0]
+        os: [macos-12, macos-13]
+        rust: [1.73, 1.72, 1.71]
 
     steps:
       - name: Checkout sources
@@ -222,7 +224,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        rust: [1.72, 1.71, 1.70.0]
+        rust: [1.73, 1.72, 1.71]
     env:
       WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
       WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build

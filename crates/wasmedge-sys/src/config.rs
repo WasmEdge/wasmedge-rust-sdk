@@ -123,17 +123,13 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 /// API users can first set the options of interest, such as those related to the WebAssembly proposals,
 /// host registrations, AOT compiler options, and etc., then apply the configuration
 /// to create other WasmEdge runtime structs.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Config {
-    pub(crate) inner: std::sync::Arc<InnerConfig>,
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    async_wasi_enabled: bool,
+    pub(crate) inner: InnerConfig,
 }
 impl Drop for Config {
     fn drop(&mut self) {
-        if std::sync::Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_ConfigureDelete(self.inner.0) };
-        }
+        unsafe { ffi::WasmEdge_ConfigureDelete(self.inner.0) }
     }
 }
 impl Config {
@@ -147,53 +143,8 @@ impl Config {
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ConfigCreate)),
             false => Ok(Self {
-                inner: std::sync::Arc::new(InnerConfig(ctx)),
-                #[cfg(all(feature = "async", target_os = "linux"))]
-                async_wasi_enabled: false,
+                inner: InnerConfig(ctx),
             }),
-        }
-    }
-
-    /// Enables or disables host registration wasi. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-
-    pub fn wasi(&mut self, enable: bool) {
-        #[cfg(not(feature = "async"))]
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddHostRegistration(
-                    self.inner.0,
-                    ffi::WasmEdge_HostRegistration_Wasi,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveHostRegistration(
-                    self.inner.0,
-                    ffi::WasmEdge_HostRegistration_Wasi,
-                )
-            }
-        }
-        #[cfg(all(feature = "async", target_os = "linux"))]
-        {
-            self.async_wasi_enabled = enable;
-        }
-    }
-
-    /// Checks if host registration wasi turns on or not.
-
-    pub fn wasi_enabled(&self) -> bool {
-        #[cfg(not(feature = "async"))]
-        unsafe {
-            ffi::WasmEdge_ConfigureHasHostRegistration(
-                self.inner.0,
-                ffi::WasmEdge_HostRegistration_Wasi,
-            )
-        }
-        #[cfg(all(feature = "async", target_os = "linux"))]
-        {
-            self.async_wasi_enabled
         }
     }
 
@@ -809,8 +760,6 @@ mod tests {
         assert!(config.simd_enabled());
         assert!(!config.tail_call_enabled());
         assert!(!config.threads_enabled());
-        #[cfg(not(feature = "async"))]
-        assert!(!config.wasi_enabled());
         assert!(!config.is_cost_measuring());
         #[cfg(feature = "aot")]
         assert!(!config.dump_ir_enabled());
@@ -1065,66 +1014,5 @@ mod tests {
         });
 
         handle.join().unwrap();
-    }
-
-    #[test]
-    fn test_config_clone() {
-        // create a Config instance
-        let result = Config::create();
-        assert!(result.is_ok());
-        let mut config = result.unwrap();
-        assert_eq!(std::sync::Arc::strong_count(&config.inner), 1);
-
-        // set options
-        config.multi_memories(true);
-        config.annotations(true);
-        config.bulk_memory_operations(false);
-        config.exception_handling(true);
-        config.function_references(true);
-        config.memory64(true);
-        config.multi_value(false);
-        config.mutable_globals(false);
-        config.non_trap_conversions(false);
-        config.sign_extension_operators(false);
-        config.reference_types(false);
-        config.simd(false);
-        config.tail_call(true);
-        config.threads(true);
-        config.measure_cost(true);
-        config.measure_time(true);
-        #[cfg(feature = "aot")]
-        config.dump_ir(true);
-        #[cfg(feature = "aot")]
-        config.generic_binary(true);
-        config.count_instructions(true);
-
-        let config_clone = config.clone();
-        assert_eq!(std::sync::Arc::strong_count(&config.inner), 2);
-        // check new settings
-        assert!(config_clone.multi_memories_enabled());
-        assert!(config_clone.annotations_enabled());
-        assert!(!config_clone.bulk_memory_operations_enabled());
-        assert!(config_clone.exception_handling_enabled());
-        assert!(config_clone.function_references_enabled());
-        assert!(config_clone.memory64_enabled());
-        assert!(!config_clone.multi_value_enabled());
-        assert!(!config_clone.mutable_globals_enabled());
-        assert!(!config_clone.non_trap_conversions_enabled());
-        assert!(!config_clone.sign_extension_operators_enabled());
-        assert!(!config_clone.reference_types_enabled());
-        assert!(!config_clone.simd_enabled());
-        assert!(config_clone.tail_call_enabled());
-        assert!(config_clone.threads_enabled());
-        assert!(config_clone.is_cost_measuring());
-        #[cfg(feature = "aot")]
-        assert!(config_clone.dump_ir_enabled());
-        #[cfg(feature = "aot")]
-        assert!(config_clone.generic_binary_enabled());
-        assert!(config_clone.is_instruction_counting());
-        assert!(config_clone.is_time_measuring());
-
-        drop(config);
-        assert_eq!(std::sync::Arc::strong_count(&config_clone.inner), 1);
-        drop(config_clone);
     }
 }

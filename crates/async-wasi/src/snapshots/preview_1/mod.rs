@@ -6,7 +6,7 @@ use super::{
         types::*,
     },
     env::{
-        vfs::{self, FdFlags, INode, WASIRights},
+        vfs::{self, FdFlags, INode, WASIRights, WasiVirtualDir, WasiVirtualFile, WasiVirtualNode},
         AsyncVM, VFD,
     },
     WasiCtx,
@@ -31,6 +31,8 @@ pub fn args_get<M: Memory>(
         let arg_bytes = arg.as_bytes();
         let arg_buf = mem.mut_slice(argv_buf + header_offset, arg.len())?;
         arg_buf.copy_from_slice(arg_bytes);
+        let ptr = mem.mut_data::<u8>(argv_buf + header_offset + arg.len())?;
+        *ptr = 0u8;
 
         header_offset += arg.len() + 1;
     }
@@ -74,6 +76,8 @@ pub fn environ_get<M: Memory>(
         let env_bytes = env.as_bytes();
         let env_buf = mem.mut_slice(environ_buf + header_offset, env.len())?;
         env_buf.copy_from_slice(env_bytes);
+        let ptr = mem.mut_data::<u8>(environ_buf + header_offset + env.len())?;
+        *ptr = 0u8;
 
         header_offset += env.len() + 1;
     }
@@ -480,8 +484,8 @@ pub fn fd_pread<M: Memory>(
             mem.write_data(nread, n.to_le())
         }
         VFD::Inode(INode::Stdin(fs)) => {
-            let bufs = mem.mut_iovec(iovs, iovs_len)?;
-            let n = fs.fd_pread(&bufs, offset)? as __wasi_size_t;
+            let mut bufs = mem.mut_iovec(iovs, iovs_len)?;
+            let n = fs.fd_pread(&mut bufs, offset)? as __wasi_size_t;
             mem.write_data(nread, n.to_le())
         }
         _ => Err(Errno::__WASI_ERRNO_BADF),

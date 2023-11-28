@@ -1,7 +1,6 @@
-use super::function::{AsyncHostFn, HostFn, WasiFunction};
 use crate::{
-    ffi, instance::module::InnerInstance, types::WasmEdgeString, CallingFrame, Memory,
-    WasmEdgeResult, WasmValue,
+    instance::function::SyncFn, AsInstance, CallingFrame, FuncType, Function, ImportModule,
+    Instance, Memory, WasmEdgeResult, WasmValue,
 };
 use async_wasi::snapshots::{
     common::{
@@ -11,32 +10,90 @@ use async_wasi::snapshots::{
     },
     preview_1 as p, WasiCtx,
 };
-use parking_lot::Mutex;
-use std::{path::PathBuf, sync::Arc};
-use wasmedge_macro::{sys_async_wasi_host_function, sys_wasi_host_function};
+use std::{
+    future::Future,
+    ops::{Deref, DerefMut},
+    path::PathBuf,
+};
 use wasmedge_types::{
-    error::{HostFuncError, InstanceError, WasmEdgeError},
+    error::{CoreCommonError, CoreError, CoreExecutionError},
     ValType,
 };
 
-/// A [AsyncWasiModule] is a module instance for the WASI specification and used in the `async` scenario.
-#[derive(Debug, Clone)]
-pub struct AsyncWasiModule {
-    pub(crate) inner: Arc<InnerInstance>,
-    pub(crate) registered: bool,
-    name: String,
-    wasi_ctx: Arc<Mutex<WasiCtx>>,
-}
-impl Drop for AsyncWasiModule {
-    fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            // free the module instance
-            unsafe {
-                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
-            }
-        }
+use super::function::{AsyncFn, AsyncFunction};
+
+#[derive(Debug)]
+pub struct AsyncInstance(pub(crate) Instance);
+
+impl AsRef<Instance> for AsyncInstance {
+    fn as_ref(&self) -> &Instance {
+        &self.0
     }
 }
+
+impl AsMut<Instance> for AsyncInstance {
+    fn as_mut(&mut self) -> &mut Instance {
+        &mut self.0
+    }
+}
+
+#[derive(Debug)]
+pub struct AsyncImportObject<T: Send>(ImportModule<T>);
+impl<T: Send> Deref for AsyncImportObject<T> {
+    type Target = ImportModule<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<T: Send> DerefMut for AsyncImportObject<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: Send> AsyncImportObject<T> {
+    pub fn create(name: impl AsRef<str>, data: Box<T>) -> WasmEdgeResult<Self> {
+        let inner = ImportModule::create(name, data)?;
+        Ok(AsyncImportObject(inner))
+    }
+
+    pub fn add_async_func(&mut self, name: impl AsRef<str>, func: AsyncFunction) {
+        self.0.add_func(name, func.0);
+    }
+}
+impl<T: Send> AsRef<ImportModule<T>> for AsyncImportObject<T> {
+    fn as_ref(&self) -> &ImportModule<T> {
+        &self.0
+    }
+}
+impl<T: Send> AsMut<ImportModule<T>> for AsyncImportObject<T> {
+    fn as_mut(&mut self) -> &mut ImportModule<T> {
+        &mut self.0
+    }
+}
+
+impl<T: Send> AsInstance for AsyncImportObject<T> {
+    unsafe fn as_ptr(&self) -> *const crate::ffi::WasmEdge_ModuleInstanceContext {
+        self.0.as_ptr()
+    }
+}
+
+/// A [AsyncWasiModule] is a module instance for the WASI specification and used in the `async` scenario.
+#[derive(Debug)]
+pub struct AsyncWasiModule(AsyncImportObject<WasiCtx>);
+
+impl AsRef<AsyncImportObject<WasiCtx>> for AsyncWasiModule {
+    fn as_ref(&self) -> &AsyncImportObject<WasiCtx> {
+        &self.0
+    }
+}
+
+impl AsMut<AsyncImportObject<WasiCtx>> for AsyncWasiModule {
+    fn as_mut(&mut self) -> &mut AsyncImportObject<WasiCtx> {
+        &mut self.0
+    }
+}
+
 impl AsyncWasiModule {
     /// Creates a [AsyncWasiModule] instance.
     ///
@@ -52,8 +109,8 @@ impl AsyncWasiModule {
     ///
     /// If fail to create a [AsyncWasiModule] instance, then an error is returned.
     pub fn create(
-        args: Option<Vec<&str>>,
-        envs: Option<Vec<(&str, &str)>>,
+        args: Option<Vec<impl AsRef<str>>>,
+        envs: Option<Vec<(impl AsRef<str>, impl AsRef<str>)>>,
         preopens: Option<Vec<(PathBuf, PathBuf)>>,
     ) -> WasmEdgeResult<Self> {
         // create wasi context
@@ -61,10 +118,14 @@ impl AsyncWasiModule {
 
         // push args, envs and preopens
         if let Some(args) = args {
-            wasi_ctx.push_args(args.iter().map(|x| x.to_string()).collect());
+            wasi_ctx.push_args(args.iter().map(|x| x.as_ref().to_string()).collect());
         }
         if let Some(envs) = envs {
-            wasi_ctx.push_envs(envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect());
+            wasi_ctx.push_envs(
+                envs.iter()
+                    .map(|(k, v)| format!("{}={}", k.as_ref(), v.as_ref()))
+                    .collect(),
+            );
         }
         if let Some(preopens) = preopens {
             for (host_dir, guest_dir) in preopens {
@@ -72,53 +133,7 @@ impl AsyncWasiModule {
             }
         }
 
-        // create wasi module
-        let name = "wasi_snapshot_preview1";
-        let raw_name = WasmEdgeString::from(name);
-        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
-        if ctx.is_null() {
-            return Err(Box::new(WasmEdgeError::Instance(
-                InstanceError::CreateImportModule,
-            )));
-        }
-        let mut async_wasi_module = Self {
-            inner: std::sync::Arc::new(InnerInstance(ctx)),
-            registered: false,
-            name: name.to_string(),
-            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
-        };
-
-        // add sync/async host functions to the module
-        for wasi_func in wasi_impls() {
-            match wasi_func {
-                WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
-                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-
-                    let func = WasiFunction::create_wasi_func(
-                        &func_ty,
-                        real_fn,
-                        Some(&mut async_wasi_module.wasi_ctx.lock()),
-                        0,
-                    )?;
-
-                    async_wasi_module.add_wasi_func(&name, func);
-                }
-                WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
-                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
-
-                    let func = WasiFunction::create_async_wasi_func(
-                        &func_ty,
-                        real_async_fn,
-                        Some(&mut async_wasi_module.wasi_ctx.lock()),
-                        0,
-                    )?;
-
-                    async_wasi_module.add_wasi_func(&name, func);
-                }
-            }
-        }
-
-        Ok(async_wasi_module)
+        Self::create_from_wasi_context(wasi_ctx)
     }
 
     /// Creates a [AsyncWasiModule] instance with the given wasi context.
@@ -133,46 +148,37 @@ impl AsyncWasiModule {
     pub fn create_from_wasi_context(wasi_ctx: WasiCtx) -> WasmEdgeResult<Self> {
         // create wasi module
         let name = "wasi_snapshot_preview1";
-        let raw_name = WasmEdgeString::from(name);
-        let ctx = unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) };
-        if ctx.is_null() {
-            return Err(Box::new(WasmEdgeError::Instance(
-                InstanceError::CreateImportModule,
-            )));
-        }
-        let mut async_wasi_module = Self {
-            inner: std::sync::Arc::new(InnerInstance(ctx)),
-            registered: false,
-            name: name.to_string(),
-            wasi_ctx: Arc::new(Mutex::new(wasi_ctx)),
-        };
+
+        let mut async_wasi_module = Self(AsyncImportObject::create(name, Box::new(wasi_ctx))?);
 
         // add sync/async host functions to the module
         for wasi_func in wasi_impls() {
             match wasi_func {
                 WasiFunc::SyncFn(name, (ty_args, ty_rets), real_fn) => {
-                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func_ty = FuncType::new(ty_args, ty_rets);
 
-                    let func = WasiFunction::create_wasi_func(
-                        &func_ty,
-                        real_fn,
-                        Some(&mut async_wasi_module.wasi_ctx.lock()),
-                        0,
-                    )?;
+                    let func = unsafe {
+                        Function::create_sync_func(
+                            &func_ty,
+                            real_fn,
+                            async_wasi_module.0.get_host_data_mut(),
+                            0,
+                        )
+                    }?;
 
-                    async_wasi_module.add_wasi_func(&name, func);
+                    async_wasi_module.0.add_func(&name, func);
                 }
                 WasiFunc::AsyncFn(name, (ty_args, ty_rets), real_async_fn) => {
-                    let func_ty = crate::FuncType::create(ty_args, ty_rets)?;
+                    let func_ty = FuncType::new(ty_args, ty_rets);
 
-                    let func = WasiFunction::create_async_wasi_func(
+                    let func = AsyncFunction::create_async_func(
                         &func_ty,
                         real_async_fn,
-                        Some(&mut async_wasi_module.wasi_ctx.lock()),
+                        async_wasi_module.0.get_host_data_mut(),
                         0,
                     )?;
 
-                    async_wasi_module.add_wasi_func(&name, func);
+                    async_wasi_module.0.add_async_func(&name, func);
                 }
             }
         }
@@ -182,169 +188,148 @@ impl AsyncWasiModule {
 
     /// Returns the name of the module instance.
     pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    /// Imports a [WasiFunction](crate::r#async::function::WasiFunction) instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The name of the host function instance to import.
-    ///
-    /// * `func` - The [WasiFunction](crate::r#async::function::WasiFunction) instance to import.
-    fn add_wasi_func(&mut self, name: impl AsRef<str>, func: WasiFunction) {
-        let func_name: WasmEdgeString = name.into();
-
-        unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(
-                self.inner.0,
-                func_name.as_raw(),
-                func.inner.lock().0,
-            );
-        }
-
-        func.inner.lock().0 = std::ptr::null_mut();
+        "wasi_snapshot_preview1"
     }
 
     /// Returns the WASI exit code.
     ///
     /// The WASI exit code can be accessed after running the "_start" function of a `wasm32-wasi` program.
     pub fn exit_code(&self) -> u32 {
-        self.wasi_ctx.lock().exit_code
+        self.0.get_host_data().exit_code
     }
 }
 
 // ============== wasi host functions ==============
 
-#[sys_wasi_host_function]
 fn args_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([argv, argv_buf]) = args.get(0..2) {
         let argv = argv.to_i32() as usize;
         let argv_buf = argv_buf.to_i32() as usize;
         Ok(to_wasm_return(p::args_get(
             data,
-            &mut mem,
+            &mut *mem,
             WasmPtr::from(argv),
             WasmPtr::from(argv_buf),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn args_sizes_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([argc, argv_buf_size]) = args.get(0..2) {
         let argc = argc.to_i32() as usize;
         let argv_buf_size = argv_buf_size.to_i32() as usize;
         Ok(to_wasm_return(p::args_sizes_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             WasmPtr::from(argc),
             WasmPtr::from(argv_buf_size),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn environ_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    ctx: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = ctx.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let environ = p1.to_i32() as usize;
         let environ_buf = p2.to_i32() as usize;
         Ok(to_wasm_return(p::environ_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             WasmPtr::from(environ),
             WasmPtr::from(environ_buf),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn environ_sizes_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let environ_count = p1.to_i32() as usize;
         let environ_buf_size = p2.to_i32() as usize;
         Ok(to_wasm_return(p::environ_sizes_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             WasmPtr::from(environ_count),
             WasmPtr::from(environ_buf_size),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn clock_res_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let clock_id = p1.to_i32() as u32;
         let resolution_ptr = p2.to_i32() as usize;
         Ok(to_wasm_return(p::clock_res_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             clock_id,
             WasmPtr::from(resolution_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn clock_time_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let clock_id = p1.to_i32() as u32;
@@ -353,25 +338,25 @@ fn clock_time_get(
 
         Ok(to_wasm_return(p::clock_time_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             clock_id,
             precision,
             WasmPtr::from(time_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn random_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let buf = p1.to_i32() as usize;
@@ -379,24 +364,24 @@ fn random_get(
 
         Ok(to_wasm_return(p::random_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             WasmPtr::from(buf),
             buf_len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_prestat_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
@@ -404,24 +389,24 @@ fn fd_prestat_get(
 
         Ok(to_wasm_return(p::fd_prestat_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(prestat_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_prestat_dir_name(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -430,45 +415,50 @@ fn fd_prestat_dir_name(
 
         Ok(to_wasm_return(p::fd_prestat_dir_name(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(path_buf_ptr),
             path_max_len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_renumber(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let from = p1.to_i32();
         let to = p2.to_i32();
 
-        Ok(to_wasm_return(p::fd_renumber(data, &mut mem, from, to)))
+        Ok(to_wasm_return(p::fd_renumber(
+            data,
+            &mut mem as &mut Memory,
+            from,
+            to,
+        )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_advise(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -477,22 +467,27 @@ fn fd_advise(
         let advice = p4.to_i32() as u8;
 
         Ok(to_wasm_return(p::fd_advise(
-            data, &mut mem, fd, offset, len, advice,
+            data,
+            &mut mem as &mut Memory,
+            fd,
+            offset,
+            len,
+            advice,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_allocate(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -500,41 +495,49 @@ fn fd_allocate(
         let len = p3.to_i64() as u64;
 
         Ok(to_wasm_return(p::fd_allocate(
-            data, &mut mem, fd, offset, len,
+            data,
+            &mut mem as &mut Memory,
+            fd,
+            offset,
+            len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_close(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1]) = args.get(0..1) {
         let fd = p1.to_i32();
 
-        Ok(to_wasm_return(p::fd_close(data, &mut mem, fd)))
+        Ok(to_wasm_return(p::fd_close(
+            data,
+            &mut mem as &mut Memory,
+            fd,
+        )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_seek(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -544,64 +547,72 @@ fn fd_seek(
 
         Ok(to_wasm_return(p::fd_seek(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             offset,
             whence,
             WasmPtr::from(newoffset_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_sync(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1]) = args.get(0..1) {
         let fd = p1.to_i32();
 
-        Ok(to_wasm_return(p::fd_sync(data, &mut mem, fd)))
+        Ok(to_wasm_return(p::fd_sync(
+            data,
+            &mut mem as &mut Memory,
+            fd,
+        )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_datasync(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1]) = args.get(0..1) {
         let fd = p1.to_i32();
 
-        Ok(to_wasm_return(p::fd_datasync(data, &mut mem, fd)))
+        Ok(to_wasm_return(p::fd_datasync(
+            data,
+            &mut mem as &mut Memory,
+            fd,
+        )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_tell(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
@@ -609,24 +620,24 @@ fn fd_tell(
 
         Ok(to_wasm_return(p::fd_tell(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(offset),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_fdstat_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
@@ -634,46 +645,49 @@ fn fd_fdstat_get(
 
         Ok(to_wasm_return(p::fd_fdstat_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(buf_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_fdstat_set_flags(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
         let flags = p2.to_i32() as u16;
 
         Ok(to_wasm_return(p::fd_fdstat_set_flags(
-            data, &mut mem, fd, flags,
+            data,
+            &mut mem as &mut Memory,
+            fd,
+            flags,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_fdstat_set_rights(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -682,25 +696,25 @@ fn fd_fdstat_set_rights(
 
         Ok(to_wasm_return(p::fd_fdstat_set_rights(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             fs_rights_base,
             fs_rights_inheriting,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_filestat_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
@@ -708,24 +722,24 @@ fn fd_filestat_get(
 
         Ok(to_wasm_return(p::fd_filestat_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(buf),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_filestat_set_size(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
@@ -733,24 +747,24 @@ fn fd_filestat_set_size(
 
         Ok(to_wasm_return(p::fd_filestat_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(buf),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_filestat_set_times(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -759,22 +773,27 @@ fn fd_filestat_set_times(
         let fst_flags = p4.to_i32() as u16;
 
         Ok(to_wasm_return(p::fd_filestat_set_times(
-            data, &mut mem, fd, st_atim, st_mtim, fst_flags,
+            data,
+            &mut mem as &mut Memory,
+            fd,
+            st_atim,
+            st_mtim,
+            fst_flags,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_read(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -784,26 +803,26 @@ fn fd_read(
 
         Ok(to_wasm_return(p::fd_read(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(iovs),
             iovs_len,
             WasmPtr::from(nread),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_pread(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -814,7 +833,7 @@ fn fd_pread(
 
         Ok(to_wasm_return(p::fd_pread(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(iovs),
             iovs_len,
@@ -822,19 +841,19 @@ fn fd_pread(
             WasmPtr::from(nread),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_write(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -844,26 +863,26 @@ fn fd_write(
 
         Ok(to_wasm_return(p::fd_write(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(iovs),
             iovs_len,
             WasmPtr::from(nwritten),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_pwrite(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -874,7 +893,7 @@ fn fd_pwrite(
 
         Ok(to_wasm_return(p::fd_pwrite(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(iovs),
             iovs_len,
@@ -882,19 +901,19 @@ fn fd_pwrite(
             WasmPtr::from(nwritten),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn fd_readdir(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -905,7 +924,7 @@ fn fd_readdir(
 
         Ok(to_wasm_return(p::fd_readdir(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(buf),
             buf_len,
@@ -913,19 +932,19 @@ fn fd_readdir(
             WasmPtr::from(bufused_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn path_create_directory(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let dirfd = p1.to_i32();
@@ -934,25 +953,25 @@ fn path_create_directory(
 
         Ok(to_wasm_return(p::path_create_directory(
             data,
-            &mem,
+            &mem as &Memory,
             dirfd,
             WasmPtr::from(path_ptr),
             path_len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn path_filestat_get(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -963,7 +982,7 @@ fn path_filestat_get(
 
         Ok(to_wasm_return(p::path_filestat_get(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             flags,
             WasmPtr::from(path_ptr),
@@ -971,41 +990,41 @@ fn path_filestat_get(
             WasmPtr::from(file_stat_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn path_filestat_set_times(
-    _frame: CallingFrame,
+    _data: &mut WasiCtx,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
     _args: Vec<WasmValue>,
-    _data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+) -> Result<Vec<WasmValue>, CoreError> {
     Ok(vec![WasmValue::from_i32(
         Errno::__WASI_ERRNO_NOSYS.0 as i32,
     )])
 }
 
-#[sys_wasi_host_function]
 fn path_link(
-    _frame: CallingFrame,
+    _data: &mut WasiCtx,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
     _args: Vec<WasmValue>,
-    _data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+) -> Result<Vec<WasmValue>, CoreError> {
     Ok(vec![WasmValue::from_i32(
         Errno::__WASI_ERRNO_NOSYS.0 as i32,
     )])
 }
 
-#[sys_wasi_host_function]
 fn path_open(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6, p7, p8, p9]) = args.get(0..9) {
         let dirfd = p1.to_i32();
@@ -1020,7 +1039,7 @@ fn path_open(
 
         Ok(to_wasm_return(p::path_open(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             dirfd,
             dirflags,
             WasmPtr::from(path),
@@ -1032,30 +1051,30 @@ fn path_open(
             WasmPtr::from(fd_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn path_readlink(
-    _frame: CallingFrame,
+    _data: &mut WasiCtx,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
     _args: Vec<WasmValue>,
-    _data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+) -> Result<Vec<WasmValue>, CoreError> {
     Ok(vec![WasmValue::from_i32(
         Errno::__WASI_ERRNO_NOSYS.0 as i32,
     )])
 }
 
-#[sys_wasi_host_function]
 fn path_remove_directory(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1064,25 +1083,25 @@ fn path_remove_directory(
 
         Ok(to_wasm_return(p::path_remove_directory(
             data,
-            &mem,
+            &mem as &Memory,
             fd,
             WasmPtr::from(path_ptr),
             path_len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn path_rename(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6]) = args.get(0..6) {
         let old_fd = p1.to_i32();
@@ -1094,7 +1113,7 @@ fn path_rename(
 
         Ok(to_wasm_return(p::path_rename(
             data,
-            &mem,
+            &mem as &Memory,
             old_fd,
             WasmPtr::from(old_path),
             old_path_len,
@@ -1103,30 +1122,30 @@ fn path_rename(
             new_path_len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn path_symlink(
-    _frame: CallingFrame,
+    _data: &mut WasiCtx,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
     _args: Vec<WasmValue>,
-    _data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+) -> Result<Vec<WasmValue>, CoreError> {
     Ok(vec![WasmValue::from_i32(
         Errno::__WASI_ERRNO_NOSYS.0 as i32,
     )])
 }
 
-#[sys_wasi_host_function]
 fn path_unlink_file(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1135,53 +1154,54 @@ fn path_unlink_file(
 
         Ok(to_wasm_return(p::path_unlink_file(
             data,
-            &mem,
+            &mem as &Memory,
             fd,
             WasmPtr::from(path_ptr),
             path_len,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn proc_exit(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1]) = args.get(0..1) {
         let code = p1.to_i32() as u32;
-        p::proc_exit(data, &mut mem, code);
-        Err(HostFuncError::Runtime(0x01))
+        p::proc_exit(data, &mut mem as &mut Memory, code);
+        Err(CoreError::Common(CoreCommonError::Terminated))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn proc_raise(
-    _frame: CallingFrame,
+    _data: &mut WasiCtx,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
     _args: Vec<WasmValue>,
-    _data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+) -> Result<Vec<WasmValue>, CoreError> {
     Ok(vec![WasmValue::from_i32(
         Errno::__WASI_ERRNO_NOSYS.0 as i32,
     )])
 }
 
 // todo: ld asyncify yield
-#[sys_wasi_host_function]
+
 fn sched_yield(
-    _frame: CallingFrame,
+    _data: &mut WasiCtx,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
     _args: Vec<WasmValue>,
-    _data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
+) -> Result<Vec<WasmValue>, CoreError> {
     Ok(vec![WasmValue::from_i32(
         Errno::__WASI_ERRNO_NOSYS.0 as i32,
     )])
@@ -1189,15 +1209,15 @@ fn sched_yield(
 
 //socket
 
-#[sys_wasi_host_function]
 fn sock_open(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let af = p1.to_i32() as u8;
@@ -1206,25 +1226,25 @@ fn sock_open(
 
         Ok(to_wasm_return(p::async_socket::sock_open(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             af,
             ty,
             WasmPtr::from(ro_fd_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_bind(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1232,72 +1252,85 @@ fn sock_bind(
         let port = p3.to_i32() as u32;
         Ok(to_wasm_return(p::async_socket::sock_bind(
             data,
-            &mem,
+            &mem as &Memory,
             fd,
             WasmPtr::from(addr_ptr),
             port,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_listen(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
         let backlog = p2.to_i32() as u32;
 
         Ok(to_wasm_return(p::async_socket::sock_listen(
-            data, &mut mem, fd, backlog,
+            data,
+            &mut mem as &mut Memory,
+            fd,
+            backlog,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-// pub type BoxedResultFuture =
-//     Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>;
-
-#[sys_async_wasi_host_function]
-async fn sock_accept(
-    frame: CallingFrame,
+fn sock_accept<'data, 'inst, 'frame, 'fut>(
+    data: &'data mut WasiCtx,
+    _inst: &'inst mut AsyncInstance,
+    frame: &'frame mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
+) -> Box<dyn Future<Output = Result<Vec<WasmValue>, CoreError>> + Send + 'fut>
+where
+    'data: 'fut,
+    'frame: 'fut,
+    'inst: 'fut,
+{
+    Box::new(async move {
+        let mut mem = frame
+            .memory_mut(0)
+            .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+        if let Some([p1, p2]) = args.get(0..2) {
+            let fd = p1.to_i32();
+            let ro_fd_ptr = p2.to_i32() as usize;
 
-    if let Some([p1, p2]) = args.get(0..2) {
-        let fd = p1.to_i32();
-        let ro_fd_ptr = p2.to_i32() as usize;
-
-        Ok(to_wasm_return(
-            p::async_socket::sock_accept(data, &mut mem, fd, WasmPtr::from(ro_fd_ptr)).await,
-        ))
-    } else {
-        Err(HostFuncError::Runtime(0x83))
-    }
+            Ok(to_wasm_return(
+                p::async_socket::sock_accept(
+                    data,
+                    &mut mem as &mut Memory,
+                    fd,
+                    WasmPtr::from(ro_fd_ptr),
+                )
+                .await,
+            ))
+        } else {
+            Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        }
+    })
 }
 
-#[sys_async_wasi_host_function]
 async fn sock_connect(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3]) = args.get(0..3) {
         let fd = p1.to_i32();
@@ -1305,22 +1338,23 @@ async fn sock_connect(
         let port = p3.to_i32() as u32;
 
         Ok(to_wasm_return(
-            p::async_socket::sock_connect(data, &mem, fd, WasmPtr::from(addr_ptr), port).await,
+            p::async_socket::sock_connect(data, &mem as &Memory, fd, WasmPtr::from(addr_ptr), port)
+                .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_async_wasi_host_function]
 async fn sock_recv(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6]) = args.get(0..6) {
         let fd = p1.to_i32();
@@ -1333,7 +1367,7 @@ async fn sock_recv(
         Ok(to_wasm_return(
             p::async_socket::sock_recv(
                 data,
-                &mut mem,
+                &mut mem as &mut Memory,
                 fd,
                 WasmPtr::from(buf_ptr),
                 buf_len,
@@ -1344,19 +1378,19 @@ async fn sock_recv(
             .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_async_wasi_host_function]
 async fn sock_recv_from(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6, p7, p8]) = args.get(0..8) {
         let fd = p1.to_i32();
@@ -1371,7 +1405,7 @@ async fn sock_recv_from(
         Ok(to_wasm_return(
             p::async_socket::sock_recv_from(
                 data,
-                &mut mem,
+                &mut mem as &mut Memory,
                 fd,
                 WasmPtr::from(buf_ptr),
                 buf_len,
@@ -1384,19 +1418,19 @@ async fn sock_recv_from(
             .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_async_wasi_host_function]
 async fn sock_send(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -1408,7 +1442,7 @@ async fn sock_send(
         Ok(to_wasm_return(
             p::async_socket::sock_send(
                 data,
-                &mut mem,
+                &mut mem as &mut Memory,
                 fd,
                 WasmPtr::from(buf_ptr),
                 buf_len,
@@ -1418,19 +1452,19 @@ async fn sock_send(
             .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_async_wasi_host_function]
 async fn sock_send_to(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6, p7]) = args.get(0..7) {
         let fd = p1.to_i32();
@@ -1444,7 +1478,7 @@ async fn sock_send_to(
         Ok(to_wasm_return(
             p::async_socket::sock_send_to(
                 data,
-                &mut mem,
+                &mut mem as &mut Memory,
                 fd,
                 WasmPtr::from(buf_ptr),
                 buf_len,
@@ -1456,40 +1490,43 @@ async fn sock_send_to(
             .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_shutdown(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2]) = args.get(0..2) {
         let fd = p1.to_i32();
         let how = p2.to_i32() as u8;
         Ok(to_wasm_return(p::async_socket::sock_shutdown(
-            data, &mut mem, fd, how,
+            data,
+            &mut mem as &mut Memory,
+            fd,
+            how,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_getpeeraddr(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -1498,26 +1535,26 @@ fn sock_getpeeraddr(
         let port_ptr = p4.to_i32() as usize;
         Ok(to_wasm_return(p::async_socket::sock_getpeeraddr(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(wasi_addr_ptr),
             WasmPtr::from(addr_type),
             WasmPtr::from(port_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_getlocaladdr(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let fd = p1.to_i32();
@@ -1526,26 +1563,26 @@ fn sock_getlocaladdr(
         let port_ptr = p4.to_i32() as usize;
         Ok(to_wasm_return(p::async_socket::sock_getlocaladdr(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             WasmPtr::from(wasi_addr_ptr),
             WasmPtr::from(addr_type),
             WasmPtr::from(port_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_getsockopt(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -1555,7 +1592,7 @@ fn sock_getsockopt(
         let flag_size_ptr = p5.to_i32() as usize;
         Ok(to_wasm_return(p::async_socket::sock_getsockopt(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             fd,
             level,
             name,
@@ -1563,19 +1600,19 @@ fn sock_getsockopt(
             WasmPtr::from(flag_size_ptr),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_setsockopt(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5]) = args.get(0..5) {
         let fd = p1.to_i32();
@@ -1585,7 +1622,7 @@ fn sock_setsockopt(
         let flag_size = p5.to_i32() as u32;
         Ok(to_wasm_return(p::async_socket::sock_setsockopt(
             data,
-            &mem,
+            &mem as &Memory,
             fd,
             level,
             name,
@@ -1593,19 +1630,19 @@ fn sock_setsockopt(
             flag_size,
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_wasi_host_function]
 fn sock_getaddrinfo(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut Instance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> std::result::Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6, p7, p8]) = args.get(0..8) {
         let node = p1.to_i32() as usize;
@@ -1619,7 +1656,7 @@ fn sock_getaddrinfo(
 
         Ok(to_wasm_return(p::async_socket::addrinfo::sock_getaddrinfo(
             data,
-            &mut mem,
+            &mut mem as &mut Memory,
             WasmPtr::from(node),
             node_len,
             WasmPtr::from(server),
@@ -1630,19 +1667,19 @@ fn sock_getaddrinfo(
             WasmPtr::from(res_len),
         )))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_async_wasi_host_function]
 async fn poll_oneoff(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4]) = args.get(0..4) {
         let in_ptr = p1.to_i32() as usize;
@@ -1653,7 +1690,7 @@ async fn poll_oneoff(
         Ok(to_wasm_return(
             p::async_poll::poll_oneoff(
                 data,
-                &mut mem,
+                &mut mem as &mut Memory,
                 WasmPtr::from(in_ptr),
                 WasmPtr::from(out_ptr),
                 nsubscriptions,
@@ -1662,19 +1699,19 @@ async fn poll_oneoff(
             .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-#[sys_async_wasi_host_function]
 async fn sock_lookup_ip(
-    frame: CallingFrame,
+    data: &mut WasiCtx,
+    _inst: &mut AsyncInstance,
+    frame: &mut CallingFrame,
     args: Vec<WasmValue>,
-    data: Option<&'static mut WasiCtx>,
-) -> Result<Vec<WasmValue>, HostFuncError> {
-    let data = data.unwrap();
-
-    let mut mem = frame.memory_mut(0).ok_or(HostFuncError::Runtime(0x88))?;
+) -> Result<Vec<WasmValue>, CoreError> {
+    let mut mem = frame
+        .memory_mut(0)
+        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
     if let Some([p1, p2, p3, p4, p5, p6]) = args.get(0..6) {
         let host_name_ptr = p1.to_i32() as usize;
@@ -1686,7 +1723,7 @@ async fn sock_lookup_ip(
         Ok(to_wasm_return(
             p::async_socket::sock_lookup_ip(
                 data,
-                &mut mem,
+                &mut mem as &mut Memory,
                 WasmPtr::from(host_name_ptr),
                 host_name_len,
                 lookup_type,
@@ -1697,23 +1734,91 @@ async fn sock_lookup_ip(
             .await,
         ))
     } else {
-        Err(HostFuncError::Runtime(0x83))
+        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
     }
 }
 
-enum WasiFunc<T: 'static> {
-    SyncFn(String, (Vec<ValType>, Vec<ValType>), HostFn<T>),
-    AsyncFn(String, (Vec<ValType>, Vec<ValType>), AsyncHostFn<T>),
+#[inline]
+fn box_future<
+    'data,
+    'inst,
+    'frame,
+    'fut,
+    Data: Send,
+    Fut: Future<Output = Result<Vec<WasmValue>, CoreError>> + Send + 'fut,
+    F: FnOnce(
+        &'data mut Data,
+        &'inst mut AsyncInstance,
+        &'frame mut CallingFrame,
+        Vec<WasmValue>,
+    ) -> Fut,
+>(
+    data: &'data mut Data,
+    inst: &'inst mut AsyncInstance,
+    frame: &'frame mut CallingFrame,
+    args: Vec<WasmValue>,
+) -> Box<dyn Future<Output = Result<Vec<WasmValue>, CoreError>> + Send + 'fut>
+where
+    'data: 'fut,
+    'inst: 'fut,
+    'frame: 'fut,
+{
+    let f: F = unsafe { std::mem::zeroed() };
+    Box::new(f(data, inst, frame, args))
 }
 
-fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
+#[allow(clippy::complexity)]
+fn wrap_future<
+    'data,
+    'inst,
+    'frame,
+    'fut,
+    Data: Send + 'data,
+    Fut: Future<Output = Result<Vec<WasmValue>, CoreError>> + Send + 'fut,
+    F: FnOnce(
+        &'data mut Data,
+        &'inst mut AsyncInstance,
+        &'frame mut CallingFrame,
+        Vec<WasmValue>,
+    ) -> Fut,
+>(
+    _f: F,
+) -> fn(
+    data: &'data mut Data,
+    inst: &'inst mut AsyncInstance,
+    frame: &'frame mut CallingFrame,
+    args: Vec<WasmValue>,
+) -> Box<dyn Future<Output = Result<Vec<WasmValue>, CoreError>> + Send + 'fut>
+where
+    'data: 'fut,
+    'inst: 'fut,
+    'frame: 'fut,
+{
+    box_future::<Data, Fut, F>
+}
+
+enum WasiFunc<'data, 'inst, 'frame, 'fut, T: Sized>
+where
+    'data: 'fut,
+    'inst: 'fut,
+    'frame: 'fut,
+{
+    SyncFn(String, (Vec<ValType>, Vec<ValType>), SyncFn<T>),
+    AsyncFn(
+        String,
+        (Vec<ValType>, Vec<ValType>),
+        AsyncFn<'data, 'inst, 'frame, 'fut, T>,
+    ),
+}
+
+fn wasi_impls<'data, 'inst, 'frame, 'fut>() -> Vec<WasiFunc<'data, 'inst, 'frame, 'fut, WasiCtx>> {
     macro_rules! sync_fn {
         ($name:expr, $ty:expr, $f:ident) => {
             WasiFunc::SyncFn($name.into(), $ty, $f)
         };
     }
     macro_rules! async_fn {
-        ($name:expr, $ty:expr, $f:ident) => {
+        ($name:expr, $ty:expr, $f:expr) => {
             WasiFunc::AsyncFn($name.into(), $ty, $f)
         };
     }
@@ -2079,7 +2184,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 vec![ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
-            sock_connect
+            wrap_future(sock_connect)
         ),
         async_fn!(
             "sock_recv",
@@ -2094,7 +2199,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            sock_recv
+            wrap_future(sock_recv)
         ),
         async_fn!(
             "sock_recv_from",
@@ -2111,7 +2216,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            sock_recv_from
+            wrap_future(sock_recv_from)
         ),
         async_fn!(
             "sock_send",
@@ -2125,7 +2230,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            sock_send
+            wrap_future(sock_send)
         ),
         async_fn!(
             "sock_send_to",
@@ -2141,7 +2246,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            sock_send_to
+            wrap_future(sock_send_to)
         ),
         sync_fn!(
             "sock_shutdown",
@@ -2176,7 +2281,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            sock_getlocaladdr
+            sock_getsockopt
         ),
         sync_fn!(
             "sock_setsockopt",
@@ -2198,7 +2303,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
-            poll_oneoff
+            wrap_future(poll_oneoff)
         ),
         async_fn!(
             "epoll_oneoff",
@@ -2206,7 +2311,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
                 vec![ValType::I32],
             ),
-            poll_oneoff
+            wrap_future(poll_oneoff)
         ),
         async_fn!(
             "sock_lookup_ip",
@@ -2221,7 +2326,7 @@ fn wasi_impls() -> Vec<WasiFunc<WasiCtx>> {
                 ],
                 vec![ValType::I32],
             ),
-            sock_lookup_ip
+            wrap_future(sock_lookup_ip)
         ),
         sync_fn!(
             "sock_getaddrinfo",
@@ -2340,17 +2445,10 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        r#async::fiber::AsyncState, Config, Executor, Loader, Store, Validator, WasiInstance,
-    };
+    use crate::{r#async::fiber::AsyncState, Executor, Loader, Store, Validator};
 
     #[tokio::test]
     async fn test_async_wasi_module() -> Result<(), Box<dyn std::error::Error>> {
-        // create a Config
-        let mut config = Config::create()?;
-        config.wasi(true);
-        assert!(config.wasi_enabled());
-
         // create an Executor
         let result = Executor::create(None, None);
         assert!(result.is_ok());
@@ -2365,11 +2463,10 @@ mod tests {
         // create an AsyncWasiModule
         let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
         assert!(result.is_ok());
-        let async_wasi_module = result.unwrap();
+        let mut async_wasi_module = result.unwrap();
 
         // register async_wasi module into the store
-        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
-        let result = executor.register_wasi_instance(&mut store, &wasi_import);
+        let result = executor.register_import_module(&mut store, async_wasi_module.as_mut());
         assert!(result.is_ok());
 
         let wasm_file = std::env::current_dir()
@@ -2380,8 +2477,8 @@ mod tests {
             .join("examples/wasmedge-sys/async_hello.wasm");
         let module = Loader::create(None)?.from_file(&wasm_file)?;
         Validator::create(None)?.validate(&module)?;
-        let instance = executor.register_active_module(&mut store, &module)?;
-        let fn_start = instance.get_func("_start")?;
+        let mut instance = executor.register_active_module(&mut store, &module)?;
+        let mut fn_start = instance.get_func_mut("_start")?;
 
         async fn tick() {
             let mut i = 0;
@@ -2395,7 +2492,7 @@ mod tests {
 
         let async_state = AsyncState::new();
         let _ = executor
-            .call_func_async(&async_state, &fn_start, [])
+            .call_func_async(&async_state, &mut fn_start, [])
             .await?;
 
         Ok(())

@@ -390,8 +390,8 @@ impl std::fmt::Display for ExternalInstanceType {
 /// A [FuncType] is used to declare the types of the parameters and return values of a WasmEdge Func to be created.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FuncType {
-    args: Option<Vec<ValType>>,
-    returns: Option<Vec<ValType>>,
+    args: Vec<ValType>,
+    returns: Vec<ValType>,
 }
 impl FuncType {
     /// Creates a new [FuncType] with the given types of arguments and returns.
@@ -401,40 +401,28 @@ impl FuncType {
     /// * `args` - A vector of [ValType]s that represent the types of the arguments.
     ///
     /// * `returns` - A vector of [ValType]s that represent the types of the returns.
-    pub fn new(args: Option<Vec<ValType>>, returns: Option<Vec<ValType>>) -> Self {
+    pub fn new(args: Vec<ValType>, returns: Vec<ValType>) -> Self {
         Self { args, returns }
     }
 
     /// Returns the types of the arguments of a host function.
-    pub fn args(&self) -> Option<&[ValType]> {
-        match &self.args {
-            Some(args) => Some(args.as_ref()),
-            None => None,
-        }
+    pub fn args(&self) -> &[ValType] {
+        &self.args
     }
 
     /// Returns the number of the arguments of a host function.
-    pub fn args_len(&self) -> u32 {
-        match &self.args {
-            Some(args) => args.len() as u32,
-            None => 0,
-        }
+    pub fn args_len(&self) -> usize {
+        self.args.len()
     }
 
     /// Returns the types of the returns of a host function.
-    pub fn returns(&self) -> Option<&[ValType]> {
-        match &self.returns {
-            Some(returns) => Some(returns.as_ref()),
-            None => None,
-        }
+    pub fn returns(&self) -> &[ValType] {
+        &self.returns
     }
 
     /// Returns the number of the returns of a host function.
-    pub fn returns_len(&self) -> u32 {
-        match &self.returns {
-            Some(returns) => returns.len() as u32,
-            None => 0,
-        }
+    pub fn returns_len(&self) -> usize {
+        self.returns.len()
     }
 }
 
