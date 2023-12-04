@@ -118,29 +118,9 @@ pub async fn sock_accept<M: Memory>(
     fd: __wasi_fd_t,
     ro_fd_ptr: WasmPtr<__wasi_fd_t>,
 ) -> Result<(), Errno> {
-    #[cfg(feature = "serialize")]
-    {
-        use crate::snapshots::serialize::IoState;
-        if let VFD::AsyncSocket(s) = ctx.get_mut_vfd(fd)? {
-            if !s.state.nonblocking && s.state.local_addr.is_some() {
-                ctx.io_state = IoState::Accept {
-                    bind: s.state.local_addr.unwrap(),
-                }
-            }
-        } else {
-            return Err(Errno::__WASI_ERRNO_NOTSOCK);
-        }
-    }
-
     let sock_fd = ctx.get_mut_vfd(fd)?;
     if let VFD::AsyncSocket(s) = sock_fd {
-        let cs = s.accept().await;
-        #[cfg(feature = "serialize")]
-        {
-            use crate::snapshots::serialize::IoState;
-            ctx.io_state = IoState::Empty;
-        }
-        let cs = cs?;
+        let cs = s.accept().await?;
         let new_fd = ctx.insert_vfd(env::VFD::AsyncSocket(cs))?;
         mem.write_data(ro_fd_ptr, new_fd)?;
         Ok(())

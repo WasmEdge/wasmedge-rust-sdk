@@ -262,79 +262,6 @@ async fn poll_fd_timeout<M: Memory>(
     Ok(())
 }
 
-#[cfg(feature = "serialize")]
-use crate::snapshots::serialize::IoState;
-#[cfg(feature = "serialize")]
-fn record_state(
-    ctx: &mut WasiCtx,
-    ddl: Option<std::time::SystemTime>,
-    fds: &[SubscriptionFd],
-) -> IoState {
-    use crate::snapshots::serialize::PollFdState;
-    let mut save_fds = vec![];
-    for fd in fds {
-        let poll_read;
-        let poll_write;
-
-        match fd.type_ {
-            SubscriptionFdType::Read(_) => {
-                poll_read = true;
-                poll_write = false;
-            }
-            SubscriptionFdType::Write(_) => {
-                poll_read = false;
-                poll_write = true;
-            }
-            SubscriptionFdType::Both { .. } => {
-                poll_read = true;
-                poll_write = true;
-            }
-        }
-
-        if let Ok(VFD::AsyncSocket(s)) = ctx.get_mut_vfd(fd.fd) {
-            match s.state.sock_type.1 {
-                net::SocketType::Datagram => {
-                    // save
-                    save_fds.push(PollFdState::UdpSocket {
-                        fd: fd.fd,
-                        socket_type: s.state.sock_type.into(),
-                        local_addr: s.get_local().ok(),
-                        peer_addr: s.get_peer().ok(),
-                        poll_read,
-                        poll_write,
-                    })
-                }
-                net::SocketType::Stream if s.state.shutdown.is_none() => {
-                    // save
-                    match s.state.so_conn_state {
-                        net::ConnectState::Empty => {}
-                        net::ConnectState::Listening => save_fds.push(PollFdState::TcpListener {
-                            fd: fd.fd,
-                            socket_type: s.state.sock_type.into(),
-                            local_addr: s.get_local().ok(),
-                            peer_addr: s.get_peer().ok(),
-                            poll_read,
-                            poll_write,
-                        }),
-                        net::ConnectState::Connected | net::ConnectState::Connecting => save_fds
-                            .push(PollFdState::TcpStream {
-                                fd: fd.fd,
-                                socket_type: s.state.sock_type.into(),
-                                local_addr: s.get_local().ok(),
-                                peer_addr: s.get_peer().ok(),
-                                poll_read,
-                                poll_write,
-                            }),
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    IoState::Poll { fds: save_fds, ddl }
-}
-
 pub async fn poll_oneoff<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -343,16 +270,7 @@ pub async fn poll_oneoff<M: Memory>(
     nsubscriptions: __wasi_size_t,
     revents_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    #[cfg(feature = "serialize")]
-    {
-        let r = poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await;
-        ctx.io_state = IoState::Empty;
-        r
-    }
-    #[cfg(not(feature = "serialize"))]
-    {
-        poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
-    }
+    poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
 }
 
 async fn poll_oneoff_impl<M: Memory>(
@@ -374,27 +292,9 @@ async fn poll_oneoff_impl<M: Memory>(
 
     match prepoll {
         PrePoll::OnlyFd(fd_vec) => {
-            #[cfg(feature = "serialize")]
-            {
-                if let IoState::Empty = ctx.io_state {
-                    ctx.io_state = record_state(ctx, None, &fd_vec);
-                }
-            }
             poll_only_fd(ctx, mem, out_ptr, nsubscriptions, revents_num_ptr, fd_vec).await?;
         }
         PrePoll::ClockAndFd(clock, fd_vec) => {
-            #[cfg(feature = "serialize")]
-            let clock = {
-                // resume
-                if let IoState::Poll { ddl, .. } = ctx.io_state {
-                    let mut clock_clone = clock;
-                    clock_clone.timeout = ddl;
-                    clock_clone
-                } else {
-                    ctx.io_state = record_state(ctx, clock.timeout, &fd_vec);
-                    clock
-                }
-            };
             poll_fd_timeout(
                 ctx,
                 mem,
@@ -416,16 +316,6 @@ async fn poll_oneoff_impl<M: Memory>(
                 return Ok(());
             }
             if let Some(ddl) = clock.timeout {
-                #[cfg(feature = "serialize")]
-                let ddl = {
-                    // resume
-                    if let IoState::Sleep { ddl } = ctx.io_state {
-                        ddl
-                    } else {
-                        ctx.io_state = IoState::Sleep { ddl };
-                        ddl
-                    }
-                };
                 let now = std::time::SystemTime::now();
                 let dur = ddl.duration_since(now).unwrap_or(Duration::from_secs(0));
                 tokio::time::sleep(dur).await;

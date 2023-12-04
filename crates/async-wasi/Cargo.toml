@@ -27,4 +27,3 @@ serde_json = { version = "1" }
 [features]
 async_tokio = ["tokio"]
 default = ["async_tokio"]
-serialize = []
