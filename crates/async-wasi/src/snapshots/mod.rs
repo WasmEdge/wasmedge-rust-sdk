@@ -2,7 +2,6 @@ pub mod common;
 pub mod env;
 pub mod preview_1;
 
-use crate::object_pool::ObjectPool;
 use common::error::Errno;
 use env::{wasi_types::__wasi_fd_t, VFD};
 use std::path::PathBuf;
@@ -11,7 +10,7 @@ use std::path::PathBuf;
 pub struct WasiCtx {
     pub args: Vec<String>,
     envs: Vec<String>,
-    vfs: ObjectPool<VFD>,
+    vfs: slab::Slab<VFD>,
     closed: Option<__wasi_fd_t>,
     vfs_preopen_limit: usize,
     pub exit_code: u32,
@@ -26,10 +25,10 @@ impl WasiCtx {
         let wasi_stdin = VFD::Inode(env::vfs::INode::Stdin(env::vfs::WasiStdin::default()));
         let wasi_stdout = VFD::Inode(env::vfs::INode::Stdout(env::vfs::WasiStdout::default()));
         let wasi_stderr = VFD::Inode(env::vfs::INode::Stderr(env::vfs::WasiStderr::default()));
-        let mut vfs = ObjectPool::new();
-        vfs.push(wasi_stdin);
-        vfs.push(wasi_stdout);
-        vfs.push(wasi_stderr);
+        let mut vfs = slab::Slab::new();
+        vfs.insert(wasi_stdin);
+        vfs.insert(wasi_stdout);
+        vfs.insert(wasi_stderr);
 
         WasiCtx {
             args: vec![],
@@ -44,7 +43,7 @@ impl WasiCtx {
     pub fn push_preopen(&mut self, host_path: PathBuf, guest_path: PathBuf) {
         let preopen = env::vfs::WasiPreOpenDir::new(host_path, guest_path);
         self.vfs
-            .push(VFD::Inode(env::vfs::INode::PreOpenDir(preopen)));
+            .insert(VFD::Inode(env::vfs::INode::PreOpenDir(preopen)));
         self.vfs_preopen_limit += 1;
     }
 
@@ -101,9 +100,9 @@ impl WasiCtx {
     }
 
     pub fn insert_vfd(&mut self, vfd: VFD) -> Result<__wasi_fd_t, Errno> {
-        let i = self.vfs.push(vfd);
+        let i = self.vfs.insert(vfd);
 
-        Ok(i.0 as __wasi_fd_t)
+        Ok(i as __wasi_fd_t)
     }
 
     pub fn remove_vfd(&mut self, fd: __wasi_fd_t) -> Result<(), Errno> {
@@ -130,7 +129,7 @@ impl WasiCtx {
 
         let _ = self.vfs.get(to).ok_or(Errno::__WASI_ERRNO_BADF)?;
 
-        let from_entry = self.vfs.remove(from).ok_or(Errno::__WASI_ERRNO_BADF)?;
+        let from_entry = self.vfs.try_remove(from).ok_or(Errno::__WASI_ERRNO_BADF)?;
 
         let to_entry = self.vfs.get_mut(to).ok_or(Errno::__WASI_ERRNO_BADF)?;
 
@@ -184,11 +183,11 @@ mod vfs_test {
 
         // [0,1,2,3,4,none]
         let fd = ctx.insert_vfd(vfd_stub()).unwrap();
-        assert_eq!(fd, 4);
+        assert_eq!(fd, 5);
 
         // [0,1,2,3,4,5]
         let fd = ctx.insert_vfd(vfd_stub()).unwrap();
-        assert_eq!(fd, 5);
+        assert_eq!(fd, 4);
 
         // [0,1,2,3,4,5,6]
         let fd = ctx.insert_vfd(vfd_stub()).unwrap();
@@ -210,19 +209,8 @@ mod vfs_test {
         // [0,1,2,3,none,5,6]
         ctx.remove_vfd(4).unwrap();
 
-        // [0,1,2,3,none,none,6]
-        ctx.remove_vfd(5).unwrap();
+        let v = ctx.vfs.iter().map(|f| f.0).collect::<Vec<usize>>();
 
-        // [0,1,2,3,none,none,none]
-        ctx.remove_vfd(6).unwrap();
-
-        let v = ctx
-            .vfs
-            .iter()
-            .take(7)
-            .map(|f| f.is_some())
-            .collect::<Vec<bool>>();
-
-        assert_eq!(&v, &[true, true, true, true, false, false, false])
+        assert_eq!(&v, &[0, 1, 2, 3, 5, 6])
     }
 }

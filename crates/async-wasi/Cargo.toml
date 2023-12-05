@@ -20,6 +20,7 @@ serde = { version = "1", features = ["derive"] }
 socket2 = { version = "^0.4.9", features = ["all"] }
 tokio = { version = "1", features = ["full"], optional = true }
 parking_lot.workspace = true
+slab = "0.4.9"
 
 [dev-dependencies]
 serde_json = { version = "1" }
