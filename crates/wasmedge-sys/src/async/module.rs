@@ -13,7 +13,6 @@ use async_wasi::snapshots::{
 use std::{
     future::Future,
     ops::{Deref, DerefMut},
-    path::PathBuf,
 };
 use wasmedge_types::{
     error::{CoreCommonError, CoreError, CoreExecutionError},
@@ -103,15 +102,12 @@ impl AsyncWasiModule {
     ///
     /// * `envs` - The environment variables.
     ///
-    /// * `preopens` - The directories to pre-open.
-    ///
     /// # Error
     ///
     /// If fail to create a [AsyncWasiModule] instance, then an error is returned.
     pub fn create(
         args: Option<Vec<impl AsRef<str>>>,
         envs: Option<Vec<(impl AsRef<str>, impl AsRef<str>)>>,
-        preopens: Option<Vec<(PathBuf, PathBuf)>>,
     ) -> WasmEdgeResult<Self> {
         // create wasi context
         let mut wasi_ctx = WasiCtx::new();
@@ -126,11 +122,6 @@ impl AsyncWasiModule {
                     .map(|(k, v)| format!("{}={}", k.as_ref(), v.as_ref()))
                     .collect(),
             );
-        }
-        if let Some(preopens) = preopens {
-            for (host_dir, guest_dir) in preopens {
-                wasi_ctx.push_preopen(host_dir, guest_dir)
-            }
         }
 
         Self::create_from_wasi_context(wasi_ctx)
@@ -2350,6 +2341,7 @@ fn wasi_impls<'data, 'inst, 'frame, 'fut>() -> Vec<WasiFunc<'data, 'inst, 'frame
 
 fn to_wasm_return(r: Result<(), Errno>) -> Vec<WasmValue> {
     let code = if let Err(e) = r { e.0 } else { 0 };
+    log::trace!("wasi return {code}");
     vec![WasmValue::from_i32(code as i32)]
 }
 
@@ -2461,7 +2453,7 @@ mod tests {
         let mut store = result.unwrap();
 
         // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
+        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]));
         assert!(result.is_ok());
         let mut async_wasi_module = result.unwrap();
 

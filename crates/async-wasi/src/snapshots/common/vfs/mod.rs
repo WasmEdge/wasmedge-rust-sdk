@@ -1,10 +1,12 @@
-use super::{error::Errno, types as wasi_types};
+use super::{
+    error::Errno,
+    types::{self as wasi_types},
+};
 use bitflags::bitflags;
-use std::{future::Future, time::Duration};
+use std::{fmt::Debug, future::Future, io, path::Path, time::Duration};
 
-pub mod sync;
-
-pub use sync::*;
+pub mod impls;
+pub mod virtual_sys;
 
 pub enum SystemTimeSpec {
     SymbolicNow,
@@ -91,6 +93,14 @@ impl From<Filestat> for wasi_types::__wasi_filestat_t {
     }
 }
 
+impl From<(u64, Filestat)> for wasi_types::__wasi_filestat_t {
+    fn from((dev, stat): (u64, Filestat)) -> Self {
+        let mut stat: Self = stat.into();
+        stat.dev = dev;
+        stat
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct FileType(pub wasi_types::__wasi_filetype_t::Type);
 impl FileType {
@@ -155,6 +165,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Debug, Clone)]
     pub struct OFlags: wasi_types::__wasi_oflags_t::Type {
         const CREATE    = wasi_types::__wasi_oflags_t::__WASI_OFLAGS_CREAT;
         const DIRECTORY = wasi_types::__wasi_oflags_t::__WASI_OFLAGS_DIRECTORY;
@@ -271,4 +282,173 @@ pub enum Advice {
     WillNeed,
     DontNeed,
     NoReuse,
+}
+
+pub trait WasiNode {
+    fn fd_fdstat_get(&self) -> Result<FdStat, Errno>;
+
+    fn fd_fdstat_set_flags(&mut self, flags: FdFlags) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_fdstat_set_rights(
+        &mut self,
+        fs_rights_base: WASIRights,
+        fs_rights_inheriting: WASIRights,
+    ) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_filestat_get(&self) -> Result<Filestat, Errno>;
+
+    fn fd_filestat_set_size(&mut self, size: wasi_types::__wasi_filesize_t) -> Result<(), Errno>;
+
+    fn fd_filestat_set_times(
+        &mut self,
+        atim: wasi_types::__wasi_timestamp_t,
+        mtim: wasi_types::__wasi_timestamp_t,
+        fst_flags: wasi_types::__wasi_fstflags_t::Type,
+    ) -> Result<(), Errno>;
+}
+
+pub trait WasiFile: WasiNode {
+    fn fd_advise(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+        advice: Advice,
+    ) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_allocate(
+        &mut self,
+        offset: wasi_types::__wasi_filesize_t,
+        len: wasi_types::__wasi_filesize_t,
+    ) -> Result<(), Errno> {
+        Err(Errno::__WASI_ERRNO_BADF)
+    }
+
+    fn fd_datasync(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_sync(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn fd_read(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> Result<usize, Errno>;
+
+    fn fd_pread(
+        &mut self,
+        bufs: &mut [io::IoSliceMut<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno>;
+
+    fn fd_write(&mut self, bufs: &[io::IoSlice<'_>]) -> Result<usize, Errno>;
+
+    fn fd_pwrite(
+        &mut self,
+        bufs: &[io::IoSlice<'_>],
+        offset: wasi_types::__wasi_filesize_t,
+    ) -> Result<usize, Errno>;
+
+    fn fd_seek(
+        &mut self,
+        offset: wasi_types::__wasi_filedelta_t,
+        whence: wasi_types::__wasi_whence_t::Type,
+    ) -> Result<wasi_types::__wasi_filesize_t, Errno>;
+
+    fn fd_tell(&mut self) -> Result<wasi_types::__wasi_filesize_t, Errno>;
+}
+
+pub trait WasiDir: WasiNode {
+    fn get_readdir(&self, start: u64) -> Result<Vec<(String, u64, FileType)>, Errno>;
+
+    fn fd_readdir(&self, cursor: usize, write_buf: &mut [u8]) -> Result<usize, Errno> {
+        fn write_dirent(entity: &ReaddirEntity, write_buf: &mut [u8]) -> usize {
+            unsafe {
+                use wasi_types::__wasi_dirent_t;
+                const __wasi_dirent_t_size: usize = std::mem::size_of::<__wasi_dirent_t>();
+                let ent = __wasi_dirent_t::from(entity);
+                let ent_bytes_ptr = (&ent) as *const __wasi_dirent_t;
+                let ent_bytes =
+                    std::slice::from_raw_parts(ent_bytes_ptr as *const u8, __wasi_dirent_t_size);
+                let dirent_copy_len = write_buf.len().min(__wasi_dirent_t_size);
+                write_buf[..dirent_copy_len].copy_from_slice(&ent_bytes[..dirent_copy_len]);
+                if dirent_copy_len < __wasi_dirent_t_size {
+                    return dirent_copy_len;
+                }
+
+                let name_bytes = entity.name.as_bytes();
+                let name_len = name_bytes.len();
+                let name_copy_len = (write_buf.len() - dirent_copy_len).min(name_len);
+                write_buf[dirent_copy_len..dirent_copy_len + name_copy_len]
+                    .copy_from_slice(&name_bytes[..name_copy_len]);
+
+                dirent_copy_len + name_copy_len
+            }
+        }
+
+        let buflen = write_buf.len();
+
+        let mut bufused = 0;
+        let mut next = cursor as u64;
+
+        for (name, inode, filetype) in self.get_readdir(next)? {
+            next += 1;
+            let entity = ReaddirEntity {
+                next,
+                inode,
+                name,
+                filetype,
+            };
+
+            let n = write_dirent(&entity, &mut write_buf[bufused..]);
+            bufused += n;
+            if bufused == buflen {
+                return Ok(bufused);
+            }
+        }
+
+        Ok(bufused)
+    }
+}
+
+pub trait WasiFileSys {
+    type Index: Sized;
+
+    fn path_open(
+        &mut self,
+        dir_ino: Self::Index,
+        path: &str,
+        oflags: OFlags,
+        fs_rights_base: WASIRights,
+        fs_rights_inheriting: WASIRights,
+        fdflags: FdFlags,
+    ) -> Result<Self::Index, Errno>;
+    fn path_rename(&mut self, old_path: &str, new_path: &str) -> Result<(), Errno>;
+    fn path_create_directory(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno>;
+    fn path_remove_directory(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno>;
+    fn path_unlink_file(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno>;
+    fn path_link_file(&mut self, src_path: &str, dst_path: &str) -> Result<(), Errno>;
+    fn path_filestat_get(
+        &self,
+        dir_ino: Self::Index,
+        path: &str,
+        follow_symlinks: bool,
+    ) -> Result<Filestat, Errno>;
+
+    fn fclose(&mut self, ino: Self::Index) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn get_mut_inode(&mut self, ino: usize) -> Result<&mut dyn WasiNode, Errno>;
+    fn get_inode(&self, ino: usize) -> Result<&dyn WasiNode, Errno>;
+
+    fn get_mut_file(&mut self, ino: usize) -> Result<&mut dyn WasiFile, Errno>;
+    fn get_file(&self, ino: usize) -> Result<&dyn WasiFile, Errno>;
+
+    fn get_mut_dir(&mut self, ino: usize) -> Result<&mut dyn WasiDir, Errno>;
+    fn get_dir(&self, ino: usize) -> Result<&dyn WasiDir, Errno>;
 }

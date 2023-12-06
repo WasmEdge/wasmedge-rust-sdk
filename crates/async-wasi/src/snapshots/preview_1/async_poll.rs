@@ -4,7 +4,6 @@ use crate::snapshots::{
         net::{self, ConnectState, SubscriptionClock},
         types::*,
     },
-    env::VFD,
     Errno, WasiCtx,
 };
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -119,16 +118,12 @@ async fn poll_only_fd<M: Memory>(
         let mut wait = FuturesUnordered::new();
         let mut i = 0;
         for SubscriptionFd { fd, type_ } in fd_vec {
-            match ctx.get_vfd(fd) {
-                Ok(VFD::AsyncSocket(s)) => {
+            match ctx.vfs.get_socket(fd as usize) {
+                Ok(s) => {
                     wait.push(wait_fd(fd as usize, s, type_));
                 }
-                Ok(VFD::Closed) => {
-                    r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_IO);
-                    i += 1;
-                }
-                _ => {
-                    r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_NOTSOCK);
+                Err(e) => {
+                    r_events[i] = handle_event_err(type_, e);
                     i += 1;
                 }
             }
@@ -166,7 +161,7 @@ async fn poll_only_fd<M: Memory>(
             drop(wait);
 
             for fd in connected_fds.into_iter().flatten() {
-                if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
+                if let Ok(socket) = ctx.vfs.get_mut_socket(fd) {
                     socket.state.so_conn_state = ConnectState::Connected;
                     socket.writable.set_writable();
                 }
@@ -193,16 +188,12 @@ async fn poll_fd_timeout<M: Memory>(
     let mut i = 0;
 
     for SubscriptionFd { fd, type_ } in fd_vec {
-        match ctx.get_vfd(fd) {
-            Ok(VFD::AsyncSocket(s)) => {
+        match ctx.vfs.get_socket(fd as usize) {
+            Ok(s) => {
                 wait.push(wait_fd(fd as usize, s, type_));
             }
-            Ok(VFD::Closed) => {
-                r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_IO);
-                i += 1;
-            }
-            _ => {
-                r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_NOTSOCK);
+            Err(e) => {
+                r_events[i] = handle_event_err(type_, e);
                 i += 1;
             }
         }
@@ -252,7 +243,7 @@ async fn poll_fd_timeout<M: Memory>(
         drop(wait);
 
         for fd in connected_fds.into_iter().flatten() {
-            if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
+            if let Ok(socket) = ctx.vfs.get_mut_socket(fd) {
                 socket.state.so_conn_state = ConnectState::Connected;
             }
         }
