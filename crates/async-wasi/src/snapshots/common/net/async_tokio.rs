@@ -7,6 +7,7 @@ use socket2::{SockAddr, Socket};
 use std::{
     ops::DerefMut,
     os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
+    sync::atomic::AtomicBool,
 };
 use tokio::io::{
     unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
@@ -125,9 +126,58 @@ impl AsyncWasiSocketInner {
 }
 
 #[derive(Debug)]
+pub(crate) struct SocketWritable(pub(crate) AtomicBool);
+impl SocketWritable {
+    pub(crate) async fn writable(&self) {
+        let b = self.0.swap(false, std::sync::atomic::Ordering::Acquire);
+        SocketWritableFuture(b).await;
+    }
+
+    pub(crate) fn set_writable(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::Release)
+    }
+}
+impl Default for SocketWritable {
+    fn default() -> Self {
+        Self(AtomicBool::new(true))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SocketWritableFuture(bool);
+
+impl Future for SocketWritableFuture {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        if self.0 {
+            std::task::Poll::Ready(())
+        } else {
+            std::task::Poll::Pending
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct AsyncWasiSocket {
     pub(crate) inner: AsyncWasiSocketInner,
-    pub state: WasiSocketState,
+    pub state: Box<WasiSocketState>,
+    pub(crate) writable: SocketWritable,
+}
+
+impl AsyncWasiSocket {
+    pub(crate) async fn readable(&self) -> std::io::Result<()> {
+        self.inner.readable().await.map(|x| ())
+    }
+
+    pub(crate) async fn writable(&self) -> std::io::Result<()> {
+        self.writable.writable().await;
+        self.inner.writable().await?;
+        Ok(())
+    }
 }
 
 #[inline]
@@ -171,7 +221,8 @@ impl AsyncWasiSocket {
         socket.set_nonblocking(true)?;
         Ok(Self {
             inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?),
-            state,
+            state: Box::new(state),
+            writable: Default::default(),
         })
     }
 
@@ -180,7 +231,8 @@ impl AsyncWasiSocket {
         socket.set_nonblocking(true)?;
         Ok(Self {
             inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?),
-            state,
+            state: Box::new(state),
+            writable: Default::default(),
         })
     }
 }
@@ -226,7 +278,8 @@ impl AsyncWasiSocket {
         }
         Ok(AsyncWasiSocket {
             inner: AsyncWasiSocketInner::PreOpen(inner),
-            state,
+            state: Box::new(state),
+            writable: Default::default(),
         })
     }
 
@@ -280,7 +333,8 @@ impl AsyncWasiSocket {
 
             Ok(AsyncWasiSocket {
                 inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
-                state: new_state,
+                state: Box::new(new_state),
+                writable: Default::default(),
             })
         } else {
             loop {
@@ -293,7 +347,8 @@ impl AsyncWasiSocket {
 
                     Ok(AsyncWasiSocket {
                         inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
-                        state: new_state.clone(),
+                        state: Box::new(new_state.clone()),
+                        writable: Default::default(),
                     })
                 }) {
                     return r;
@@ -365,15 +420,27 @@ impl AsyncWasiSocket {
 
         match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
-                // Safety: reference Socket::read_vectored
-                let bufs = unsafe {
-                    &mut *(bufs as *mut [io::IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>])
+                let (n, f) = {
+                    let r = {
+                        // Safety: reference Socket::read_vectored
+                        let bufs = unsafe {
+                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
+                                as *mut [MaybeUninitSlice<'_>])
+                        };
+                        self.inner.get_ref()?.recv_vectored_with_flags(bufs, flags)
+                    };
+                    if let Err(e) = &r {
+                        if e.kind() == std::io::ErrorKind::WouldBlock {
+                            tokio::select! {
+                                s=self.inner.readable()=>{
+                                    s?.clear_ready();
+                                }
+                                else=>{}
+                            }
+                        }
+                    };
+                    r?
                 };
-
-                let (n, f) = self
-                    .inner
-                    .get_ref()?
-                    .recv_vectored_with_flags(bufs, flags)?;
                 Ok((n, f.is_truncated()))
             }
             (false, None) => loop {

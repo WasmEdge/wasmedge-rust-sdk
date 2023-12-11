@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (func $fib (param $n i32) (result i32)
                  (if
                   (i32.lt_s
-                   (get_local $n)
+                   (local.get $n)
                    (i32.const 2)
                   )
                   (return
@@ -31,13 +31,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                   (i32.add
                    (call $fib
                     (i32.sub
-                     (get_local $n)
+                     (local.get $n)
                      (i32.const 2)
                     )
                    )
                    (call $fib
                     (i32.sub
-                     (get_local $n)
+                     (local.get $n)
                      (i32.const 1)
                     )
                    )

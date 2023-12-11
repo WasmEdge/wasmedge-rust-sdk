@@ -1,18 +1,20 @@
 use crate::{io::WasmValTypeList, FuncType, WasmEdgeResult};
-pub use sys::AsInstance;
-use sys::Function;
+use sys::r#async::{
+    function::{AsyncFn, AsyncFunction},
+    module::AsyncImportObject,
+};
 use wasmedge_sys::{self as sys};
 
-/// Creates a [import object](crate::ImportObject).
+/// Creates a [async import object](sys::r#async::module::AsyncImportObject).
 ///
 #[derive(Debug)]
-pub struct ImportObjectBuilder<Data> {
-    import_object: ImportObject<Data>,
+pub struct ImportObjectBuilder<Data: Send> {
+    import_object: AsyncImportObject<Data>,
 }
-impl<Data> ImportObjectBuilder<Data> {
+impl<Data: Send> ImportObjectBuilder<Data> {
     /// Creates a new [ImportObjectBuilder].
-    pub fn new(name: &str, data: Data) -> WasmEdgeResult<Self> {
-        let import_object = ImportObject::create(name, Box::new(data))?;
+    pub fn new(name: impl AsRef<str>, data: Data) -> WasmEdgeResult<Self> {
+        let import_object = AsyncImportObject::create(name, Box::new(data))?;
         Ok(Self { import_object })
     }
 
@@ -34,7 +36,7 @@ impl<Data> ImportObjectBuilder<Data> {
     pub fn with_func<Args, Rets>(
         &mut self,
         name: impl AsRef<str>,
-        real_func: sys::SyncFn<Data>,
+        real_func: AsyncFn<Data>,
     ) -> WasmEdgeResult<&mut Self>
     where
         Args: WasmValTypeList,
@@ -43,11 +45,14 @@ impl<Data> ImportObjectBuilder<Data> {
         let args = Args::wasm_types();
         let returns = Rets::wasm_types();
         let ty = FuncType::new(args.to_vec(), returns.to_vec());
-        let func = unsafe {
-            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)
-        }?;
-        self.import_object.add_func(name, func);
+        let func = AsyncFunction::create_async_func(
+            &ty,
+            real_func,
+            self.import_object.get_host_data_mut(),
+            0,
+        )?;
 
+        self.import_object.add_async_func(name, func);
         Ok(self)
     }
 
@@ -72,12 +77,16 @@ impl<Data> ImportObjectBuilder<Data> {
         &mut self,
         name: impl AsRef<str>,
         ty: FuncType,
-        real_func: sys::SyncFn<Data>,
+        real_func: AsyncFn<Data>,
     ) -> WasmEdgeResult<&mut Self> {
-        let func = unsafe {
-            Function::create_sync_func(&ty, real_func, self.import_object.get_host_data_mut(), 0)
-        }?;
-        self.import_object.add_func(name, func);
+        let func = AsyncFunction::create_async_func(
+            &ty,
+            real_func,
+            self.import_object.get_host_data_mut(),
+            0,
+        )?;
+
+        self.import_object.add_async_func(name, func);
         Ok(self)
     }
 
@@ -139,4 +148,4 @@ impl<Data> ImportObjectBuilder<Data> {
 /// Defines an import object that contains the required import data used when instantiating a [module](crate::Module).
 ///
 /// An [ImportObject] instance is created with [ImportObjectBuilder](crate::ImportObjectBuilder).
-pub type ImportObject<T> = sys::ImportModule<T>;
+pub type ImportObject<T> = sys::r#async::module::AsyncImportObject<T>;

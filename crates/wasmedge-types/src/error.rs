@@ -16,14 +16,14 @@ pub enum WasmEdgeError {
 
     /// Errors raised by WasmEdge Core.
     #[error("{0}")]
-    Core(CoreError),
+    Core(#[from] CoreError),
 
     #[error("Fail to create ImportObj module")]
     ImportObjCreate,
     #[error("Fail to create Executor context")]
     ExecutorCreate,
     #[error("{0}")]
-    Store(StoreError),
+    Store(#[from] StoreError),
     #[error("Fail to create Statistics context")]
     StatisticsCreate,
     #[error("Fail to create Module")]
@@ -37,35 +37,35 @@ pub enum WasmEdgeError {
     #[error("Fail to create Validator")]
     ValidatorCreate,
     #[error("{0}")]
-    Vm(VmError),
+    Vm(#[from] VmError),
 
     // instances
     #[error("{0}")]
-    Func(FuncError),
+    Func(#[from] FuncError),
     #[error("Fail to create FuncType")]
     FuncTypeCreate,
     #[error("Execution Timed Out")]
     ExecuteTimeout,
     #[error("{0}")]
-    Mem(MemError),
+    Mem(#[from] MemError),
     #[error("Fail to create MemType")]
     MemTypeCreate,
     #[error("{0}")]
-    Global(GlobalError),
+    Global(#[from] GlobalError),
     #[error("Fail to create GlobalType")]
     GlobalTypeCreate,
     #[error("{0}")]
-    Table(TableError),
+    Table(#[from] TableError),
     #[error("Fail to create TableType")]
     TableTypeCreate,
     #[error("{0}")]
-    Import(ImportError),
+    Import(#[from] ImportError),
     #[error("{0}")]
-    Export(ExportError),
+    Export(#[from] ExportError),
     #[error("{0}")]
-    Instance(InstanceError),
+    Instance(#[from] InstanceError),
     #[error("{0}")]
-    Plugin(PluginError),
+    Plugin(#[from] PluginError),
 
     // std
     #[error("Found an internal 0 byte")]
@@ -304,6 +304,8 @@ pub enum CoreError {
 /// The error type for the common errors from WasmEdge Core.
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 pub enum CoreCommonError {
+    #[error("process terminated")]
+    Terminated,
     #[error("generic runtime error")]
     RuntimeError,
     #[error("cost limit exceeded")]

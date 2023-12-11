@@ -1,7 +1,7 @@
 //! Defines WasmEdge AST Module, ImportType, and ExportType.
 
 use crate::{config::Config, ExternalInstanceType, WasmEdgeResult};
-use std::{borrow::Cow, marker::PhantomData, path::Path};
+use std::{borrow::Cow, marker::PhantomData, path::Path, sync::Arc};
 use wasmedge_sys as sys;
 
 /// Defines compiled in-memory representation of an input WASM binary.
@@ -9,7 +9,7 @@ use wasmedge_sys as sys;
 /// A [Module] is a compiled in-memory representation of an input WebAssembly binary. In the instantiation process, a [Module] is instatiated to a module [instance](crate::Instance), from which the exported [function](crate::Func), [table](crate::Table), [memory](crate::Memory), and [global](crate::Global) instances can be fetched.
 #[derive(Debug, Clone)]
 pub struct Module {
-    pub(crate) inner: sys::Module,
+    pub(crate) inner: Arc<sys::Module>,
 }
 impl Module {
     /// Returns a validated module from a file.
@@ -24,7 +24,7 @@ impl Module {
     ///
     /// If fail to load and valiate a module from a file, returns an error.
     pub fn from_file(config: Option<&Config>, file: impl AsRef<Path>) -> WasmEdgeResult<Self> {
-        let inner_config = config.map(|cfg| &cfg.inner);
+        let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
         // load module
         let inner_module = sys::Loader::create(inner_config)?.from_file(file.as_ref())?;
@@ -49,7 +49,7 @@ impl Module {
     ///
     /// If fail to load and valiate the WebAssembly module from the given in-memory bytes, returns an error.
     pub fn from_bytes(config: Option<&Config>, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Self> {
-        let inner_config = config.map(|cfg| &cfg.inner);
+        let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
         // load module
         let inner_module = sys::Loader::create(inner_config)?.from_bytes(bytes.as_ref())?;
@@ -88,7 +88,7 @@ impl Module {
     /// Returns the [export types](crate::ExportType) of all exported WasmEdge instances (including funcs, tables, globals and memories) from the [module](crate::Module).
     pub fn exports(&self) -> Vec<ExportType> {
         let mut exports = Vec::new();
-        for inner_export in self.inner.exports() {
+        for inner_export in self.inner.export() {
             let export = ExportType {
                 inner: inner_export,
                 _marker: PhantomData,
@@ -207,115 +207,36 @@ mod tests {
         // read the wasm bytes
         let wasm_bytes = wat2wasm(
             br#"
-            (module
-                (type (;0;) (func (param i32) (result i32)))
-                (type (;1;) (func))
-                (func (;0;) (type 0) (param i32) (result i32)
-                  (local i32 i32 i32)
-                  i32.const 1
-                  local.set 1
-                  block  ;; label = @1
-                    local.get 0
-                    i32.const 2
-                    i32.lt_s
-                    br_if 0 (;@1;)
-                    local.get 0
-                    i32.const -1
-                    i32.add
-                    local.tee 1
-                    i32.const 7
-                    i32.and
-                    local.set 2
-                    block  ;; label = @2
-                      block  ;; label = @3
-                        local.get 0
-                        i32.const -2
-                        i32.add
-                        i32.const 7
-                        i32.ge_u
-                        br_if 0 (;@3;)
-                        i32.const 1
-                        local.set 0
-                        i32.const 1
-                        local.set 1
-                        br 1 (;@2;)
-                      end
-                      local.get 1
-                      i32.const -8
-                      i32.and
-                      local.set 3
-                      i32.const 1
-                      local.set 0
-                      i32.const 1
-                      local.set 1
-                      loop  ;; label = @3
-                        local.get 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.tee 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.tee 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.tee 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.set 1
-                        local.get 3
-                        i32.const -8
-                        i32.add
-                        local.tee 3
-                        br_if 0 (;@3;)
-                      end
-                    end
-                    local.get 2
-                    i32.eqz
-                    br_if 0 (;@1;)
-                    local.get 1
-                    local.set 3
-                    loop  ;; label = @2
-                      local.get 3
-                      local.get 0
-                      i32.add
-                      local.set 1
-                      local.get 3
-                      local.set 0
-                      local.get 1
-                      local.set 3
-                      local.get 2
-                      i32.const -1
-                      i32.add
-                      local.tee 2
-                      br_if 0 (;@2;)
-                    end
-                  end
-                  local.get 1)
-                (func (;1;) (type 1))
-                (func (;2;) (type 1)
-                  call 1
-                  call 1)
-                (func (;3;) (type 0) (param i32) (result i32)
-                  local.get 0
-                  call 0
-                  call 2)
-                (table (;0;) 1 1 funcref)
-                (memory (;0;) 16)
-                (global (;0;) (mut i32) (i32.const 1048576))
-                (export "memory" (memory 0))
-                (export "fib" (func 3)))
+        (module
+            (export "fib" (func $fib))
+            (func $fib (param $n i32) (result i32)
+             (if
+              (i32.lt_s
+               (local.get $n)
+               (i32.const 2)
+              )
+              (then
+                (return (i32.const 1))
+              )
+             )
+             (return
+              (i32.add
+               (call $fib
+                (i32.sub
+                 (local.get $n)
+                 (i32.const 2)
+                )
+               )
+               (call $fib
+                (i32.sub
+                 (local.get $n)
+                 (i32.const 1)
+                )
+               )
+              )
+             )
+            )
+           )
 "#,
         )
         .unwrap();
@@ -339,115 +260,36 @@ mod tests {
         // read the wasm bytes
         let wasm_bytes = wat2wasm(
             br#"
-            (module
-                (type (;0;) (func (param i32) (result i32)))
-                (type (;1;) (func))
-                (func (;0;) (type 0) (param i32) (result i32)
-                  (local i32 i32 i32)
-                  i32.const 1
-                  local.set 1
-                  block  ;; label = @1
-                    local.get 0
-                    i32.const 2
-                    i32.lt_s
-                    br_if 0 (;@1;)
-                    local.get 0
-                    i32.const -1
-                    i32.add
-                    local.tee 1
-                    i32.const 7
-                    i32.and
-                    local.set 2
-                    block  ;; label = @2
-                      block  ;; label = @3
-                        local.get 0
-                        i32.const -2
-                        i32.add
-                        i32.const 7
-                        i32.ge_u
-                        br_if 0 (;@3;)
-                        i32.const 1
-                        local.set 0
-                        i32.const 1
-                        local.set 1
-                        br 1 (;@2;)
-                      end
-                      local.get 1
-                      i32.const -8
-                      i32.and
-                      local.set 3
-                      i32.const 1
-                      local.set 0
-                      i32.const 1
-                      local.set 1
-                      loop  ;; label = @3
-                        local.get 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.tee 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.tee 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.tee 1
-                        local.get 0
-                        i32.add
-                        local.tee 0
-                        local.get 1
-                        i32.add
-                        local.set 1
-                        local.get 3
-                        i32.const -8
-                        i32.add
-                        local.tee 3
-                        br_if 0 (;@3;)
-                      end
-                    end
-                    local.get 2
-                    i32.eqz
-                    br_if 0 (;@1;)
-                    local.get 1
-                    local.set 3
-                    loop  ;; label = @2
-                      local.get 3
-                      local.get 0
-                      i32.add
-                      local.set 1
-                      local.get 3
-                      local.set 0
-                      local.get 1
-                      local.set 3
-                      local.get 2
-                      i32.const -1
-                      i32.add
-                      local.tee 2
-                      br_if 0 (;@2;)
-                    end
-                  end
-                  local.get 1)
-                (func (;1;) (type 1))
-                (func (;2;) (type 1)
-                  call 1
-                  call 1)
-                (func (;3;) (type 0) (param i32) (result i32)
-                  local.get 0
-                  call 0
-                  call 2)
-                (table (;0;) 1 1 funcref)
-                (memory (;0;) 16)
-                (global (;0;) (mut i32) (i32.const 1048576))
-                (export "memory" (memory 0))
-                (export "fib" (func 3)))
+        (module
+            (export "fib" (func $fib))
+            (func $fib (param $n i32) (result i32)
+             (if
+              (i32.lt_s
+               (local.get $n)
+               (i32.const 2)
+              )
+              (then
+                (return (i32.const 1))
+              )
+             )
+             (return
+              (i32.add
+               (call $fib
+                (i32.sub
+                 (local.get $n)
+                 (i32.const 2)
+                )
+               )
+               (call $fib
+                (i32.sub
+                 (local.get $n)
+                 (i32.const 1)
+                )
+               )
+              )
+             )
+            )
+           )
 "#,
         )
         .unwrap();
@@ -455,7 +297,7 @@ mod tests {
         let result = Module::from_bytes(None, wasm_bytes);
         assert!(result.is_ok());
         let module = result.unwrap();
-        assert_eq!(module.exports().len(), 2);
+        assert_eq!(module.exports().len(), 1);
 
         // clone the module
         let module_clone = module.clone();

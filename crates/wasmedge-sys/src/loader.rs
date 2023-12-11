@@ -13,7 +13,6 @@ use wasmedge_types::error::WasmEdgeError;
 #[derive(Debug)]
 pub struct Loader {
     pub(crate) inner: InnerLoader,
-    pub(crate) registered: bool,
 }
 impl Loader {
     /// Create a new [Loader](crate::Loader) to be associated with the given global configuration.
@@ -35,7 +34,6 @@ impl Loader {
             true => Err(Box::new(WasmEdgeError::LoaderCreate)),
             false => Ok(Self {
                 inner: InnerLoader(ctx),
-                registered: false,
             }),
         }
     }
@@ -56,7 +54,7 @@ impl Loader {
     /// let file = "path/to/foo.wasm"
     /// let module = loader.from_file(file)?;
     /// ```
-    pub fn from_file(&self, file: impl AsRef<Path>) -> WasmEdgeResult<Module> {
+    pub fn from_file(&self, file: impl AsRef<Path>) -> WasmEdgeResult<Arc<Module>> {
         match file.as_ref().extension() {
             Some(extension) => match extension.to_str() {
                 Some("wasm") => self.load_from_wasm_or_aot_file(&file),
@@ -79,7 +77,7 @@ impl Loader {
         }
     }
 
-    fn load_from_wasm_or_aot_file(&self, file: impl AsRef<Path>) -> WasmEdgeResult<Module> {
+    fn load_from_wasm_or_aot_file(&self, file: impl AsRef<Path>) -> WasmEdgeResult<Arc<Module>> {
         let c_path = utils::path_to_cstring(file.as_ref())?;
         let mut mod_ctx = std::ptr::null_mut();
         unsafe {
@@ -93,8 +91,9 @@ impl Loader {
         match mod_ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ModuleCreate)),
             false => Ok(Module {
-                inner: Arc::new(InnerModule(mod_ctx)),
-            }),
+                inner: InnerModule(mod_ctx),
+            }
+            .into()),
         }
     }
 
@@ -120,7 +119,7 @@ impl Loader {
     /// ```ignore
     /// assert!(loader.from_bytes(b"(module)").is_err());
     /// ```
-    pub fn from_bytes(&self, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Module> {
+    pub fn from_bytes(&self, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Arc<Module>> {
         let mut mod_ctx: *mut ffi::WasmEdge_ASTModuleContext = std::ptr::null_mut();
 
         unsafe {
@@ -148,23 +147,15 @@ impl Loader {
         match mod_ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ModuleCreate)),
             false => Ok(Module {
-                inner: Arc::new(InnerModule(mod_ctx)),
-            }),
+                inner: InnerModule(mod_ctx),
+            }
+            .into()),
         }
-    }
-
-    /// Provides a raw pointer to the inner Loader context.
-    #[cfg(feature = "ffi")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
-    pub fn as_ptr(&self) -> *const ffi::WasmEdge_LoaderContext {
-        self.inner.0 as *const _
     }
 }
 impl Drop for Loader {
     fn drop(&mut self) {
-        if !self.registered && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_LoaderDelete(self.inner.0) }
-        }
+        unsafe { ffi::WasmEdge_LoaderDelete(self.inner.0) }
     }
 }
 

@@ -10,7 +10,6 @@ use crate::snapshots::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use net::{async_tokio::AsyncWasiSocket, PrePoll, SubscriptionFd, SubscriptionFdType};
 use std::time::Duration;
-use tokio::io::unix::AsyncFdReadyGuard;
 
 fn handle_event_err(type_: SubscriptionFdType, errno: Errno) -> __wasi_event_t {
     let mut r = __wasi_event_t {
@@ -46,60 +45,54 @@ async fn wait_fd(
 ) -> Result<(__wasi_event_t, Option<usize>), Errno> {
     let connecting = ConnectState::Connecting == socket.state.so_conn_state;
 
-    let handler =
-        |r: Result<AsyncFdReadyGuard<socket2::Socket>, std::io::Error>, userdata, type_| match r {
-            Ok(mut s) => {
-                if !connecting {
-                    s.clear_ready();
-                }
-                (
-                    __wasi_event_t {
-                        userdata,
-                        error: 0,
-                        type_,
-                        fd_readwrite: __wasi_event_fd_readwrite_t {
-                            nbytes: 0,
-                            flags: 0,
-                        },
-                    },
-                    if connecting { Some(fd_index) } else { None },
-                )
-            }
-            Err(e) => (
-                __wasi_event_t {
-                    userdata,
-                    error: Errno::from(e).0,
-                    type_,
-                    fd_readwrite: __wasi_event_fd_readwrite_t {
-                        nbytes: 0,
-                        flags: __wasi_eventrwflags_t::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
-                    },
+    let handler = |r: Result<(), std::io::Error>, userdata, type_| match r {
+        Ok(_) => (
+            __wasi_event_t {
+                userdata,
+                error: 0,
+                type_,
+                fd_readwrite: __wasi_event_fd_readwrite_t {
+                    nbytes: 0,
+                    flags: 0,
                 },
-                None,
-            ),
-        };
+            },
+            if connecting { Some(fd_index) } else { None },
+        ),
+        Err(e) => (
+            __wasi_event_t {
+                userdata,
+                error: Errno::from(e).0,
+                type_,
+                fd_readwrite: __wasi_event_fd_readwrite_t {
+                    nbytes: 0,
+                    flags: __wasi_eventrwflags_t::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
+                },
+            },
+            None,
+        ),
+    };
 
     match type_ {
         SubscriptionFdType::Write(userdata) => Ok(handler(
-            socket.inner.writable().await,
+            socket.writable().await,
             userdata,
             __wasi_eventtype_t::__WASI_EVENTTYPE_FD_WRITE,
         )),
         SubscriptionFdType::Read(userdata) => Ok(handler(
-            socket.inner.readable().await,
+            socket.readable().await,
             userdata,
             __wasi_eventtype_t::__WASI_EVENTTYPE_FD_READ,
         )),
         SubscriptionFdType::Both { read, write } => {
             tokio::select! {
-                read_result=socket.inner.readable()=>{
+                read_result=socket.readable()=>{
                     Ok(handler(
                         read_result,
                         read,
                         __wasi_eventtype_t::__WASI_EVENTTYPE_FD_READ,
                     ))
                 }
-                write_result=socket.inner.writable()=>{
+                write_result=socket.writable()=>{
                     Ok(handler(
                         write_result,
                         write,
@@ -111,7 +104,6 @@ async fn wait_fd(
     }
 }
 
-#[allow(clippy::needless_pass_by_ref_mut)]
 async fn poll_only_fd<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -176,6 +168,7 @@ async fn poll_only_fd<M: Memory>(
             for fd in connected_fds.into_iter().flatten() {
                 if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
                     socket.state.so_conn_state = ConnectState::Connected;
+                    socket.writable.set_writable();
                 }
             }
         }
@@ -185,7 +178,6 @@ async fn poll_only_fd<M: Memory>(
     Ok(())
 }
 
-#[allow(clippy::needless_pass_by_ref_mut)]
 async fn poll_fd_timeout<M: Memory>(
     ctx: &mut WasiCtx,
     mem: &mut M,
@@ -351,12 +343,16 @@ pub async fn poll_oneoff<M: Memory>(
     nsubscriptions: __wasi_size_t,
     revents_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    let r = poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await;
     #[cfg(feature = "serialize")]
     {
+        let r = poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await;
         ctx.io_state = IoState::Empty;
+        r
     }
-    r
+    #[cfg(not(feature = "serialize"))]
+    {
+        poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
+    }
 }
 
 async fn poll_oneoff_impl<M: Memory>(

@@ -148,7 +148,7 @@ unsafe impl Sync for InnerCompiler {}
 mod tests {
     use super::*;
     use crate::{
-        AsImport, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
+        AsInstance, CallingFrame, Compiler, Config, Executor, FuncType, Function, ImportModule,
         Loader, Store, Validator, WasmValue,
     };
     use std::{
@@ -156,10 +156,9 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
-    use wasmedge_macro::sys_host_function;
     use wasmedge_types::{
-        error::{CoreError, CoreLoadError, HostFuncError},
-        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, NeverType,
+        error::{CoreError, CoreLoadError},
+        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
     };
 
     #[test]
@@ -253,114 +252,35 @@ mod tests {
         {
             let result = wat2wasm(
                 br#"(module
-                    (type (;0;) (func (param i32) (result i32)))
-                    (type (;1;) (func))
-                    (func (;0;) (type 0) (param i32) (result i32)
-                      (local i32 i32 i32)
-                      i32.const 1
-                      local.set 1
-                      block  ;; label = @1
-                        local.get 0
-                        i32.const 2
-                        i32.lt_s
-                        br_if 0 (;@1;)
-                        local.get 0
-                        i32.const -1
-                        i32.add
-                        local.tee 1
-                        i32.const 7
-                        i32.and
-                        local.set 2
-                        block  ;; label = @2
-                          block  ;; label = @3
-                            local.get 0
-                            i32.const -2
-                            i32.add
-                            i32.const 7
-                            i32.ge_u
-                            br_if 0 (;@3;)
-                            i32.const 1
-                            local.set 0
-                            i32.const 1
-                            local.set 1
-                            br 1 (;@2;)
-                          end
-                          local.get 1
-                          i32.const -8
-                          i32.and
-                          local.set 3
-                          i32.const 1
-                          local.set 0
-                          i32.const 1
-                          local.set 1
-                          loop  ;; label = @3
-                            local.get 1
-                            local.get 0
-                            i32.add
-                            local.tee 0
-                            local.get 1
-                            i32.add
-                            local.tee 1
-                            local.get 0
-                            i32.add
-                            local.tee 0
-                            local.get 1
-                            i32.add
-                            local.tee 1
-                            local.get 0
-                            i32.add
-                            local.tee 0
-                            local.get 1
-                            i32.add
-                            local.tee 1
-                            local.get 0
-                            i32.add
-                            local.tee 0
-                            local.get 1
-                            i32.add
-                            local.set 1
-                            local.get 3
-                            i32.const -8
-                            i32.add
-                            local.tee 3
-                            br_if 0 (;@3;)
-                          end
-                        end
-                        local.get 2
-                        i32.eqz
-                        br_if 0 (;@1;)
-                        local.get 1
-                        local.set 3
-                        loop  ;; label = @2
-                          local.get 3
-                          local.get 0
-                          i32.add
-                          local.set 1
-                          local.get 3
-                          local.set 0
-                          local.get 1
-                          local.set 3
-                          local.get 2
-                          i32.const -1
-                          i32.add
-                          local.tee 2
-                          br_if 0 (;@2;)
-                        end
-                      end
-                      local.get 1)
-                    (func (;1;) (type 1))
-                    (func (;2;) (type 1)
-                      call 1
-                      call 1)
-                    (func (;3;) (type 0) (param i32) (result i32)
-                      local.get 0
-                      call 0
-                      call 2)
-                    (table (;0;) 1 1 funcref)
-                    (memory (;0;) 16)
-                    (global (;0;) (mut i32) (i32.const 1048576))
-                    (export "memory" (memory 0))
-                    (export "fib" (func 3)))
+                    (export "fib" (func $fib))
+                    (func $fib (param $n i32) (result i32)
+                     (if
+                      (i32.lt_s
+                       (local.get $n)
+                       (i32.const 2)
+                      )
+                      (then
+                        (return (i32.const 1))
+                      )
+                     )
+                     (return
+                      (i32.add
+                       (call $fib
+                        (i32.sub
+                         (local.get $n)
+                         (i32.const 2)
+                        )
+                       )
+                       (call $fib
+                        (i32.sub
+                         (local.get $n)
+                         (i32.const 1)
+                        )
+                       )
+                      )
+                     )
+                    )
+                   )
               "#,
             );
             assert!(result.is_ok());
@@ -539,11 +459,11 @@ mod tests {
             // register the wasm module as named module
             let extern_module = Loader::create(Some(&config))?.from_file(&out_path)?;
             Validator::create(Some(&config))?.validate(&extern_module)?;
-            let extern_instance =
+            let mut extern_instance =
                 executor.register_named_module(&mut store, &extern_module, "extern")?;
 
-            let fib = extern_instance.get_func("fib")?;
-            let returns = executor.call_func(&fib, [WasmValue::from_i32(5)])?;
+            let mut fib = extern_instance.get_func_mut("fib")?;
+            let returns = executor.call_func(&mut fib, [WasmValue::from_i32(5)])?;
             assert_eq!(returns[0].to_i32(), 8);
         }
 
@@ -551,10 +471,11 @@ mod tests {
             // register the wasm module as active module
             let active_module = Loader::create(Some(&config))?.from_file(&out_path)?;
             Validator::create(Some(&config))?.validate(&active_module)?;
-            let active_instance = executor.register_active_module(&mut store, &active_module)?;
+            let mut active_instance =
+                executor.register_active_module(&mut store, &active_module)?;
 
-            let fib = active_instance.get_func("fib")?;
-            let returns = executor.call_func(&fib, [WasmValue::from_i32(5)])?;
+            let mut fib = active_instance.get_func_mut("fib")?;
+            let returns = executor.call_func(&mut fib, [WasmValue::from_i32(5)])?;
             assert_eq!(returns[0].to_i32(), 8);
         }
 
@@ -565,18 +486,17 @@ mod tests {
     }
 
     #[cfg(feature = "aot")]
-    fn create_spec_test_module() -> ImportModule<NeverType> {
+    fn create_spec_test_module() -> ImportModule<()> {
         // create an ImportObj module
-        let result = ImportModule::<NeverType>::create("spectest", None);
+        let result = ImportModule::create("spectest", Box::new(()));
         assert!(result.is_ok());
         let mut import = result.unwrap();
 
         // create a host function
-        let result = FuncType::create([], []);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        let result =
-            Function::create_sync_func::<NeverType>(&func_ty, Box::new(spec_test_print), None, 0);
+        let func_ty = FuncType::new(vec![], vec![]);
+        let result = unsafe {
+            Function::create_sync_func(&func_ty, spec_test_print, import.get_host_data_mut(), 0)
+        };
         assert!(result.is_ok());
         let host_func = result.unwrap();
         // add host function "print"
@@ -585,11 +505,12 @@ mod tests {
     }
 
     #[cfg(feature = "aot")]
-    #[sys_host_function]
     fn spec_test_print(
-        _frame: CallingFrame,
+        _data: &mut (),
+        _inst: &mut crate::Instance,
+        _frame: &mut CallingFrame,
         _inputs: Vec<WasmValue>,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
+    ) -> Result<Vec<WasmValue>, CoreError> {
         Ok(vec![])
     }
 }

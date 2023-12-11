@@ -2,19 +2,20 @@
 
 use crate::{
     ffi,
-    instance::module::{InnerInstance, Instance},
+    instance::{
+        module::{InnerInstance, Instance},
+        InnerRef,
+    },
     types::WasmEdgeString,
     WasmEdgeResult,
 };
-use parking_lot::Mutex;
-use std::sync::Arc;
+
 use wasmedge_types::error::{StoreError, WasmEdgeError};
 
-/// A [Store] represents all global state that can be manipulated by WebAssembly programs. It consists of the runtime representation of all instances of [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global).
-#[derive(Debug, Clone)]
+/// The [Store] is a collection of registered modules and assists wasm modules in finding the import modules they need.
+#[derive(Debug)]
 pub struct Store {
-    pub(crate) inner: Arc<InnerStore>,
-    pub(crate) registered: bool,
+    pub(crate) inner: InnerStore,
 }
 impl Store {
     /// Creates a new [Store].
@@ -27,8 +28,7 @@ impl Store {
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Store(StoreError::Create))),
             false => Ok(Store {
-                inner: Arc::new(InnerStore(ctx)),
-                registered: false,
+                inner: InnerStore(ctx),
             }),
         }
     }
@@ -72,17 +72,24 @@ impl Store {
     /// # Error
     ///
     /// If fail to find the target [module instance](crate::Instance), then an error is returned.
-    pub fn module(&self, name: impl AsRef<str>) -> WasmEdgeResult<Instance> {
+    pub fn module(&self, name: impl AsRef<str>) -> WasmEdgeResult<InnerRef<Instance, &Self>> {
         let mod_name: WasmEdgeString = name.as_ref().into();
         let ctx = unsafe { ffi::WasmEdge_StoreFindModule(self.inner.0, mod_name.as_raw()) };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::Store(StoreError::NotFoundModule(
                 name.as_ref().to_string(),
             )))),
-            false => Ok(Instance {
-                inner: Arc::new(Mutex::new(InnerInstance(ctx as *mut _))),
-                registered: true,
-            }),
+            false => {
+                let inst = Instance {
+                    inner: InnerInstance(ctx as _),
+                };
+                unsafe {
+                    Ok(InnerRef::create_from_ref(
+                        std::mem::ManuallyDrop::new(inst),
+                        self,
+                    ))
+                }
+            }
         }
     }
 
@@ -102,19 +109,10 @@ impl Store {
             None => false,
         }
     }
-
-    /// Provides a raw pointer to the inner Store context.
-    #[cfg(feature = "ffi")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
-    pub fn as_ptr(&self) -> *const ffi::WasmEdge_StoreContext {
-        self.inner.0 as *const _
-    }
 }
 impl Drop for Store {
     fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_StoreDelete(self.inner.0) }
-        }
+        unsafe { ffi::WasmEdge_StoreDelete(self.inner.0) }
     }
 }
 
@@ -122,249 +120,3 @@ impl Drop for Store {
 pub(crate) struct InnerStore(pub(crate) *mut ffi::WasmEdge_StoreContext);
 unsafe impl Send for InnerStore {}
 unsafe impl Sync for InnerStore {}
-
-#[cfg(test)]
-mod tests {
-    use super::Store;
-    use crate::{
-        instance::{Function, Global, GlobalType, MemType, Memory, Table, TableType},
-        types::WasmValue,
-        AsImport, CallingFrame, Config, Engine, Executor, FuncType, ImportModule, Loader,
-        Validator,
-    };
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
-    use wasmedge_macro::sys_host_function;
-    use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_store_basic() {
-        let module_name = "extern_module";
-
-        let result = Store::create();
-        assert!(result.is_ok());
-        let mut store = result.unwrap();
-        assert!(!store.inner.0.is_null());
-        assert!(!store.registered);
-
-        // check the length of registered module list in store before instantiation
-        assert_eq!(store.module_len(), 0);
-        assert!(store.module_names().is_none());
-
-        // create ImportObject instance
-        let result = ImportModule::<NeverType>::create(module_name, None);
-        assert!(result.is_ok());
-        let mut import = result.unwrap();
-
-        // add host function
-        let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-        assert!(result.is_ok());
-        let host_func = result.unwrap();
-        import.add_func("add", host_func);
-
-        // add table
-        let result = TableType::create(RefType::FuncRef, 0, Some(u32::MAX));
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        let result = Table::create(&ty);
-        assert!(result.is_ok());
-        let table = result.unwrap();
-        import.add_table("table", table);
-
-        // add memory
-        let memory = {
-            let result = MemType::create(10, Some(20), false);
-            assert!(result.is_ok());
-            let mem_ty = result.unwrap();
-            let result = Memory::create(&mem_ty);
-            assert!(result.is_ok());
-            result.unwrap()
-        };
-        import.add_memory("mem", memory);
-
-        // add globals
-        let result = GlobalType::create(ValType::F32, Mutability::Const);
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-        let result = Global::create(&ty, WasmValue::from_f32(3.5));
-        assert!(result.is_ok());
-        let global = result.unwrap();
-        import.add_global("global", global);
-
-        let result = Config::create();
-        assert!(result.is_ok());
-        let config = result.unwrap();
-        let result = Executor::create(Some(&config), None);
-        assert!(result.is_ok());
-        let mut executor = result.unwrap();
-
-        let result = executor.register_import_module(&mut store, &import);
-        assert!(result.is_ok());
-
-        // check the module list after instantiation
-        assert_eq!(store.module_len(), 1);
-        assert!(store.module_names().is_some());
-        assert_eq!(store.module_names().unwrap()[0], module_name);
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_store_send() {
-        let result = Store::create();
-        assert!(result.is_ok());
-        let store = result.unwrap();
-        assert!(!store.inner.0.is_null());
-        assert!(!store.registered);
-
-        let handle = thread::spawn(move || {
-            let s = store;
-            assert!(!s.inner.0.is_null());
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_store_sync() {
-        let result = Store::create();
-        assert!(result.is_ok());
-        let store = Arc::new(Mutex::new(result.unwrap()));
-
-        let store_cloned = Arc::clone(&store);
-        let handle = thread::spawn(move || {
-            // create ImportObject instance
-            let result = ImportModule::<NeverType>::create("extern_module", None);
-            assert!(result.is_ok());
-            let mut import = result.unwrap();
-
-            // add host function
-            let result = FuncType::create(vec![ValType::I32; 2], vec![ValType::I32]);
-            assert!(result.is_ok());
-            let func_ty = result.unwrap();
-            let result =
-                Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-            assert!(result.is_ok());
-            let host_func = result.unwrap();
-            import.add_func("add", host_func);
-
-            // create an Executor
-            let result = Config::create();
-            assert!(result.is_ok());
-            let config = result.unwrap();
-            let result = Executor::create(Some(&config), None);
-            assert!(result.is_ok());
-            let mut executor = result.unwrap();
-
-            let result = store_cloned.lock();
-            assert!(result.is_ok());
-            let mut store = result.unwrap();
-
-            let result = executor.register_import_module(&mut store, &import);
-            assert!(result.is_ok());
-
-            // get module instance
-            let result = store.module("extern_module");
-            assert!(result.is_ok());
-            let instance = result.unwrap();
-
-            // get function instance
-            let result = instance.get_func("add");
-            assert!(result.is_ok());
-            let add = result.unwrap();
-
-            // run the function
-            let result =
-                executor.run_func(&add, vec![WasmValue::from_i32(12), WasmValue::from_i32(21)]);
-            assert!(result.is_ok());
-            let returns = result.unwrap();
-            assert_eq!(returns[0].to_i32(), 33);
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_store_named_module() -> Result<(), Box<dyn std::error::Error>> {
-        // create a Config context
-        let result = Config::create();
-        assert!(result.is_ok());
-        let mut config = result.unwrap();
-        config.bulk_memory_operations(true);
-        assert!(config.bulk_memory_operations_enabled());
-
-        // create an executor with the given config
-        let mut executor = Executor::create(Some(&config), None)?;
-
-        // create a store
-        let mut store = Store::create()?;
-
-        // register a wasm module from a wasm file
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/fibonacci.wat");
-        let module = Loader::create(Some(&config))?.from_file(path)?;
-        Validator::create(Some(&config))?.validate(&module)?;
-        let instance = executor.register_named_module(&mut store, &module, "extern")?;
-
-        // check the name of the module
-        assert!(instance.name().is_some());
-        assert_eq!(instance.name().unwrap(), "extern");
-
-        // get the exported function named "fib"
-        let result = instance.get_func("fib");
-        assert!(result.is_ok());
-        let func = result.unwrap();
-
-        // check the type of the function
-        let result = func.ty();
-        assert!(result.is_ok());
-        let ty = result.unwrap();
-
-        // check the parameter types
-        let param_types = ty.params_type_iter().collect::<Vec<ValType>>();
-        assert_eq!(param_types, [ValType::I32]);
-
-        // check the return types
-        let return_types = ty.returns_type_iter().collect::<Vec<ValType>>();
-        assert_eq!(return_types, [ValType::I32]);
-
-        Ok(())
-    }
-
-    #[sys_host_function]
-    fn real_add(
-        _frame: CallingFrame,
-        inputs: Vec<WasmValue>,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
-        if inputs.len() != 2 {
-            return Err(HostFuncError::User(1));
-        }
-
-        let a = if inputs[0].ty() == ValType::I32 {
-            inputs[0].to_i32()
-        } else {
-            return Err(HostFuncError::User(2));
-        };
-
-        let b = if inputs[1].ty() == ValType::I32 {
-            inputs[1].to_i32()
-        } else {
-            return Err(HostFuncError::User(3));
-        };
-
-        let c = a + b;
-
-        Ok(vec![WasmValue::from_i32(c)])
-    }
-}

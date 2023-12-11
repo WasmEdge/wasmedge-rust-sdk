@@ -8,14 +8,14 @@ use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::r#async::fiber::TimeoutFiberFuture;
 
 use crate::{
-    instance::module::InnerInstance, types::WasmEdgeString, utils::check, Config, Engine, FuncRef,
-    Function, ImportModule, Instance, Module, Statistics, Store, WasiInstance, WasmEdgeResult,
-    WasmValue,
+    instance::{function::AsFunc, module::InnerInstance},
+    store::Store,
+    types::WasmEdgeString,
+    utils::check,
+    AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
 };
-use parking_lot::Mutex;
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 use std::os::raw::c_void;
-use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
@@ -86,11 +86,17 @@ pub(crate) unsafe fn init_signal_listen() {
 }
 
 /// Defines an execution environment for both pure WASM and compiled WASM.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Executor {
-    pub(crate) inner: Arc<InnerExecutor>,
-    pub(crate) registered: bool,
+    pub(crate) inner: InnerExecutor,
 }
+
+impl Drop for Executor {
+    fn drop(&mut self) {
+        unsafe { ffi::WasmEdge_ExecutorDelete(self.inner.0) }
+    }
+}
+
 impl Executor {
     /// Creates a new [executor](crate::Executor) to be associated with the given [config](crate::Config) and [statistics](crate::Statistics).
     ///
@@ -103,219 +109,41 @@ impl Executor {
     /// # Error
     ///
     /// If fail to create a [executor](crate::Executor), then an error is returned.
-    pub fn create(config: Option<&Config>, stat: Option<&mut Statistics>) -> WasmEdgeResult<Self> {
-        let ctx = match config {
-            Some(config) => match stat {
-                Some(stat) => unsafe { ffi::WasmEdge_ExecutorCreate(config.inner.0, stat.inner.0) },
-                None => unsafe {
-                    ffi::WasmEdge_ExecutorCreate(config.inner.0, std::ptr::null_mut())
-                },
-            },
-            None => match stat {
-                Some(stat) => unsafe {
-                    ffi::WasmEdge_ExecutorCreate(std::ptr::null_mut(), stat.inner.0)
-                },
-                None => unsafe {
-                    ffi::WasmEdge_ExecutorCreate(std::ptr::null_mut(), std::ptr::null_mut())
-                },
-            },
-        };
+    pub fn create(config: Option<&Config>, stat: Option<Statistics>) -> WasmEdgeResult<Self> {
+        let conf_ctx = config
+            .map(|cfg| cfg.inner.0)
+            .unwrap_or(std::ptr::null_mut());
+        let stat_ctx = stat
+            .map(|stat| stat.inner.0)
+            .unwrap_or(std::ptr::null_mut());
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ExecutorCreate)),
-            false => {
-                #[cfg(all(target_os = "linux", not(target_env = "musl")))]
-                unsafe {
-                    ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
-                        ctx,
-                        std::ptr::null_mut(),
-                        Some(pre_host_func),
-                    );
-                    ffi::WasmEdge_ExecutorExperimentalRegisterPostHostFunction(
-                        ctx,
-                        std::ptr::null_mut(),
-                        Some(post_host_func),
-                    );
-                }
+        let ctx = unsafe { ffi::WasmEdge_ExecutorCreate(conf_ctx, stat_ctx) };
 
-                Ok(Executor {
-                    inner: Arc::new(InnerExecutor(ctx)),
-                    registered: false,
-                })
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ExecutorCreate))
+        } else {
+            #[cfg(all(target_os = "linux", not(target_env = "musl")))]
+            unsafe {
+                ffi::WasmEdge_ExecutorExperimentalRegisterPreHostFunction(
+                    ctx,
+                    std::ptr::null_mut(),
+                    Some(pre_host_func),
+                );
+                ffi::WasmEdge_ExecutorExperimentalRegisterPostHostFunction(
+                    ctx,
+                    std::ptr::null_mut(),
+                    Some(post_host_func),
+                );
             }
+
+            Ok(Executor {
+                inner: InnerExecutor(ctx),
+            })
         }
     }
+}
 
-    /// Registers and instantiates the given [WASI instance](crate::WasiInstance) into a [store](crate::Store).
-    ///
-    /// # Arguments
-    ///
-    /// * `store` - The target [store](crate::Store), into which the given [wasi instance] is registered.
-    ///
-    /// * `instance` - The [WASI instance](crate::WasiInstance) to be registered.
-    ///
-    /// # Error
-    ///
-    /// If fail to register the given [WASI instance](crate::WasiInstance), then an error is returned.
-    pub fn register_wasi_instance(
-        &mut self,
-        store: &Store,
-        instance: &WasiInstance,
-    ) -> WasmEdgeResult<()> {
-        match instance {
-            #[cfg(not(feature = "async"))]
-            WasiInstance::Wasi(import) => unsafe {
-                check(ffi::WasmEdge_ExecutorRegisterImport(
-                    self.inner.0,
-                    store.inner.0,
-                    import.inner.0 as *const _,
-                ))?;
-            },
-            #[cfg(all(feature = "async", target_os = "linux"))]
-            WasiInstance::AsyncWasi(import) => unsafe {
-                check(ffi::WasmEdge_ExecutorRegisterImport(
-                    self.inner.0,
-                    store.inner.0,
-                    import.inner.0 as *const _,
-                ))?;
-            },
-        }
-
-        Ok(())
-    }
-
-    /// Registers and instantiates a [import module](crate::ImportModule) into a [store](crate::Store).
-    ///
-    /// # Arguments
-    ///
-    /// * `store` - The target [store](crate::Store), into which the given [import module](crate::ImportModule) is registered.
-    ///
-    /// * `import` - The WasmEdge [import module](crate::ImportModule) to be registered.
-    ///
-    /// # Error
-    ///
-    /// If fail to register the given [import module](crate::ImportModule), then an error is returned.
-    pub fn register_import_module<T>(
-        &mut self,
-        store: &Store,
-        import: &ImportModule<T>,
-    ) -> WasmEdgeResult<()>
-    where
-        T: ?Sized + Send + Sync + Clone,
-    {
-        unsafe {
-            check(ffi::WasmEdge_ExecutorRegisterImport(
-                self.inner.0,
-                store.inner.0,
-                import.inner.0 as *const _,
-            ))?;
-        }
-
-        Ok(())
-    }
-
-    /// Registers and instantiates a WasmEdge [module](crate::Module) into a store.
-    ///
-    /// Instantiates the given WasmEdge [module](crate::Module), including the [functions](crate::Function), [memories](crate::Memory), [tables](crate::Table), and [globals](crate::Global) it hosts; and then, registers the module [instance](crate::Instance) into the [store](crate::Store) with the given name.
-    ///
-    /// # Arguments
-    ///
-    /// * `store` - The target [store](crate::Store), into which the given [module](crate::Module) is registered.
-    ///
-    /// * `module` - A validated [module](crate::Module) to be registered.
-    ///
-    /// * `name` - The exported name of the registered [module](crate::Module).
-    ///
-    /// # Error
-    ///
-    /// If fail to register the given [module](crate::Module), then an error is returned.
-    pub fn register_named_module(
-        &mut self,
-        store: &Store,
-        module: &Module,
-        name: impl AsRef<str>,
-    ) -> WasmEdgeResult<Instance> {
-        let mut instance_ctx = std::ptr::null_mut();
-        let mod_name: WasmEdgeString = name.as_ref().into();
-        unsafe {
-            check(ffi::WasmEdge_ExecutorRegister(
-                self.inner.0,
-                &mut instance_ctx,
-                store.inner.0,
-                module.inner.0 as *const _,
-                mod_name.as_raw(),
-            ))?;
-        }
-
-        Ok(Instance {
-            inner: Arc::new(Mutex::new(InnerInstance(instance_ctx))),
-            registered: false,
-        })
-    }
-
-    /// Registers and instantiates a WasmEdge [module](crate::Module) into a [store](crate::Store) as an anonymous module.
-    ///
-    /// Notice that when a new module is instantiated into the [store](crate::Store), the old instantiated module is removed; in addition, ensure that the [imports](crate::ImportModule) the module depends on are already registered into the [store](crate::Store).
-    ///
-    ///
-    /// # Arguments
-    ///
-    /// * `store` - The [store](crate::Store), in which the [module](crate::Module) to be instantiated
-    /// is stored.
-    ///
-    /// * `ast_mod` - The target [module](crate::Module) to be instantiated.
-    ///
-    /// # Error
-    ///
-    /// If fail to instantiate the given [module](crate::Module), then an error is returned.
-    pub fn register_active_module(
-        &mut self,
-        store: &Store,
-        module: &Module,
-    ) -> WasmEdgeResult<Instance> {
-        let mut instance_ctx = std::ptr::null_mut();
-        unsafe {
-            check(ffi::WasmEdge_ExecutorInstantiate(
-                self.inner.0,
-                &mut instance_ctx,
-                store.inner.0,
-                module.inner.0 as *const _,
-            ))?;
-        }
-        Ok(Instance {
-            inner: Arc::new(Mutex::new(InnerInstance(instance_ctx))),
-            registered: false,
-        })
-    }
-
-    /// Registers plugin module instance into a [store](crate::Store).
-    ///
-    /// # Arguments
-    ///
-    /// * `store` - The [store](crate::Store), in which the [module](crate::Module) to be instantiated
-    /// is stored.
-    ///
-    /// * `instance` - The plugin module instance to be registered.
-    ///
-    /// # Error
-    ///
-    /// If fail to register the given plugin module instance, then an error is returned.
-    pub fn register_plugin_instance(
-        &mut self,
-        store: &Store,
-        instance: &Instance,
-    ) -> WasmEdgeResult<()> {
-        unsafe {
-            check(ffi::WasmEdge_ExecutorRegisterImport(
-                self.inner.0,
-                store.inner.0,
-                instance.inner.lock().0 as *const _,
-            ))?;
-        }
-
-        Ok(())
-    }
-
+impl Executor {
     /// Runs a host function instance and returns the results.
     ///
     /// # Arguments
@@ -328,28 +156,30 @@ impl Executor {
     ///
     /// If fail to run the host function, then an error is returned.
     pub fn call_func(
-        &self,
-        func: &Function,
+        &mut self,
+        func: &mut Function,
         params: impl IntoIterator<Item = WasmValue>,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
 
         // get the length of the function's returns
-        let func_ty = func.ty()?;
+        let func_ty = func
+            .ty()
+            .ok_or(WasmEdgeError::Func(wasmedge_types::error::FuncError::Type))?;
         let returns_len = func_ty.returns_len();
-        let mut returns = Vec::with_capacity(returns_len as usize);
+        let mut returns = Vec::with_capacity(returns_len);
 
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
-                func.inner.lock().0 as *const _,
+                func.get_func_raw(),
                 raw_params.as_ptr(),
                 raw_params.len() as u32,
                 returns.as_mut_ptr(),
-                returns_len,
+                returns_len as u32,
             ))?;
 
-            returns.set_len(returns_len as usize);
+            returns.set_len(returns_len);
         }
 
         Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
@@ -372,7 +202,7 @@ impl Executor {
     #[cfg_attr(docsrs, doc(cfg(all(target_os = "linux", not(target_env = "musl")))))]
     pub fn call_func_with_timeout(
         &self,
-        func: &Function,
+        func: &mut Function,
         params: impl IntoIterator<Item = WasmValue>,
         timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
@@ -380,9 +210,11 @@ impl Executor {
 
         let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
         // get the length of the function's returns
-        let func_ty = func.ty()?;
+        let func_ty = func
+            .ty()
+            .ok_or(WasmEdgeError::Func(wasmedge_types::error::FuncError::Type))?;
         let returns_len = func_ty.returns_len();
-        let mut returns = Vec::with_capacity(returns_len as usize);
+        let mut returns = Vec::with_capacity(returns_len);
 
         unsafe {
             init_signal_listen();
@@ -416,11 +248,11 @@ impl Executor {
                 if setjmp::sigsetjmp(env, 1) == 0 {
                     let r = check(ffi::WasmEdge_ExecutorInvoke(
                         self.inner.0,
-                        func.inner.lock().0 as *const _,
+                        func.get_func_raw(),
                         raw_params.as_ptr(),
                         raw_params.len() as u32,
                         returns.as_mut_ptr(),
-                        returns_len,
+                        returns_len as u32,
                     ));
                     libc::timer_delete(timerid);
                     r
@@ -430,7 +262,7 @@ impl Executor {
                 }
             })?;
 
-            returns.set_len(returns_len as usize);
+            returns.set_len(returns_len);
             Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
         }
     }
@@ -451,9 +283,9 @@ impl Executor {
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
     pub async fn call_func_async(
-        &self,
+        &mut self,
         async_state: &AsyncState,
-        func: &Function,
+        func: &mut Function,
         params: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         FiberFuture::on_fiber(async_state, || self.call_func(func, params))
@@ -481,11 +313,10 @@ impl Executor {
         docsrs,
         doc(cfg(all(feature = "async", target_os = "linux", not(target_env = "musl"))))
     )]
-    #[cfg(feature = "async")]
     pub async fn call_func_async_with_timeout(
-        &self,
+        &mut self,
         async_state: &AsyncState,
-        func: &Function,
+        func: &mut Function,
         params: impl IntoIterator<Item = WasmValue> + Send,
         timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
@@ -507,28 +338,28 @@ impl Executor {
     /// # Errors
     ///
     /// If fail to run the host function reference instance, then an error is returned.
-    pub fn call_func_ref(
-        &self,
-        func_ref: &FuncRef,
+    pub fn call_func_ref<FuncRef: AsFunc>(
+        &mut self,
+        func_ref: &mut FuncRef,
         params: impl IntoIterator<Item = WasmValue>,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
 
         // get the length of the function's returns
-        let func_ty = func_ref.ty()?;
+        let func_ty = func_ref.ty().unwrap();
         let returns_len = func_ty.returns_len();
-        let mut returns = Vec::with_capacity(returns_len as usize);
+        let mut returns = Vec::with_capacity(returns_len);
 
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
-                func_ref.inner.0 as *const _,
+                func_ref.get_func_raw(),
                 raw_params.as_ptr(),
                 raw_params.len() as u32,
                 returns.as_mut_ptr(),
-                returns_len,
+                returns_len as u32,
             ))?;
-            returns.set_len(returns_len as usize);
+            returns.set_len(returns_len);
         }
 
         Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
@@ -549,447 +380,125 @@ impl Executor {
     /// If fail to run the host function reference instance, then an error is returned.
     #[cfg(all(feature = "async", target_os = "linux"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-    pub async fn call_func_ref_async(
-        &self,
+    pub async fn call_func_ref_async<FuncRef: AsFunc + Send>(
+        &mut self,
         async_state: &AsyncState,
-        func_ref: &FuncRef,
+        func_ref: &mut FuncRef,
         params: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
         FiberFuture::on_fiber(async_state, || self.call_func_ref(func_ref, params))
             .await
             .unwrap()
     }
-
-    /// Provides a raw pointer to the inner Executor context.
-    #[cfg(feature = "ffi")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
-    pub fn as_ptr(&self) -> *const ffi::WasmEdge_ExecutorContext {
-        self.inner.0 as *const _
-    }
 }
-impl Drop for Executor {
-    fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            unsafe { ffi::WasmEdge_ExecutorDelete(self.inner.0) }
+
+impl Executor {
+    /// Registers and instantiates a [import module](crate::ImportModule) into a [store](crate::Store).
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - The target [store](crate::Store), into which the given [import module](crate::ImportModule) is registered.
+    ///
+    /// * `import` - The WasmEdge [import module](crate::ImportModule) to be registered.
+    ///
+    /// # Error
+    ///
+    /// If fail to register the given [import module](crate::ImportModule), then an error is returned.
+    pub fn register_import_module<T: AsInstance + ?Sized>(
+        &mut self,
+        store: &mut Store,
+        import: &T,
+    ) -> WasmEdgeResult<()> {
+        unsafe {
+            check(ffi::WasmEdge_ExecutorRegisterImport(
+                self.inner.0,
+                store.inner.0,
+                import.as_ptr(),
+            ))?;
+        }
+
+        Ok(())
+    }
+
+    /// Registers and instantiates a WasmEdge [module](crate::Module) into a store.
+    ///
+    /// Instantiates the given WasmEdge [module](crate::Module), including the [functions](crate::Function), [memories](crate::Memory), [tables](crate::Table), and [globals](crate::Global) it hosts; and then, registers the module [instance](crate::Instance) into the [store](crate::Store) with the given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - The target [store](crate::Store), into which the given [module](crate::Module) is registered.
+    ///
+    /// * `module` - A validated [module](crate::Module) to be registered.
+    ///
+    /// * `name` - The exported name of the registered [module](crate::Module).
+    ///
+    /// # Error
+    ///
+    /// If fail to register the given [module](crate::Module), then an error is returned.
+    pub fn register_named_module(
+        &mut self,
+        store: &mut Store,
+        module: &Module,
+        name: impl AsRef<str>,
+    ) -> WasmEdgeResult<Instance> {
+        let mut instance_ctx = std::ptr::null_mut();
+        let mod_name: WasmEdgeString = name.as_ref().into();
+        unsafe {
+            check(ffi::WasmEdge_ExecutorRegister(
+                self.inner.0,
+                &mut instance_ctx,
+                store.inner.0,
+                module.inner.0 as *const _,
+                mod_name.as_raw(),
+            ))?;
+
+            let inst = Instance {
+                inner: InnerInstance(instance_ctx),
+            };
+
+            Ok(inst)
+        }
+    }
+
+    /// Registers and instantiates a WasmEdge [module](crate::Module) into a [store](crate::Store) as an anonymous module.
+    ///
+    /// Notice that when a new module is instantiated into the [store](crate::Store), the old instantiated module is removed; in addition, ensure that the [imports](crate::ImportModule) the module depends on are already registered into the [store](crate::Store).
+    ///
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - The [store](crate::Store), in which the [module](crate::Module) to be instantiated
+    /// is stored.
+    ///
+    /// * `ast_mod` - The target [module](crate::Module) to be instantiated.
+    ///
+    /// # Error
+    ///
+    /// If fail to instantiate the given [module](crate::Module), then an error is returned.
+    pub fn register_active_module(
+        &mut self,
+        store: &mut Store,
+        module: &Module,
+    ) -> WasmEdgeResult<Instance> {
+        let mut instance_ctx = std::ptr::null_mut();
+        unsafe {
+            check(ffi::WasmEdge_ExecutorInstantiate(
+                self.inner.0,
+                &mut instance_ctx,
+                store.inner.0,
+                module.inner.0 as *const _,
+            ))?;
+
+            let inst = Instance {
+                inner: InnerInstance(instance_ctx),
+            };
+
+            Ok(inst)
         }
     }
 }
-impl Engine for Executor {
-    fn run_func(
-        &self,
-        func: &Function,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>> {
-        self.call_func(func, params)
-    }
 
-    fn run_func_ref(
-        &self,
-        func_ref: &FuncRef,
-        params: impl IntoIterator<Item = WasmValue>,
-    ) -> WasmEdgeResult<Vec<WasmValue>> {
-        self.call_func_ref(func_ref, params)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct InnerExecutor(pub(crate) *mut ffi::WasmEdge_ExecutorContext);
 unsafe impl Send for InnerExecutor {}
 unsafe impl Sync for InnerExecutor {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    cfg_if::cfg_if! {
-        if #[cfg(all(feature = "async", target_os = "linux"))] {
-            use crate::r#async::AsyncWasiModule;
-            use crate::{Loader, Validator};
-            use wasmedge_macro::sys_async_host_function;
-        }
-    }
-    use crate::{
-        AsImport, CallingFrame, Config, FuncType, Function, Global, GlobalType, ImportModule,
-        MemType, Memory, Statistics, Table, TableType, HOST_FUNCS, HOST_FUNC_FOOTPRINTS,
-    };
-    use std::{
-        sync::{Arc, Mutex},
-        thread,
-    };
-    use wasmedge_macro::sys_host_function;
-    use wasmedge_types::{error::HostFuncError, Mutability, NeverType, RefType, ValType};
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_executor_create() {
-        {
-            // create an Executor context without configuration and statistics
-            let result = Executor::create(None, None);
-            assert!(result.is_ok());
-            let executor = result.unwrap();
-            assert!(!executor.inner.0.is_null());
-        }
-
-        {
-            // create an Executor context with a given configuration
-            let result = Config::create();
-            assert!(result.is_ok());
-            let config = result.unwrap();
-            let result = Executor::create(Some(&config), None);
-            assert!(result.is_ok());
-            let executor = result.unwrap();
-            assert!(!executor.inner.0.is_null());
-        }
-
-        {
-            // create an Executor context with a given statistics
-            let result = Statistics::create();
-            assert!(result.is_ok());
-            let mut stat = result.unwrap();
-            let result = Executor::create(None, Some(&mut stat));
-            assert!(result.is_ok());
-            let executor = result.unwrap();
-            assert!(!executor.inner.0.is_null());
-        }
-
-        {
-            // create an Executor context with the given configuration and statistics.
-            let result = Config::create();
-            assert!(result.is_ok());
-            let config = result.unwrap();
-
-            let result = Statistics::create();
-            assert!(result.is_ok());
-            let mut stat = result.unwrap();
-
-            let result = Executor::create(Some(&config), Some(&mut stat));
-            assert!(result.is_ok());
-            let executor = result.unwrap();
-            assert!(!executor.inner.0.is_null());
-        }
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_executor_register_import() {
-        // create an Executor
-        let result = Executor::create(None, None);
-        assert!(result.is_ok());
-        let mut executor = result.unwrap();
-        assert!(!executor.inner.0.is_null());
-
-        // create a Store
-        let result = Store::create();
-        assert!(result.is_ok());
-        let mut store = result.unwrap();
-
-        // create an ImportObj module
-        let host_name = "extern";
-        let result = ImportModule::<NeverType>::create(host_name, None);
-        assert!(result.is_ok());
-        let mut import = result.unwrap();
-
-        assert_eq!(HOST_FUNCS.read().len(), 0);
-        assert_eq!(HOST_FUNC_FOOTPRINTS.lock().len(), 0);
-
-        // add host function "func-add": (externref, i32) -> (i32)
-        let result = FuncType::create([ValType::ExternRef, ValType::I32], [ValType::I32]);
-        assert!(result.is_ok());
-        let func_ty = result.unwrap();
-        let result = Function::create_sync_func::<NeverType>(&func_ty, Box::new(real_add), None, 0);
-        assert!(result.is_ok());
-        let host_func = result.unwrap();
-        // add the function into the import_obj module
-        import.add_func("func-add", host_func);
-
-        // create a Table instance
-        let result = TableType::create(RefType::FuncRef, 10, Some(20));
-        assert!(result.is_ok());
-        let table_ty = result.unwrap();
-        let result = Table::create(&table_ty);
-        assert!(result.is_ok());
-        let host_table = result.unwrap();
-        // add the table into the import_obj module
-        import.add_table("table", host_table);
-
-        // create a Memory instance
-        let result = MemType::create(1, Some(2), false);
-        assert!(result.is_ok());
-        let mem_ty = result.unwrap();
-        let result = Memory::create(&mem_ty);
-        assert!(result.is_ok());
-        let host_memory = result.unwrap();
-        // add the memory into the import_obj module
-        import.add_memory("memory", host_memory);
-
-        // create a Global instance
-        let result = GlobalType::create(ValType::I32, Mutability::Const);
-        assert!(result.is_ok());
-        let global_ty = result.unwrap();
-        let result = Global::create(&global_ty, WasmValue::from_i32(666));
-        assert!(result.is_ok());
-        let host_global = result.unwrap();
-        // add the global into import_obj module
-        import.add_global("global_i32", host_global);
-
-        let result = executor.register_import_module(&mut store, &import);
-        assert!(result.is_ok());
-
-        {
-            let result = store.module("extern");
-            assert!(result.is_ok());
-            let instance = result.unwrap();
-
-            let result = instance.get_global("global_i32");
-            assert!(result.is_ok());
-            let global = result.unwrap();
-            assert_eq!(global.get_value().to_i32(), 666);
-        }
-
-        let handle = thread::spawn(move || {
-            let result = store.module("extern");
-            assert!(result.is_ok());
-            let instance = result.unwrap();
-
-            let result = instance.get_global("global_i32");
-            assert!(result.is_ok());
-            let global = result.unwrap();
-            assert_eq!(global.get_value().to_i32(), 666);
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_executor_send() {
-        // create an Executor context with the given configuration and statistics.
-        let result = Config::create();
-        assert!(result.is_ok());
-        let config = result.unwrap();
-
-        let result = Statistics::create();
-        assert!(result.is_ok());
-        let mut stat = result.unwrap();
-
-        let result = Executor::create(Some(&config), Some(&mut stat));
-        assert!(result.is_ok());
-        let executor = result.unwrap();
-        assert!(!executor.inner.0.is_null());
-
-        let handle = thread::spawn(move || {
-            assert!(!executor.inner.0.is_null());
-            println!("{:?}", executor.inner);
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_result_states)]
-    fn test_executor_sync() {
-        // create an Executor context with the given configuration and statistics.
-        let result = Config::create();
-        assert!(result.is_ok());
-        let config = result.unwrap();
-
-        let result = Statistics::create();
-        assert!(result.is_ok());
-        let mut stat = result.unwrap();
-
-        let result = Executor::create(Some(&config), Some(&mut stat));
-        assert!(result.is_ok());
-        let executor = Arc::new(Mutex::new(result.unwrap()));
-
-        let executor_cloned = Arc::clone(&executor);
-        let handle = thread::spawn(move || {
-            let result = executor_cloned.lock();
-            assert!(result.is_ok());
-            let executor = result.unwrap();
-
-            assert!(!executor.inner.0.is_null());
-        });
-
-        handle.join().unwrap();
-    }
-
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[tokio::test]
-    async fn test_executor_register_async_wasi() -> Result<(), Box<dyn std::error::Error>> {
-        // create a Config
-        let mut config = Config::create()?;
-        config.wasi(true);
-        assert!(config.wasi_enabled());
-
-        // create an Executor
-        let result = Executor::create(None, None);
-        assert!(result.is_ok());
-        let mut executor = result.unwrap();
-        assert!(!executor.inner.0.is_null());
-
-        // create a Store
-        let result = Store::create();
-        assert!(result.is_ok());
-        let mut store = result.unwrap();
-
-        // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(Some(vec!["abc"]), Some(vec![("ENV", "1")]), None);
-        assert!(result.is_ok());
-        let async_wasi_module = result.unwrap();
-
-        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
-        let result = executor.register_wasi_instance(&mut store, &wasi_import);
-        assert!(result.is_ok());
-
-        // register async_wasi module into the store
-        let wasm_file = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/async_hello.wasm");
-        let module = Loader::create(None)?.from_file(&wasm_file)?;
-        Validator::create(None)?.validate(&module)?;
-        let instance = executor.register_active_module(&mut store, &module)?;
-        let fn_start = instance.get_func("_start")?;
-
-        async fn tick() {
-            let mut i = 0;
-            loop {
-                println!("[tick] i={i}");
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                i += 1;
-            }
-        }
-        tokio::spawn(tick());
-
-        dbg!("call async host func");
-
-        let async_state = AsyncState::new();
-        let _ = executor
-            .call_func_async(&async_state, &fn_start, [])
-            .await?;
-
-        dbg!("call async host func done");
-
-        Ok(())
-    }
-
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[tokio::test]
-    async fn test_executor_run_async_host_func() -> Result<(), Box<dyn std::error::Error>> {
-        fn async_hello(
-            _frame: CallingFrame,
-            _inputs: Vec<WasmValue>,
-            _: *mut std::os::raw::c_void,
-        ) -> Box<(dyn std::future::Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send)>
-        {
-            Box::new(async move {
-                for _ in 0..10 {
-                    println!("[async hello] say hello");
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                }
-
-                println!("[async hello] Done!");
-
-                Ok(vec![])
-            })
-        }
-
-        // create a Config
-        let mut config = Config::create()?;
-        config.wasi(true);
-        assert!(config.wasi_enabled());
-
-        // create an Executor
-        let result = Executor::create(None, None);
-        assert!(result.is_ok());
-        let mut executor = result.unwrap();
-        assert!(!executor.inner.0.is_null());
-
-        // create a Store
-        let result = Store::create();
-        assert!(result.is_ok());
-        let mut store = result.unwrap();
-
-        // create an AsyncWasiModule
-        let result = AsyncWasiModule::create(None, None, None);
-        assert!(result.is_ok());
-        let async_wasi_module = result.unwrap();
-
-        // register async_wasi module into the store
-        let wasi_import = WasiInstance::AsyncWasi(async_wasi_module);
-        let result = executor.register_wasi_instance(&mut store, &wasi_import);
-        assert!(result.is_ok());
-
-        let ty = FuncType::create([], [])?;
-        let async_hello_func =
-            Function::create_async_func::<NeverType>(&ty, Box::new(async_hello), None, 0)?;
-        let mut import = ImportModule::<NeverType>::create("extern", None)?;
-        import.add_func("async_hello", async_hello_func);
-
-        executor.register_import_module(&mut store, &import)?;
-
-        let extern_instance = store.module("extern")?;
-        let async_hello = extern_instance.get_func("async_hello")?;
-
-        async fn tick() {
-            let mut i = 0;
-            loop {
-                println!("[tick] i={i}");
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                i += 1;
-            }
-        }
-        tokio::spawn(tick());
-
-        let async_state = AsyncState::new();
-        let _ = executor
-            .call_func_async(&async_state, &async_hello, [])
-            .await?;
-
-        Ok(())
-    }
-
-    #[sys_host_function]
-    fn real_add(
-        _frame: CallingFrame,
-        inputs: Vec<WasmValue>,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
-        if inputs.len() != 2 {
-            return Err(HostFuncError::User(1));
-        }
-
-        let a = if inputs[0].ty() == ValType::I32 {
-            inputs[0].to_i32()
-        } else {
-            return Err(HostFuncError::User(2));
-        };
-
-        let b = if inputs[1].ty() == ValType::I32 {
-            inputs[1].to_i32()
-        } else {
-            return Err(HostFuncError::User(3));
-        };
-
-        let c = a + b;
-
-        Ok(vec![WasmValue::from_i32(c)])
-    }
-
-    #[cfg(all(feature = "async", target_os = "linux"))]
-    #[sys_async_host_function]
-    async fn async_hello<T>(
-        _frame: CallingFrame,
-        _inputs: Vec<WasmValue>,
-        _data: *mut std::os::raw::c_void,
-    ) -> Result<Vec<WasmValue>, HostFuncError> {
-        for _ in 0..10 {
-            println!("[async hello] say hello");
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
-
-        println!("[async hello] Done!");
-
-        Ok(vec![])
-    }
-}

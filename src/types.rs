@@ -1,8 +1,7 @@
 //! Defines the general types.
 
-use crate::FuncRef;
 use wasmedge_sys::WasmValue;
-use wasmedge_types::{self, FuncType, RefType};
+use wasmedge_types::{self, RefType};
 
 /// Defines runtime values that a WebAssembly module can either consume or produce.
 #[derive(Debug, Clone)]
@@ -28,7 +27,7 @@ pub enum Val {
     ///
     /// `FuncRef(None)` is the null function reference, created by `ref.null
     /// func` in Wasm.
-    FuncRef(Option<FuncRef>),
+    // FuncRef(Option<FuncRef>),
     /// A reference to opaque data in the wasm instance.
     ///
     /// `ExternRef(None)` is the null external reference, created by `ref.null
@@ -43,8 +42,8 @@ impl From<Val> for WasmValue {
             Val::F32(i) => WasmValue::from_f32(i),
             Val::F64(i) => WasmValue::from_f64(i),
             Val::V128(i) => WasmValue::from_v128(i),
-            Val::FuncRef(Some(func_ref)) => WasmValue::from_func_ref(func_ref.inner),
-            Val::FuncRef(None) => WasmValue::from_null_ref(RefType::FuncRef),
+            // Val::FuncRef(Some(func_ref)) => WasmValue::from_func_ref(func_ref.inner),
+            // Val::FuncRef(None) => WasmValue::from_null_ref(RefType::FuncRef),
             Val::ExternRef(Some(extern_ref)) => extern_ref.inner,
             Val::ExternRef(None) => WasmValue::from_null_ref(RefType::ExternRef),
         }
@@ -59,15 +58,8 @@ impl From<WasmValue> for Val {
             wasmedge_types::ValType::F64 => Val::F64(value.to_f64()),
             wasmedge_types::ValType::V128 => Val::V128(value.to_v128()),
             wasmedge_types::ValType::FuncRef => {
-                if value.is_null_ref() {
-                    Val::FuncRef(None)
-                } else {
-                    let inner = value
-                        .func_ref()
-                        .expect("[wasmedge] Failed to convert a WasmValue to a FuncRef.");
-                    let ty: FuncType = inner.ty().unwrap().into();
-                    Val::FuncRef(Some(FuncRef { inner, ty }))
-                }
+                // Waiting for the fun-ref related proposals to stabilize
+                Val::ExternRef(None)
             }
             wasmedge_types::ValType::ExternRef => {
                 if value.is_null_ref() {

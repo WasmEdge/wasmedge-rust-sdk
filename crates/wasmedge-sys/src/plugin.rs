@@ -2,16 +2,11 @@
 
 use super::ffi;
 use crate::{
-    instance::{module::InnerInstance, Function, Global, Memory, Table},
-    types::WasmEdgeString,
-    utils, AsImport, Instance, WasmEdgeResult,
+    instance::module::InnerInstance, types::WasmEdgeString, utils, Instance, WasmEdgeResult,
 };
-use parking_lot::Mutex;
-use std::{
-    ffi::{c_void, CString},
-    sync::Arc,
-};
-use wasmedge_types::error::{InstanceError, PluginError, WasmEdgeError};
+
+use std::ffi::CString;
+use wasmedge_types::error::{PluginError, WasmEdgeError};
 
 /// Defines the APIs for loading plugins and check the basic information of the loaded plugins.
 #[derive(Debug)]
@@ -102,6 +97,14 @@ impl PluginManager {
         }
     }
 
+    pub fn create_plugin_instance(
+        pname: impl AsRef<str>,
+        mname: impl AsRef<str>,
+    ) -> WasmEdgeResult<Instance> {
+        let plugin = Self::find(pname.as_ref())?;
+        plugin.mod_instance(mname.as_ref())
+    }
+
     /// Initializes the `wasmedge_process` plugin module instance with the parameters.
     ///
     /// # Arguments
@@ -146,7 +149,7 @@ impl PluginManager {
 }
 
 /// Represents a loaded plugin. It provides the APIs for accessing the plugin.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Plugin {
     pub(crate) inner: InnerPlugin,
 }
@@ -194,21 +197,20 @@ impl Plugin {
                 name.as_ref().into(),
             )))),
             false => Ok(Instance {
-                inner: Arc::new(Mutex::new(InnerInstance(ctx))),
-                registered: false,
+                inner: InnerInstance(ctx),
             }),
         }
     }
 
-    /// Provides a raw pointer to the inner Plugin context.
-    #[cfg(feature = "ffi")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
-    pub fn as_ptr(&self) -> *const ffi::WasmEdge_PluginContext {
+    /// # Safety
+    ///
+    /// The lifetime of the returned pointer must not exceed that of the object itself.
+    pub unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_PluginContext {
         self.inner.0 as *const _
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct InnerPlugin(pub(crate) *mut ffi::WasmEdge_PluginContext);
 unsafe impl Send for InnerPlugin {}
 unsafe impl Sync for InnerPlugin {}
@@ -498,138 +500,7 @@ impl PluginDescriptor {
 }
 
 /// Represents a Plugin module instance.
-#[derive(Debug, Clone)]
-pub struct PluginModule {
-    pub(crate) inner: Arc<InnerInstance>,
-    pub(crate) registered: bool,
-    name: String,
-    funcs: Vec<Function>,
-}
-impl Drop for PluginModule {
-    fn drop(&mut self) {
-        if !self.registered && Arc::strong_count(&self.inner) == 1 && !self.inner.0.is_null() {
-            unsafe {
-                ffi::WasmEdge_ModuleInstanceDelete(self.inner.0);
-            }
-
-            // drop the registered host functions
-            self.funcs.drain(..);
-        }
-    }
-}
-impl PluginModule {
-    /// Creates a module instance which is used to import host functions, tables, memories, and globals into a wasm module.
-    ///
-    /// # Argument
-    ///
-    /// * `name` - The name of the import module instance.
-    ///
-    /// * `host_data` - The host context data to be used in the module instance.
-    ///
-    /// * `finalizer` - the function to drop the host data. This argument is only available when `host_data` is set.
-    ///
-    /// # Error
-    ///
-    /// If fail to create the import module instance, then an error is returned.
-    pub fn create<T>(name: impl AsRef<str>, host_data: Option<Box<T>>) -> WasmEdgeResult<Self>
-    where
-        T: ?Sized + Send + Sync + Clone,
-    {
-        let raw_name = WasmEdgeString::from(name.as_ref());
-
-        let ctx = match host_data {
-            Some(data) => unsafe {
-                ffi::WasmEdge_ModuleInstanceCreateWithData(
-                    raw_name.as_raw(),
-                    Box::into_raw(data) as *mut c_void,
-                    Some(host_data_finalizer::<T>),
-                )
-            },
-            None => unsafe { ffi::WasmEdge_ModuleInstanceCreate(raw_name.as_raw()) },
-        };
-
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Instance(
-                InstanceError::CreateImportModule,
-            ))),
-            false => Ok(Self {
-                inner: std::sync::Arc::new(InnerInstance(ctx)),
-                registered: false,
-                name: name.as_ref().to_string(),
-                funcs: Vec::new(),
-            }),
-        }
-    }
-
-    /// Provides a raw pointer to the inner module instance context.
-    #[cfg(feature = "ffi")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
-    pub fn as_raw_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
-        self.inner.0 as *const _
-    }
-}
-impl AsImport for PluginModule {
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn add_func(&mut self, name: impl AsRef<str>, func: Function) {
-        self.funcs.push(func);
-        let f = self.funcs.last_mut().unwrap();
-
-        let func_name: WasmEdgeString = name.into();
-        unsafe {
-            ffi::WasmEdge_ModuleInstanceAddFunction(
-                self.inner.0,
-                func_name.as_raw(),
-                f.inner.lock().0,
-            );
-        }
-    }
-
-    fn add_table(&mut self, name: impl AsRef<str>, table: Table) {
-        let table_name: WasmEdgeString = name.as_ref().into();
-        unsafe {
-            ffi::WasmEdge_ModuleInstanceAddTable(
-                self.inner.0,
-                table_name.as_raw(),
-                table.inner.lock().0,
-            );
-        }
-        table.inner.lock().0 = std::ptr::null_mut();
-    }
-
-    fn add_memory(&mut self, name: impl AsRef<str>, memory: Memory) {
-        let mem_name: WasmEdgeString = name.as_ref().into();
-        unsafe {
-            ffi::WasmEdge_ModuleInstanceAddMemory(
-                self.inner.0,
-                mem_name.as_raw(),
-                memory.inner.lock().0,
-            );
-        }
-        memory.inner.lock().0 = std::ptr::null_mut();
-    }
-
-    fn add_global(&mut self, name: impl AsRef<str>, global: Global) {
-        let global_name: WasmEdgeString = name.as_ref().into();
-        unsafe {
-            ffi::WasmEdge_ModuleInstanceAddGlobal(
-                self.inner.0,
-                global_name.as_raw(),
-                global.inner.lock().0,
-            );
-        }
-        global.inner.lock().0 = std::ptr::null_mut();
-    }
-}
-
-pub(crate) unsafe extern "C" fn host_data_finalizer<T: Sized + Send>(
-    raw: *mut ::std::os::raw::c_void,
-) {
-    let host_data: Box<T> = Box::from_raw(raw as *mut T);
-    drop(host_data);
-}
+pub type PluginModule = Instance;
 
 #[cfg(test)]
 mod tests {
@@ -642,6 +513,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_plugin_wasmedge_process() {
+        use crate::AsInstance;
+
         use super::*;
 
         PluginManager::load_plugins_from_default_paths();
@@ -689,6 +562,8 @@ mod tests {
     #[cfg(all(target_os = "linux", feature = "wasi_crypto", not(feature = "static")))]
     #[test]
     fn test_plugin_wasi_crypto() {
+        use crate::AsInstance;
+
         use super::*;
 
         PluginManager::load_plugins_from_default_paths();
@@ -700,7 +575,7 @@ mod tests {
 
         // get `wasmedge_process` plugin
         let result = PluginManager::find("wasi_crypto");
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let plugin = result.unwrap();
         assert_eq!(plugin.name(), "wasi_crypto");
         assert_eq!(plugin.mod_count(), 5);
@@ -718,7 +593,7 @@ mod tests {
         // get `wasi_crypto_asymmetric_common` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_asymmetric_common");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(
                 instance.name().unwrap(),
@@ -755,7 +630,7 @@ mod tests {
         // get `wasi_crypto_common` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_common");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_common");
             assert_eq!(instance.func_len(), 10);
@@ -779,7 +654,7 @@ mod tests {
         // get `wasi_crypto_kx` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_kx");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_kx");
             assert_eq!(instance.func_len(), 3);
@@ -792,7 +667,7 @@ mod tests {
         // get `wasi_crypto_signatures` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_signatures");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_signatures");
             assert_eq!(instance.func_len(), 11);
@@ -817,7 +692,7 @@ mod tests {
         // get `wasi_crypto_symmetric` module instance from plugin
         {
             let result = plugin.mod_instance("wasi_crypto_symmetric");
-            assert!(result.is_some());
+            assert!(result.is_ok());
             let instance = result.unwrap();
             assert_eq!(instance.name().unwrap(), "wasi_ephemeral_crypto_symmetric");
             assert_eq!(instance.func_len(), 28);
