@@ -51,6 +51,8 @@ pub fn sock_open<M: Memory>(
     ty: __wasi_sock_type_t::Type,
     ro_fd_ptr: WasmPtr<__wasi_fd_t>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_open ...");
+
     let mut state = WasiSocketState::default();
     match af {
         __wasi_address_family_t::__WASI_ADDRESS_FAMILY_INET4 => {
@@ -73,6 +75,8 @@ pub fn sock_open<M: Memory>(
 
     let s = net::async_tokio::AsyncWasiSocket::open(state)?;
     let fd = ctx.vfs.insert_socket(s)?;
+    log::trace!("sock_open {fd}");
+
     mem.write_data(ro_fd_ptr, fd as __wasi_fd_t)?;
     Ok(())
 }
@@ -84,6 +88,8 @@ pub fn sock_bind<M: Memory>(
     addr_ptr: WasmPtr<__wasi_address_t>,
     port: u32,
 ) -> Result<(), Errno> {
+    log::trace!("sock_bind {fd}");
+
     let ip = parse_wasi_ip(mem, addr_ptr)?;
     let addr = SocketAddr::new(ip, port as u16);
 
@@ -98,6 +104,8 @@ pub fn sock_listen<M: Memory>(
     fd: __wasi_fd_t,
     backlog: u32,
 ) -> Result<(), Errno> {
+    log::trace!("sock_listen {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
     s.listen(backlog)?;
     Ok(())
@@ -109,6 +117,8 @@ pub async fn sock_accept<M: Memory>(
     fd: __wasi_fd_t,
     ro_fd_ptr: WasmPtr<__wasi_fd_t>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_accept {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
     let cs = s.accept().await?;
     let new_fd = ctx.vfs.insert_socket(cs)?;
@@ -123,6 +133,8 @@ pub async fn sock_connect<M: Memory>(
     addr_ptr: WasmPtr<__wasi_address_t>,
     port: u32,
 ) -> Result<(), Errno> {
+    log::trace!("sock_connect {fd}");
+
     let ip = parse_wasi_ip(mem, addr_ptr)?;
     let addr = SocketAddr::new(ip, port as u16);
 
@@ -140,6 +152,8 @@ pub async fn sock_recv<M: Memory>(
     ro_data_len_ptr: WasmPtr<__wasi_size_t>,
     ro_flags_ptr: WasmPtr<__wasi_roflags_t::Type>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_recv {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
     let mut iovec = mem.mut_iovec(buf_ptr, buf_len)?;
     let mut native_flags = 0;
@@ -175,6 +189,8 @@ pub async fn sock_recv_from<M: Memory>(
     ro_data_len_ptr: WasmPtr<__wasi_size_t>,
     ro_flags_ptr: WasmPtr<__wasi_roflags_t::Type>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_recv_from {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
 
     let wasi_addr = *(mem.mut_data(wasi_addr_ptr)?);
@@ -242,6 +258,8 @@ pub async fn sock_send<M: Memory>(
     _flags: __wasi_siflags_t,
     send_len_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_send {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
     let iovec = mem.get_iovec(buf_ptr, buf_len)?;
     let n = s.send(&iovec, MSG_NOSIGNAL).await?;
@@ -261,6 +279,8 @@ pub async fn sock_send_to<M: Memory>(
     _flags: __wasi_siflags_t,
     send_len_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_send_to {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
 
     let ip = parse_wasi_ip(mem, wasi_addr_ptr)?;
@@ -279,6 +299,8 @@ pub fn sock_shutdown<M: Memory>(
     fd: __wasi_fd_t,
     how: __wasi_sdflags_t::Type,
 ) -> Result<(), Errno> {
+    log::trace!("sock_shutdown {fd}");
+
     use std::net::Shutdown;
 
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
@@ -305,6 +327,8 @@ pub fn sock_getpeeraddr<M: Memory>(
     addr_type: WasmPtr<u32>,
     port_ptr: WasmPtr<u32>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_getpeeraddr {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
 
     let wasi_addr = *(mem.mut_data(wasi_addr_ptr)?);
@@ -342,6 +366,8 @@ pub fn sock_getlocaladdr<M: Memory>(
     addr_type: WasmPtr<u32>,
     port_ptr: WasmPtr<u32>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_getlocaladdr {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
 
     let wasi_addr = *(mem.mut_data(wasi_addr_ptr)?);
@@ -381,6 +407,8 @@ pub fn sock_getsockopt<M: Memory>(
     flag: WasmPtr<i32>,
     flag_size_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_getsockopt {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
 
     let flag_size = *(mem.get_data(flag_size_ptr)?);
@@ -524,6 +552,8 @@ pub fn sock_setsockopt<M: Memory>(
     flag: WasmPtr<i32>,
     flag_size: __wasi_size_t,
 ) -> Result<(), Errno> {
+    log::trace!("sock_setsockopt {fd}");
+
     let s = ctx.vfs.get_mut_socket(fd as usize)?;
 
     if level != __wasi_sock_opt_level_t::__WASI_SOCK_OPT_LEVEL_SOL_SOCKET {
@@ -635,6 +665,8 @@ pub async fn sock_lookup_ip<M: Memory>(
     addr_buf_max_len: __wasi_size_t,
     raddr_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("sock_lookup_ip");
+
     match lookup_type {
         __wasi_address_family_t::__WASI_ADDRESS_FAMILY_INET4 => {
             let host_name_buf = mem.get_slice(host_name_ptr, host_name_len as usize)?;

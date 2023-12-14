@@ -123,6 +123,8 @@ pub fn clock_res_get<M: Memory>(
     clock_id: __wasi_clockid_t::Type,
     resolution_ptr: WasmPtr<__wasi_timestamp_t>,
 ) -> Result<(), Errno> {
+    log::trace!("clock_res_get");
+
     let resolution = clock::wasi_clock_res_get(clock_id)?;
     let resolution_ptr = mem.mut_data(resolution_ptr)?;
     *resolution_ptr = resolution.to_le();
@@ -136,6 +138,8 @@ pub fn clock_time_get<M: Memory>(
     precision: __wasi_timestamp_t,
     time_ptr: WasmPtr<__wasi_timestamp_t>,
 ) -> Result<(), Errno> {
+    log::trace!("clock_time_get");
+
     let time = clock::wasi_clock_time_get(ctx, clock_id, precision)?;
     let time_ptr = mem.mut_data(time_ptr)?;
     *time_ptr = time.to_le();
@@ -148,6 +152,8 @@ pub fn random_get<M: Memory>(
     buf: WasmPtr<u8>,
     buf_len: __wasi_size_t,
 ) -> Result<(), Errno> {
+    log::trace!("random_get");
+
     let u8_buffer = mem.mut_slice(buf, buf_len as usize)?;
     getrandom::getrandom(u8_buffer).map_err(|_| Errno(__wasi_errno_t::__WASI_ERRNO_IO))
 }
@@ -197,6 +203,8 @@ pub fn fd_renumber<M: Memory>(
     from: __wasi_fd_t,
     to: __wasi_fd_t,
 ) -> Result<(), Errno> {
+    log::trace!("fd_renumber {from} {to}");
+
     ctx.vfs.fd_renumber(from as usize, to as usize)
 }
 
@@ -208,6 +216,8 @@ pub fn fd_advise<M: Memory>(
     len: __wasi_filesize_t,
     advice: __wasi_advice_t::Type,
 ) -> Result<(), Errno> {
+    log::trace!("fd_advise {fd}");
+
     ctx.vfs.fd_advise(fd as usize, offset, len, advice)
 }
 
@@ -218,10 +228,14 @@ pub fn fd_allocate<M: Memory>(
     offset: __wasi_filesize_t,
     len: __wasi_filesize_t,
 ) -> Result<(), Errno> {
+    log::trace!("fd_allocate {fd}");
+
     ctx.vfs.get_mut_file(fd as usize)?.fd_allocate(offset, len)
 }
 
 pub fn fd_close<M: Memory>(ctx: &mut WasiCtx, _mem: &mut M, fd: __wasi_fd_t) -> Result<(), Errno> {
+    log::trace!("fd_close {fd}");
+
     ctx.vfs.fd_close(fd as usize)
 }
 
@@ -233,6 +247,8 @@ pub fn fd_seek<M: Memory>(
     whence: __wasi_whence_t::Type,
     newoffset_ptr: WasmPtr<__wasi_filesize_t>,
 ) -> Result<(), Errno> {
+    log::trace!("fd_seek {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     let newoffset = mem.mut_data(newoffset_ptr)?;
     *newoffset = fs.fd_seek(offset, whence)?.to_le();
@@ -240,6 +256,8 @@ pub fn fd_seek<M: Memory>(
 }
 
 pub fn fd_sync<M: Memory>(ctx: &mut WasiCtx, _mem: &mut M, fd: __wasi_fd_t) -> Result<(), Errno> {
+    log::trace!("fd_sync {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     fs.fd_sync()
 }
@@ -249,6 +267,8 @@ pub fn fd_datasync<M: Memory>(
     _mem: &mut M,
     fd: __wasi_fd_t,
 ) -> Result<(), Errno> {
+    log::trace!("fd_datasync {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     fs.fd_datasync()
 }
@@ -259,6 +279,8 @@ pub fn fd_tell<M: Memory>(
     fd: __wasi_fd_t,
     offset: WasmPtr<__wasi_filesize_t>,
 ) -> Result<(), Errno> {
+    log::trace!("fd_tell {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     mem.write_data(offset, fs.fd_tell()?)
 }
@@ -269,8 +291,23 @@ pub fn fd_fdstat_get<M: Memory>(
     fd: __wasi_fd_t,
     buf_ptr: WasmPtr<__wasi_fdstat_t>,
 ) -> Result<(), Errno> {
-    let fs = ctx.vfs.get_file(fd as usize)?;
-    mem.write_data(buf_ptr, __wasi_fdstat_t::from(fs.fd_fdstat_get()?))
+    log::trace!("fd_fdstat_get {fd}");
+
+    let fd_stat;
+    #[cfg(all(unix, feature = "async_tokio"))]
+    {
+        if let Ok(s) = ctx.vfs.get_socket(fd as usize) {
+            fd_stat = s.fd_fdstat_get()?;
+        } else {
+            fd_stat = ctx.vfs.get_inode(fd as usize)?.fd_fdstat_get()?;
+        }
+    }
+    #[cfg(not(all(unix, feature = "async_tokio")))]
+    {
+        fd_stat = ctx.vfs.get_inode(fd as usize)?.fd_fdstat_get()?;
+    }
+
+    mem.write_data(buf_ptr, __wasi_fdstat_t::from(fd_stat))
 }
 
 pub fn fd_fdstat_set_flags<M: Memory>(
@@ -279,6 +316,8 @@ pub fn fd_fdstat_set_flags<M: Memory>(
     fd: __wasi_fd_t,
     flags: __wasi_fdflags_t::Type,
 ) -> Result<(), Errno> {
+    log::trace!("fd_fdstat_set_flags {fd}");
+
     let fdflags = FdFlags::from_bits_truncate(flags);
 
     if let Ok(fs) = ctx.vfs.get_mut_file(fd as usize) {
@@ -301,6 +340,8 @@ pub fn fd_fdstat_set_rights<M: Memory>(
     fs_rights_base: __wasi_rights_t::Type,
     fs_rights_inheriting: __wasi_rights_t::Type,
 ) -> Result<(), Errno> {
+    log::trace!("fd_fdstat_set_rights {fd}");
+
     let fs_rights_base = WASIRights::from_bits_truncate(fs_rights_base);
     let fs_rights_inheriting = WASIRights::from_bits_truncate(fs_rights_inheriting);
     ctx.vfs
@@ -314,6 +355,8 @@ pub fn fd_filestat_get<M: Memory>(
     fd: __wasi_fd_t,
     buf: WasmPtr<__wasi_filestat_t>,
 ) -> Result<(), Errno> {
+    log::trace!("fd_filestat_get {fd}");
+
     let filestat = ctx.vfs.get_inode(fd as usize)?.fd_filestat_get()?;
     mem.write_data(buf, __wasi_filestat_t::from(filestat))
 }
@@ -324,6 +367,8 @@ pub fn fd_filestat_set_size<M: Memory>(
     fd: __wasi_fd_t,
     st_size: __wasi_filesize_t,
 ) -> Result<(), Errno> {
+    log::trace!("fd_filestat_set_size {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     fs.fd_filestat_set_size(st_size)
 }
@@ -336,6 +381,8 @@ pub fn fd_filestat_set_times<M: Memory>(
     st_mtim: __wasi_timestamp_t,
     fst_flags: __wasi_fstflags_t::Type,
 ) -> Result<(), Errno> {
+    log::trace!("fd_filestat_set_times {fd}");
+
     let inode = ctx.vfs.get_mut_inode(fd as usize)?;
     inode.fd_filestat_set_times(st_atim, st_mtim, fst_flags)
 }
@@ -348,6 +395,8 @@ pub fn fd_read<M: Memory>(
     iovs_len: __wasi_size_t,
     nread: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("fd_read {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     let mut bufs = mem.mut_iovec(iovs, iovs_len)?;
     let n = fs.fd_read(&mut bufs)? as __wasi_size_t;
@@ -363,6 +412,8 @@ pub fn fd_pread<M: Memory>(
     offset: __wasi_filesize_t,
     nread: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("fd_pread {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     let mut bufs = mem.mut_iovec(iovs, iovs_len)?;
     let n = fs.fd_pread(&mut bufs, offset)? as __wasi_size_t;
@@ -378,6 +429,7 @@ pub fn fd_write<M: Memory>(
     nwritten: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
     log::trace!("fd_write {fd}");
+
     let fs = ctx.vfs.get_mut_file(fd as usize)?;
     let bufs = mem.get_iovec(iovs, iovs_len)?;
     let n = fs.fd_write(&bufs)? as __wasi_size_t;
@@ -559,6 +611,8 @@ pub fn path_rename<M: Memory>(
 
     let new_path = mem.get_slice(new_path, new_path_len as usize)?;
     let new_path = std::str::from_utf8(new_path).or(Err(Errno::__WASI_ERRNO_ILSEQ))?;
+
+    log::trace!("path_rename {old_fd} {old_path} {new_fd} {new_path}");
 
     ctx.vfs
         .path_rename(old_fd as usize, old_path, new_fd as usize, new_path)

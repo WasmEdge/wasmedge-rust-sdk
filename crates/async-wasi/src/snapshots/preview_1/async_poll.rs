@@ -44,47 +44,62 @@ async fn wait_fd(
 ) -> Result<(__wasi_event_t, Option<usize>), Errno> {
     let connecting = ConnectState::Connecting == socket.state.so_conn_state;
 
-    let handler = |r: Result<(), std::io::Error>, userdata, type_| match r {
-        Ok(_) => (
-            __wasi_event_t {
-                userdata,
-                error: 0,
-                type_,
-                fd_readwrite: __wasi_event_fd_readwrite_t {
-                    nbytes: 0,
-                    flags: 0,
+    let handler = |r: Result<(), std::io::Error>, userdata, type_| {
+        log::trace!("wait_fd {fd_index} {r:?}");
+        match r {
+            Ok(_) => (
+                __wasi_event_t {
+                    userdata,
+                    error: 0,
+                    type_,
+                    fd_readwrite: __wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: 0,
+                    },
                 },
-            },
-            if connecting { Some(fd_index) } else { None },
-        ),
-        Err(e) => (
-            __wasi_event_t {
-                userdata,
-                error: Errno::from(e).0,
-                type_,
-                fd_readwrite: __wasi_event_fd_readwrite_t {
-                    nbytes: 0,
-                    flags: __wasi_eventrwflags_t::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
+                if connecting { Some(fd_index) } else { None },
+            ),
+            Err(e) => (
+                __wasi_event_t {
+                    userdata,
+                    error: Errno::from(e).0,
+                    type_,
+                    fd_readwrite: __wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: __wasi_eventrwflags_t::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
+                    },
                 },
-            },
-            None,
-        ),
+                None,
+            ),
+        }
     };
 
     match type_ {
-        SubscriptionFdType::Write(userdata) => Ok(handler(
-            socket.writable().await,
-            userdata,
-            __wasi_eventtype_t::__WASI_EVENTTYPE_FD_WRITE,
-        )),
-        SubscriptionFdType::Read(userdata) => Ok(handler(
-            socket.readable().await,
-            userdata,
-            __wasi_eventtype_t::__WASI_EVENTTYPE_FD_READ,
-        )),
+        SubscriptionFdType::Write(userdata) => {
+            let write_result = socket.writable().await;
+            log::trace!("wait_fd {fd_index} writeable");
+
+            Ok(handler(
+                write_result,
+                userdata,
+                __wasi_eventtype_t::__WASI_EVENTTYPE_FD_WRITE,
+            ))
+        }
+        SubscriptionFdType::Read(userdata) => {
+            let read_result = socket.readable().await;
+            log::trace!("wait_fd {fd_index} readable");
+
+            Ok(handler(
+                read_result,
+                userdata,
+                __wasi_eventtype_t::__WASI_EVENTTYPE_FD_READ,
+            ))
+        }
         SubscriptionFdType::Both { read, write } => {
             tokio::select! {
                 read_result=socket.readable()=>{
+                    log::trace!("wait_fd {fd_index} readable");
+
                     Ok(handler(
                         read_result,
                         read,
@@ -92,6 +107,8 @@ async fn wait_fd(
                     ))
                 }
                 write_result=socket.writable()=>{
+                    log::trace!("wait_fd {fd_index} writeable");
+
                     Ok(handler(
                         write_result,
                         write,
@@ -261,6 +278,7 @@ pub async fn poll_oneoff<M: Memory>(
     nsubscriptions: __wasi_size_t,
     revents_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
+    log::trace!("poll_oneoff");
     poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
 }
 
@@ -280,6 +298,8 @@ async fn poll_oneoff_impl<M: Memory>(
 
     let subs = mem.get_slice(in_ptr, nsubscriptions)?;
     let prepoll = PrePoll::from_wasi_subscription(subs)?;
+
+    log::trace!("poll_oneoff subs prepoll={:#?}", prepoll);
 
     match prepoll {
         PrePoll::OnlyFd(fd_vec) => {

@@ -304,6 +304,17 @@ impl WasiFile for MemoryFile {
     }
 }
 
+impl From<Vec<u8>> for MemoryFile {
+    fn from(value: Vec<u8>) -> Self {
+        Self {
+            context: std::io::Cursor::new(value),
+            nlink: 0,
+            ino: 0,
+            is_open: false,
+        }
+    }
+}
+
 impl WasiVirtualFile for MemoryFile {
     fn create(ino: usize) -> Self {
         Self {
@@ -312,6 +323,10 @@ impl WasiVirtualFile for MemoryFile {
             ino,
             is_open: false,
         }
+    }
+
+    fn set_ino(&mut self, ino: usize) {
+        self.ino = ino;
     }
 
     fn inc_link(&mut self) -> Result<usize, Errno> {

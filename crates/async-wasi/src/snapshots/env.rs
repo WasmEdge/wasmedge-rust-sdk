@@ -195,15 +195,20 @@ impl VFS {
     }
 
     pub fn fd_close(&mut self, fd: usize) -> Result<(), Errno> {
-        log::trace!("VFS f_close({fd})");
-        if let Some(VFD::Inode { dev, ino }) = self.fds.get(fd) {
-            if *ino == 0 {
-                return Err(Errno::__WASI_ERRNO_NOTSUP);
+        match self.fds.get(fd) {
+            Some(VFD::Inode { dev, ino }) => {
+                if *ino == 0 {
+                    return Err(Errno::__WASI_ERRNO_NOTSUP);
+                }
+                if let Some(vfs) = self.vfs.get_mut(*dev) {
+                    vfs.fclose(*ino)?;
+                }
+                self.fds.remove(fd);
             }
-            if let Some(vfs) = self.vfs.get_mut(*dev) {
-                vfs.fclose(*ino)?;
+            Some(VFD::AsyncSocket(_)) => {
+                self.fds.remove(fd);
             }
-            self.fds.remove(fd);
+            None => {}
         }
 
         Ok(())

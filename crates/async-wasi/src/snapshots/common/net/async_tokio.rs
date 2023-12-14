@@ -11,7 +11,7 @@ use std::{
 };
 use tokio::io::{
     unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
-    AsyncReadExt, AsyncWriteExt,
+    AsyncReadExt, AsyncWriteExt, Interest,
 };
 
 #[derive(Debug)]
@@ -74,10 +74,20 @@ impl AsyncWasiSocketInner {
         self.register()
     }
 
-    fn accept(&mut self) -> io::Result<(Socket, SockAddr)> {
+    async fn accept(&mut self) -> io::Result<(Socket, SockAddr)> {
         match self {
             AsyncWasiSocketInner::PreOpen(s) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
-            AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().accept(),
+            AsyncWasiSocketInner::AsyncFd(s) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(100),
+                    s.async_io(Interest::READABLE, |s| s.accept()),
+                )
+                .await
+                {
+                    Ok(r) => r,
+                    Err(_) => Err(io::Error::from(io::ErrorKind::WouldBlock)),
+                }
+            }
         }
     }
 
@@ -107,6 +117,20 @@ impl AsyncWasiSocketInner {
         match self {
             AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::ENOTCONN)),
             AsyncWasiSocketInner::AsyncFd(s) => Ok(s.get_ref()),
+        }
+    }
+
+    fn get_async_socket(&self) -> io::Result<&AsyncFd<Socket>> {
+        match self {
+            AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::ENOTCONN)),
+            AsyncWasiSocketInner::AsyncFd(s) => Ok(s),
+        }
+    }
+
+    fn mut_async_socket(&mut self) -> io::Result<&mut AsyncFd<Socket>> {
+        match self {
+            AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::ENOTCONN)),
+            AsyncWasiSocketInner::AsyncFd(s) => Ok(s),
         }
     }
 
@@ -325,38 +349,32 @@ impl AsyncWasiSocket {
             ..Default::default()
         };
 
-        if self.state.nonblocking {
-            let (cs, _) = self.inner.accept()?;
-            cs.set_nonblocking(true)?;
-            new_state.peer_addr = cs.peer_addr().ok().and_then(|addr| addr.as_socket());
-            new_state.local_addr = cs.local_addr().ok().and_then(|addr| addr.as_socket());
+        log::trace!("accept nonblocking={}", self.state.nonblocking);
 
-            Ok(AsyncWasiSocket {
-                inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
-                state: Box::new(new_state),
-                writable: Default::default(),
-            })
+        let (cs, _) = if self.state.nonblocking {
+            let s = self
+                .inner
+                .get_async_socket()?
+                .async_io(Interest::READABLE, |s| s.accept());
+            tokio::time::timeout(std::time::Duration::from_millis(50), s)
+                .await
+                .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))?
         } else {
-            loop {
-                let mut guard = self.inner.readable().await?;
-                if let Ok(r) = guard.try_io(|s| {
-                    let (cs, _) = s.get_ref().accept()?;
-                    cs.set_nonblocking(true)?;
-                    new_state.peer_addr = cs.peer_addr().ok().and_then(|addr| addr.as_socket());
-                    new_state.local_addr = cs.local_addr().ok().and_then(|addr| addr.as_socket());
+            self.inner
+                .get_async_socket()?
+                .async_io(Interest::READABLE, |s| s.accept())
+                .await
+        }?;
 
-                    Ok(AsyncWasiSocket {
-                        inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
-                        state: Box::new(new_state.clone()),
-                        writable: Default::default(),
-                    })
-                }) {
-                    return r;
-                } else {
-                    continue;
-                }
-            }
-        }
+        cs.set_nonblocking(true)?;
+        new_state.peer_addr = cs.peer_addr().ok().and_then(|addr| addr.as_socket());
+        new_state.local_addr = cs.local_addr().ok().and_then(|addr| addr.as_socket());
+
+        Ok(AsyncWasiSocket {
+            inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
+            state: Box::new(new_state),
+            writable: Default::default(),
+        })
     }
 
     pub async fn connect(&mut self, addr: net::SocketAddr) -> io::Result<()> {
@@ -418,68 +436,54 @@ impl AsyncWasiSocket {
     ) -> io::Result<(usize, bool)> {
         use socket2::MaybeUninitSlice;
 
-        match (self.state.nonblocking, self.state.so_recv_timeout) {
+        let (n, f) = match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
-                let (n, f) = {
-                    let r = {
-                        // Safety: reference Socket::read_vectored
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::READABLE, |s| {
                         let bufs = unsafe {
                             &mut *(bufs as *mut [io::IoSliceMut<'_>]
                                 as *mut [MaybeUninitSlice<'_>])
                         };
-                        self.inner.get_ref()?.recv_vectored_with_flags(bufs, flags)
-                    };
-                    if let Err(e) = &r {
-                        if e.kind() == std::io::ErrorKind::WouldBlock {
-                            tokio::select! {
-                                s=self.inner.readable()=>{
-                                    s?.clear_ready();
-                                }
-                                else=>{}
-                            }
-                        }
-                    };
-                    r?
-                };
-                Ok((n, f.is_truncated()))
+                        s.recv_vectored_with_flags(bufs, flags)
+                    });
+
+                tokio::time::timeout(std::time::Duration::from_millis(50), f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
             }
-            (false, None) => loop {
-                let mut guard = self.inner.readable().await?;
-                if let Ok(r) = guard.try_io(|s| {
-                    // Safety: reference Socket::read_vectored
-                    let bufs = unsafe {
-                        &mut *(bufs as *mut [io::IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>])
-                    };
-                    let (n, f) = s.get_ref().recv_vectored_with_flags(bufs, flags)?;
-                    Ok((n, f.is_truncated()))
-                }) {
-                    break r;
-                } else {
-                    continue;
-                }
-            },
-            (_, Some(timeout)) => handle_timeout_result(
-                tokio::time::timeout(timeout, async {
-                    loop {
-                        let mut guard = self.inner.readable().await?;
-                        if let Ok(r) = guard.try_io(|s| {
-                            // Safety: reference Socket::read_vectored
-                            let bufs = unsafe {
-                                &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                    as *mut [MaybeUninitSlice<'_>])
-                            };
-                            let (n, f) = s.get_ref().recv_vectored_with_flags(bufs, flags)?;
-                            Ok((n, f.is_truncated()))
-                        }) {
-                            break r;
-                        } else {
-                            continue;
-                        }
-                    }
-                })
-                .await,
-            ),
-        }
+            (false, None) => {
+                self.inner
+                    .get_async_socket()?
+                    .async_io(Interest::READABLE, |s| {
+                        let bufs = unsafe {
+                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
+                                as *mut [MaybeUninitSlice<'_>])
+                        };
+                        s.recv_vectored_with_flags(bufs, flags)
+                    })
+                    .await?
+            }
+            (_, Some(timeout)) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::READABLE, |s| {
+                        let bufs = unsafe {
+                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
+                                as *mut [MaybeUninitSlice<'_>])
+                        };
+                        s.recv_vectored_with_flags(bufs, flags)
+                    });
+
+                tokio::time::timeout(timeout, f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
+            }
+        };
+
+        Ok((n, f.is_truncated()))
     }
 
     pub async fn recv_from<'a>(
@@ -489,59 +493,55 @@ impl AsyncWasiSocket {
     ) -> io::Result<(usize, bool, Option<net::SocketAddr>)> {
         use socket2::MaybeUninitSlice;
 
-        match (self.state.nonblocking, self.state.so_recv_timeout) {
+        let (n, f, addr) = match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
-                // Safety: reference Socket::read_vectored
-                let bufs = unsafe {
-                    &mut *(bufs as *mut [io::IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>])
-                };
-
-                let (n, f, addr) = self
+                let f = self
                     .inner
-                    .get_ref()?
-                    .recv_from_vectored_with_flags(bufs, flags)?;
-                Ok((n, f.is_truncated(), addr.as_socket()))
+                    .get_async_socket()?
+                    .async_io(Interest::READABLE, |s| {
+                        let bufs = unsafe {
+                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
+                                as *mut [MaybeUninitSlice<'_>])
+                        };
+                        s.recv_from_vectored_with_flags(bufs, flags)
+                    });
+
+                tokio::time::timeout(std::time::Duration::from_millis(50), f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
             }
-            (false, None) => loop {
-                let mut guard = self.inner.readable().await?;
-                if let Ok(r) = guard.try_io(|s| {
-                    // Safety: reference Socket::read_vectored
-                    let bufs = unsafe {
-                        &mut *(bufs as *mut [io::IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>])
-                    };
+            (false, None) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::READABLE, |s| {
+                        let bufs = unsafe {
+                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
+                                as *mut [MaybeUninitSlice<'_>])
+                        };
+                        s.recv_from_vectored_with_flags(bufs, flags)
+                    });
 
-                    let (n, f, addr) = s.get_ref().recv_from_vectored_with_flags(bufs, flags)?;
-                    Ok((n, f.is_truncated(), addr.as_socket()))
-                }) {
-                    break r;
-                } else {
-                    continue;
-                }
-            },
-            (_, Some(timeout)) => handle_timeout_result(
-                tokio::time::timeout(timeout, async {
-                    loop {
-                        let mut guard = self.inner.readable().await?;
-                        if let Ok(r) = guard.try_io(|s| {
-                            // Safety: reference Socket::read_vectored
-                            let bufs = unsafe {
-                                &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                    as *mut [MaybeUninitSlice<'_>])
-                            };
+                f.await?
+            }
+            (_, Some(timeout)) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::READABLE, |s| {
+                        let bufs = unsafe {
+                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
+                                as *mut [MaybeUninitSlice<'_>])
+                        };
+                        s.recv_from_vectored_with_flags(bufs, flags)
+                    });
 
-                            let (n, f, addr) =
-                                s.get_ref().recv_from_vectored_with_flags(bufs, flags)?;
-                            Ok((n, f.is_truncated(), addr.as_socket()))
-                        }) {
-                            break r;
-                        } else {
-                            continue;
-                        }
-                    }
-                })
-                .await,
-            ),
-        }
+                tokio::time::timeout(timeout, f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
+            }
+        };
+        Ok((n, f.is_truncated(), addr.as_socket()))
     }
 
     pub async fn send<'a>(
@@ -549,32 +549,44 @@ impl AsyncWasiSocket {
         bufs: &[io::IoSlice<'a>],
         flags: libc::c_int,
     ) -> io::Result<usize> {
-        match (self.state.nonblocking, self.state.so_send_timeout) {
-            (true, None) => self.inner.get_ref()?.send_vectored_with_flags(bufs, flags),
-            (false, None) => loop {
-                let mut guard = self.inner.writable().await?;
-                if let Ok(r) = guard.try_io(|s| s.get_ref().send_vectored_with_flags(bufs, flags)) {
-                    break r;
-                } else {
-                    continue;
-                }
-            },
-            (_, Some(timeout)) => handle_timeout_result(
-                tokio::time::timeout(timeout, async {
-                    loop {
-                        let mut guard = self.inner.writable().await?;
-                        if let Ok(r) =
-                            guard.try_io(|s| s.get_ref().send_vectored_with_flags(bufs, flags))
-                        {
-                            break r;
-                        } else {
-                            continue;
-                        }
-                    }
-                })
-                .await,
-            ),
-        }
+        let n = match (self.state.nonblocking, self.state.so_send_timeout) {
+            (true, None) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::WRITABLE, |s| {
+                        s.send_vectored_with_flags(bufs, flags)
+                    });
+
+                tokio::time::timeout(std::time::Duration::from_millis(50), f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
+            }
+            (false, None) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::WRITABLE, |s| {
+                        s.send_vectored_with_flags(bufs, flags)
+                    });
+
+                f.await?
+            }
+            (_, Some(timeout)) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::WRITABLE, |s| {
+                        s.send_vectored_with_flags(bufs, flags)
+                    });
+
+                tokio::time::timeout(timeout, f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
+            }
+        };
+
+        Ok(n)
     }
 
     pub async fn send_to<'a>(
@@ -586,39 +598,44 @@ impl AsyncWasiSocket {
         use socket2::{MaybeUninitSlice, SockAddr};
         let address = SockAddr::from(addr);
 
-        match (self.state.nonblocking, self.state.so_send_timeout) {
-            (true, None) => self
-                .inner
-                .get_ref()?
-                .send_to_vectored_with_flags(bufs, &address, flags),
-            (false, None) => loop {
-                let mut guard = self.inner.writable().await?;
-                if let Ok(r) = guard.try_io(|s| {
-                    s.get_ref()
-                        .send_to_vectored_with_flags(bufs, &address, flags)
-                }) {
-                    break r;
-                } else {
-                    continue;
-                }
-            },
-            (_, Some(timeout)) => handle_timeout_result(
-                tokio::time::timeout(timeout, async {
-                    loop {
-                        let mut guard = self.inner.writable().await?;
-                        if let Ok(r) = guard.try_io(|s| {
-                            s.get_ref()
-                                .send_to_vectored_with_flags(bufs, &address, flags)
-                        }) {
-                            break r;
-                        } else {
-                            continue;
-                        }
-                    }
-                })
-                .await,
-            ),
-        }
+        let n = match (self.state.nonblocking, self.state.so_send_timeout) {
+            (true, None) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::WRITABLE, |s| {
+                        s.send_to_vectored_with_flags(bufs, &address, flags)
+                    });
+
+                tokio::time::timeout(std::time::Duration::from_millis(50), f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
+            }
+            (false, None) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::WRITABLE, |s| {
+                        s.send_to_vectored_with_flags(bufs, &address, flags)
+                    });
+
+                f.await?
+            }
+            (_, Some(timeout)) => {
+                let f = self
+                    .inner
+                    .get_async_socket()?
+                    .async_io(Interest::WRITABLE, |s| {
+                        s.send_to_vectored_with_flags(bufs, &address, flags)
+                    });
+
+                tokio::time::timeout(timeout, f)
+                    .await
+                    .map_err(|_| io::Error::from(io::ErrorKind::WouldBlock))??
+            }
+        };
+
+        Ok(n)
     }
 
     pub fn shutdown(&mut self, how: net::Shutdown) -> io::Result<()> {

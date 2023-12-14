@@ -34,6 +34,8 @@ pub trait WasiVirtualDir: WasiDir {
 pub trait WasiVirtualFile: WasiFile {
     fn create(ino: usize) -> Self;
 
+    fn set_ino(&mut self, ino: usize);
+
     fn inc_link(&mut self) -> Result<usize, Errno>;
 
     fn dec_link(&mut self) -> Result<usize, Errno>;
@@ -119,6 +121,28 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiVirtualSys<D, F> {
         }
     }
 
+    pub fn create_file<P: AsRef<Path>>(
+        &mut self,
+        dir_ino: usize,
+        path: &P,
+        mut new_file: F,
+    ) -> Result<usize, Errno> {
+        new_file.inc_link();
+        let new_ino = self.inodes.insert(Inode::File(new_file));
+
+        if let Some(Inode::Dir(dir)) = self.inodes.get_mut(dir_ino) {
+            let r = dir.link_inode(path, new_ino);
+            if r.is_err() {
+                self.inodes.remove(new_ino);
+            }
+            r?;
+            Ok(new_ino)
+        } else {
+            self.inodes.remove(new_ino);
+            Err(Errno::__WASI_ERRNO_NOTDIR)
+        }
+    }
+
     pub fn find_inode_index<P: AsRef<Path>>(
         &self,
         dir_ino: usize,
@@ -199,6 +223,8 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
         fdflags: FdFlags,
     ) -> Result<usize, Errno> {
         let path: &Path = path.as_ref();
+
+        log::trace!("WasiVirtualSys path_open {oflags:?} {path:?} {dir_ino}");
 
         if fdflags.intersects(FdFlags::DSYNC | FdFlags::SYNC | FdFlags::RSYNC) {
             return Err(Errno::__WASI_ERRNO_NOSYS);
