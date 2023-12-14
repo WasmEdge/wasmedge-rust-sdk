@@ -25,19 +25,17 @@ pub struct MemoryDir {
     is_open: usize,
 }
 
-// impl Drop for MemoryDir {
-//     fn drop(&mut self) {
-//         println!("{self:#?}")
-//     }
-// }
+impl Drop for MemoryDir {
+    fn drop(&mut self) {
+        log::trace!("\r\n{self:#?}")
+    }
+}
 
-// impl Drop for MemoryFile {
-//     fn drop(&mut self) {
-//         let c = self.context.get_ref().clone();
-//         println!("{self:#?}");
-//         println!("{:#?}", String::from_utf8(c));
-//     }
-// }
+impl Drop for MemoryFile {
+    fn drop(&mut self) {
+        log::trace!("\r\n{self:#?} \r\n {:#?}", self.context.get_ref());
+    }
+}
 
 impl WasiNode for MemoryDir {
     fn fd_fdstat_get(&self) -> Result<super::FdStat, Errno> {
@@ -189,7 +187,7 @@ impl WasiVirtualDir for MemoryDir {
     }
 
     fn close(&mut self) -> usize {
-        if self.is_open > 1 {
+        if self.is_open > 0 {
             self.is_open -= 1;
         }
         self.nlink
@@ -335,7 +333,7 @@ impl WasiVirtualFile for MemoryFile {
     }
 
     fn dec_link(&mut self) -> Result<usize, Errno> {
-        if self.nlink > 1 {
+        if self.nlink > 0 {
             self.nlink -= 1;
         }
         Ok(self.nlink)

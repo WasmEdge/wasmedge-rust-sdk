@@ -123,6 +123,8 @@ impl VFS {
             fs_rights_inheriting,
             fdflags,
         )?;
+        log::trace!("path_open {dirfd} {path} fd=({dev},{ino})");
+
         if ino != 0 {
             Ok(self.fds.insert(VFD::Inode { dev, ino }))
         } else {
@@ -137,33 +139,51 @@ impl VFS {
         new_dir_fd: usize,
         new_path: &str,
     ) -> Result<(), Errno> {
-        if let (
-            VFD::Inode {
-                dev: dev0,
-                ino: ino0,
-            },
-            VFD::Inode {
-                dev: dev1,
-                ino: ino1,
-            },
-        ) = self
-            .fds
-            .get2_mut(old_dir_fd, new_dir_fd)
-            .ok_or(Errno::__WASI_ERRNO_BADF)?
-        {
-            if *dev0 != *dev1 {
-                return Err(Errno::__WASI_ERRNO_XDEV);
-            }
+        log::trace!(
+            "path_rename {:?} {:?}",
+            (old_dir_fd, old_path),
+            (new_dir_fd, new_path)
+        );
 
-            if *ino0 != 0 || *ino1 != 0 {
-                return Err(Errno::__WASI_ERRNO_ACCES);
+        let (dev0, ino0, dev1, ino1) = if old_dir_fd == new_dir_fd {
+            if let VFD::Inode { dev, ino } =
+                self.fds.get(old_dir_fd).ok_or(Errno::__WASI_ERRNO_BADF)?
+            {
+                (*dev, *ino, *dev, *ino)
+            } else {
+                return Err(Errno::__WASI_ERRNO_BADF);
             }
-
-            let vfs = self.vfs.get_mut(*dev0).ok_or(Errno::__WASI_ERRNO_BADF)?;
-            vfs.path_rename(old_path, new_path)
         } else {
-            Err(Errno::__WASI_ERRNO_BADF)
+            if let (
+                VFD::Inode {
+                    dev: dev0,
+                    ino: ino0,
+                },
+                VFD::Inode {
+                    dev: dev1,
+                    ino: ino1,
+                },
+            ) = self
+                .fds
+                .get2_mut(old_dir_fd, new_dir_fd)
+                .ok_or(Errno::__WASI_ERRNO_BADF)?
+            {
+                (*dev0, *ino0, *dev1, *ino1)
+            } else {
+                return Err(Errno::__WASI_ERRNO_BADF);
+            }
+        };
+
+        if dev0 != dev1 {
+            return Err(Errno::__WASI_ERRNO_XDEV);
         }
+
+        if ino0 != 0 || ino1 != 0 {
+            return Err(Errno::__WASI_ERRNO_ACCES);
+        }
+
+        let vfs = self.vfs.get_mut(dev0).ok_or(Errno::__WASI_ERRNO_BADF)?;
+        vfs.path_rename(ino0, old_path, ino1, new_path)
     }
 
     pub fn fd_preopen_get(&mut self, fd: usize) -> Result<String, Errno> {
@@ -201,6 +221,7 @@ impl VFS {
                     return Err(Errno::__WASI_ERRNO_NOTSUP);
                 }
                 if let Some(vfs) = self.vfs.get_mut(*dev) {
+                    log::trace!("fclose fd=({},{})", *dev, *ino);
                     vfs.fclose(*ino)?;
                 }
                 self.fds.remove(fd);

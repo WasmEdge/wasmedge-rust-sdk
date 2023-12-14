@@ -128,6 +128,8 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiVirtualSys<D, F> {
         mut new_file: F,
     ) -> Result<usize, Errno> {
         new_file.inc_link();
+        let new_ino = self.inodes.vacant_key();
+        new_file.set_ino(new_ino);
         let new_ino = self.inodes.insert(Inode::File(new_file));
 
         if let Some(Inode::Dir(dir)) = self.inodes.get_mut(dir_ino) {
@@ -290,8 +292,16 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
         }
     }
 
-    fn path_rename(&mut self, old_path: &str, new_path: &str) -> Result<(), Errno> {
-        todo!()
+    fn path_rename(
+        &mut self,
+        old_dir: usize,
+        old_path: &str,
+        new_dir: usize,
+        new_path: &str,
+    ) -> Result<(), Errno> {
+        self.path_link_file(old_dir, old_path, new_dir, new_path)?;
+        self.path_unlink_file(old_dir, old_path)?;
+        Ok(())
     }
 
     fn path_create_directory(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno> {
@@ -327,6 +337,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
             Inode::Dir(dir) => dir.close(),
             Inode::File(file) => file.close(),
         };
+        log::trace!("WasiVirtualSys path_open {ino} close_r={i}");
         if i == 0 {
             self.inodes.remove(ino);
         }
@@ -364,28 +375,95 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
         self.dir_rights.can(WASIRights::PATH_UNLINK_FILE)?;
 
         let path: &Path = path.as_ref();
-        let file_ino = self.find_inode_index(dir_ino, &path)?;
+        let parent_dir_ino = if let Some(parent) = path.parent() {
+            self.find_inode_index(dir_ino, &parent)?
+        } else {
+            dir_ino
+        };
 
-        match self
+        let file_name = path
+            .file_name()
+            .ok_or(Errno::__WASI_ERRNO_INVAL)?
+            .to_str()
+            .ok_or(Errno::__WASI_ERRNO_ILSEQ)?;
+
+        let file_ino = if let Inode::Dir(dir) = self
             .inodes
-            .get2_mut(dir_ino, file_ino)
-            .ok_or(Errno::__WASI_ERRNO_NOENT)?
+            .get_mut(parent_dir_ino)
+            .ok_or(Errno::__WASI_ERRNO_BADF)?
         {
-            (Inode::Dir(dir), Inode::File(file)) => {
-                dir.unlink_inode(&path)?;
-                let link = file.dec_link()?;
-                if link == 0 && !file.is_open() {
-                    self.inodes.try_remove(file_ino);
-                }
-                Ok(())
+            let file_ino = dir
+                .find_inode(&file_name)
+                .ok_or(Errno::__WASI_ERRNO_NOENT)?;
+            dir.unlink_inode(&file_name)?;
+            file_ino
+        } else {
+            return Err(Errno::__WASI_ERRNO_NOTDIR);
+        };
+
+        if let Inode::File(file) = self
+            .inodes
+            .get_mut(file_ino)
+            .ok_or(Errno::__WASI_ERRNO_BADF)?
+        {
+            let link = file.dec_link()?;
+            log::trace!("WasiVirtualSys path_unlink_file {file_ino} nlink = {link}");
+
+            if link == 0 && !file.is_open() {
+                self.inodes.try_remove(file_ino);
             }
-            (Inode::File(dir), _) => Err(Errno::__WASI_ERRNO_NOTDIR),
-            (Inode::Dir(_), Inode::Dir(_)) => Err(Errno::__WASI_ERRNO_ISDIR),
+            Ok(())
+        } else {
+            return Err(Errno::__WASI_ERRNO_ISDIR);
         }
     }
 
-    fn path_link_file(&mut self, _src_path: &str, _dst_path: &str) -> Result<(), Errno> {
-        Err(Errno::__WASI_ERRNO_NOSYS)
+    fn path_link_file(
+        &mut self,
+        old_dir: usize,
+        old_path: &str,
+        new_dir: usize,
+        new_path: &str,
+    ) -> Result<(), Errno> {
+        log::trace!("WasiVirtualSys path_link_file ({old_dir} {old_path})  ({new_dir} {new_path})");
+
+        let old_inode = self.find_inode_index(old_dir, &old_path)?;
+
+        let new_path: &Path = new_path.as_ref();
+        let parent_dir_ino = if let Some(parent) = new_path.parent() {
+            self.find_inode_index(new_dir, &parent)?
+        } else {
+            new_dir
+        };
+
+        let file_name = new_path
+            .file_name()
+            .ok_or(Errno::__WASI_ERRNO_INVAL)?
+            .to_str()
+            .ok_or(Errno::__WASI_ERRNO_ILSEQ)?;
+
+        if let Inode::Dir(dir) = self
+            .inodes
+            .get_mut(parent_dir_ino)
+            .ok_or(Errno::__WASI_ERRNO_BADF)?
+        {
+            dir.link_inode(&file_name, old_inode)?;
+        } else {
+            return Err(Errno::__WASI_ERRNO_NOTDIR);
+        };
+
+        if let Inode::File(file) = self
+            .inodes
+            .get_mut(old_inode)
+            .ok_or(Errno::__WASI_ERRNO_BADF)?
+        {
+            let nlink = file.inc_link()?;
+            log::trace!("WasiVirtualSys path_link_file {old_inode} nlink = {nlink}");
+        } else {
+            return Err(Errno::__WASI_ERRNO_ISDIR);
+        };
+
+        Ok(())
     }
 
     fn path_filestat_get(
@@ -1076,9 +1154,26 @@ impl WasiFileSys for DiskFileSys {
         Ok(ino)
     }
 
-    fn path_rename(&mut self, old_path: &str, new_path: &str) -> Result<(), Errno> {
-        let old_path = self.get_absolutize_path(&old_path)?;
-        let new_path = self.get_absolutize_path(&new_path)?;
+    fn path_rename(
+        &mut self,
+        old_dir: usize,
+        old_path: &str,
+        new_dir: usize,
+        new_path: &str,
+    ) -> Result<(), Errno> {
+        let old_parent_dir = match self.inodes.get(old_dir).ok_or(Errno::__WASI_ERRNO_BADF)? {
+            DiskInode::Dir(dir) => dir,
+            _ => return Err(Errno::__WASI_ERRNO_NOTDIR),
+        };
+
+        let old_path = old_parent_dir.get_absolutize_path(&old_path)?;
+
+        let new_parent_dir = match self.inodes.get(new_dir).ok_or(Errno::__WASI_ERRNO_BADF)? {
+            DiskInode::Dir(dir) => dir,
+            _ => return Err(Errno::__WASI_ERRNO_NOTDIR),
+        };
+        let new_path = new_parent_dir.get_absolutize_path(&new_path)?;
+
         Ok(std::fs::rename(old_path, new_path)?)
     }
 
@@ -1118,7 +1213,13 @@ impl WasiFileSys for DiskFileSys {
         Ok(())
     }
 
-    fn path_link_file(&mut self, _src_path: &str, _dst_path: &str) -> Result<(), Errno> {
+    fn path_link_file(
+        &mut self,
+        old_dir: Self::Index,
+        old_path: &str,
+        new_dir: Self::Index,
+        new_path: &str,
+    ) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_NOSYS)
     }
 
@@ -1487,7 +1588,13 @@ where
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    fn path_rename(&mut self, old_path: &str, new_path: &str) -> Result<(), Errno> {
+    fn path_rename(
+        &mut self,
+        old_dir: usize,
+        old_path: &str,
+        new_dir: usize,
+        new_path: &str,
+    ) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
@@ -1503,7 +1610,13 @@ where
         Err(Errno::__WASI_ERRNO_BADF)
     }
 
-    fn path_link_file(&mut self, src_path: &str, dst_path: &str) -> Result<(), Errno> {
+    fn path_link_file(
+        &mut self,
+        old_dir: Self::Index,
+        old_path: &str,
+        new_dir: Self::Index,
+        new_path: &str,
+    ) -> Result<(), Errno> {
         Err(Errno::__WASI_ERRNO_BADF)
     }
 

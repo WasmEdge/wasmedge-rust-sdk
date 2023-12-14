@@ -427,11 +427,23 @@ pub trait WasiFileSys {
         fs_rights_inheriting: WASIRights,
         fdflags: FdFlags,
     ) -> Result<Self::Index, Errno>;
-    fn path_rename(&mut self, old_path: &str, new_path: &str) -> Result<(), Errno>;
+    fn path_rename(
+        &mut self,
+        old_dir: Self::Index,
+        old_path: &str,
+        new_dir: Self::Index,
+        new_path: &str,
+    ) -> Result<(), Errno>;
     fn path_create_directory(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno>;
     fn path_remove_directory(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno>;
     fn path_unlink_file(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno>;
-    fn path_link_file(&mut self, src_path: &str, dst_path: &str) -> Result<(), Errno>;
+    fn path_link_file(
+        &mut self,
+        old_dir: Self::Index,
+        old_path: &str,
+        new_dir: Self::Index,
+        new_path: &str,
+    ) -> Result<(), Errno>;
     fn path_filestat_get(
         &self,
         dir_ino: Self::Index,
