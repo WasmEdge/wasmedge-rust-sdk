@@ -158,7 +158,7 @@ impl WasiVirtualDir for MemoryDir {
         path: &P,
     ) -> Result<(), crate::snapshots::env::Errno> {
         let path = path.as_ref().to_str().ok_or(Errno::__WASI_ERRNO_ILSEQ)?;
-        if let Some(_) = self.paths.remove(path) {
+        if self.paths.remove(path).is_some() {
             Ok(())
         } else {
             Err(Errno::__WASI_ERRNO_NOENT)

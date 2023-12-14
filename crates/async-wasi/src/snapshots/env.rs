@@ -153,25 +153,23 @@ impl VFS {
             } else {
                 return Err(Errno::__WASI_ERRNO_BADF);
             }
+        } else if let (
+            VFD::Inode {
+                dev: dev0,
+                ino: ino0,
+            },
+            VFD::Inode {
+                dev: dev1,
+                ino: ino1,
+            },
+        ) = self
+            .fds
+            .get2_mut(old_dir_fd, new_dir_fd)
+            .ok_or(Errno::__WASI_ERRNO_BADF)?
+        {
+            (*dev0, *ino0, *dev1, *ino1)
         } else {
-            if let (
-                VFD::Inode {
-                    dev: dev0,
-                    ino: ino0,
-                },
-                VFD::Inode {
-                    dev: dev1,
-                    ino: ino1,
-                },
-            ) = self
-                .fds
-                .get2_mut(old_dir_fd, new_dir_fd)
-                .ok_or(Errno::__WASI_ERRNO_BADF)?
-            {
-                (*dev0, *ino0, *dev1, *ino1)
-            } else {
-                return Err(Errno::__WASI_ERRNO_BADF);
-            }
+            return Err(Errno::__WASI_ERRNO_BADF);
         };
 
         if dev0 != dev1 {
@@ -201,7 +199,7 @@ impl VFS {
     }
 
     pub fn fd_renumber(&mut self, _from: usize, _to: usize) -> Result<(), Errno> {
-        return Err(Errno::__WASI_ERRNO_NOTSUP);
+        Err(Errno::__WASI_ERRNO_NOTSUP)
     }
 
     pub fn fd_advise(

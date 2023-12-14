@@ -110,6 +110,12 @@ pub struct WasiVirtualSys<D: WasiVirtualDir, F: WasiVirtualFile> {
     file_rights: WASIRights,
 }
 
+impl<D: WasiVirtualDir, F: WasiVirtualFile> Default for WasiVirtualSys<D, F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiVirtualSys<D, F> {
     pub fn new() -> Self {
         let mut inodes = Slab::new();
@@ -232,13 +238,12 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
             return Err(Errno::__WASI_ERRNO_NOSYS);
         }
 
-        if oflags.intersects(OFlags::DIRECTORY) {
-            if oflags.contains(OFlags::CREATE)
+        if oflags.intersects(OFlags::DIRECTORY)
+            && (oflags.contains(OFlags::CREATE)
                 || oflags.contains(OFlags::EXCLUSIVE)
-                || oflags.contains(OFlags::TRUNCATE)
-            {
-                return Err(Errno::__WASI_ERRNO_INVAL);
-            }
+                || oflags.contains(OFlags::TRUNCATE))
+        {
+            return Err(Errno::__WASI_ERRNO_INVAL);
         }
 
         let read = fs_rights_base.contains(WASIRights::FD_READ);
@@ -249,7 +254,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
             Ok(ino) => match self.inodes.get_mut(ino).ok_or(Errno::__WASI_ERRNO_NOENT)? {
                 Inode::Dir(dir) => {
                     dir.open();
-                    return Ok(ino);
+                    Ok(ino)
                 }
                 Inode::File(file) => {
                     if oflags.intersects(OFlags::DIRECTORY) {
@@ -262,7 +267,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
 
                     file.open();
 
-                    return Ok(ino);
+                    Ok(ino)
                 }
             },
             Err(e) => {
@@ -287,7 +292,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
                     return Ok(ino);
                 }
 
-                return Err(Errno::__WASI_ERRNO_EXIST);
+                Err(Errno::__WASI_ERRNO_EXIST)
             }
         }
     }
@@ -414,7 +419,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
             }
             Ok(())
         } else {
-            return Err(Errno::__WASI_ERRNO_ISDIR);
+            Err(Errno::__WASI_ERRNO_ISDIR)
         }
     }
 
@@ -1073,13 +1078,12 @@ impl WasiFileSys for DiskFileSys {
             return Err(Errno::__WASI_ERRNO_NOSYS);
         }
 
-        if oflags.intersects(OFlags::DIRECTORY) {
-            if oflags.contains(OFlags::CREATE)
+        if oflags.intersects(OFlags::DIRECTORY)
+            && (oflags.contains(OFlags::CREATE)
                 || oflags.contains(OFlags::EXCLUSIVE)
-                || oflags.contains(OFlags::TRUNCATE)
-            {
-                return Err(Errno::__WASI_ERRNO_INVAL);
-            }
+                || oflags.contains(OFlags::TRUNCATE))
+        {
+            return Err(Errno::__WASI_ERRNO_INVAL);
         }
 
         let parent_dir = match self.inodes.get(dir_ino).ok_or(Errno::__WASI_ERRNO_BADF)? {
