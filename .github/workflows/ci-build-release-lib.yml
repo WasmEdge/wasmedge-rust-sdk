@@ -1,0 +1,262 @@
+name: Continuous integration with the release version of Wasmedge
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/rust-static-lib.yml"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - ".github/workflows/standalone.yml"
+      - ".github/workflows/rust-static-lib.yml"
+
+jobs:
+  build_ubuntu:
+    name: Ubuntu
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-20.04]
+        rust: [1.73, 1.72, 1.71]
+    container:
+      image: wasmedge/wasmedge:ubuntu-build-clang
+
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
+          ldconfig
+
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Rustfmt
+        run: cargo +nightly fmt --all -- --check
+
+      - name: Clippy check
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Build Async-Hello for Testing
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasi
+          rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasi -o hello.wasm
+
+      - name: Test Rust SDK
+        run: |
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
+          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1
+
+      - name: Test Rust SDK with async feature
+        run: |
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
+          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
+
+  build_fedora:
+    name: Fedora
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [1.73, 1.72, 1.71]
+    container:
+      image: fedora:latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install WasmEdge
+        run: |
+          dnf update -y
+          dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
+          dnf install -y which python python3-pip
+          git config --global --add safe.directory $(pwd)
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
+          ldconfig
+
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Rustfmt
+        run: cargo +nightly fmt --all -- --check
+
+      - name: Clippy check
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Build Async-Hello for Testing
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasi
+          rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasi -o hello.wasm
+
+      - name: Test Rust SDK
+        run: |
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
+          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
+
+      - name: Test Rust SDK with async feature
+        run: |
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
+          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
+
+  build_macos:
+    name: MacOS
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-12, macos-13]
+        rust: [1.73, 1.72, 1.71]
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
+
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Run cargo fmt
+        run: cargo +nightly fmt --all -- --check
+
+      - name: Clippy
+        run: |
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,ffi -- -D warnings
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Test Rust Bindings
+        run: |
+          export DYLD_LIBRARY_PATH="/Users/runner/.wasmedge/lib"
+          cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --nocapture --test-threads=1
+
+  build_windows:
+    name: Windows
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        rust: [1.73, 1.72, 1.71]
+    env:
+      WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
+      WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build
+      WASMEDGE_PLUGIN_PATH: ${{ github.workspace }}\WasmEdge\build\wasmedge\plugins\wasmedge_process
+      LD_LIBRARY_PATH: ${{ github.workspace }}\WasmEdge\build\lib\api
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Checkout WasmEdge Runtime
+        uses: actions/checkout@v3
+        with:
+          repository: WasmEdge/WasmEdge
+          path: WasmEdge
+          fetch-depth: 0
+
+      - name: Install dependency
+        uses: crazy-max/ghaction-chocolatey@v2
+        with:
+          args: install cmake ninja vswhere
+
+      - name: Set up Windows 10 SDK
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
+        with:
+          sdk-version: 19041
+
+      - name: Build WasmEdge with Release mode
+        working-directory: WasmEdge
+        run: |
+          git checkout $(git describe --tags --abbrev=0)
+          $vsPath = (vswhere -latest -property installationPath)
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          $llvm = "LLVM-13.0.1-win64.zip"
+          curl -sLO https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-13.0.1/LLVM-13.0.1-win64.zip -o $llvm
+          Expand-Archive -Path $llvm
+          $llvm_dir = "$pwd\\LLVM-13.0.1-win64\\LLVM-13.0.1-win64\\lib\\cmake\\llvm"
+          $Env:CC = "clang-cl"
+          $Env:CXX = "clang-cl"
+          $cmake_sys_version = "10.0.19041.0"
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
+          cmake --build build
+
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Rustfmt
+        run: cargo +nightly fmt --all -- --check
+
+      - name: Clippy
+        run: |
+          $vsPath = (vswhere -latest -property installationPath)
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          cargo +nightly clippy -V
+          cargo +nightly clippy --lib --examples --features aot,ffi -- -D warnings
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Test Rust Bindings
+        run: |
+          $vsPath = (vswhere -latest -property installationPath)
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\wasmedge-rust-sdk\wasmedge-rust-sdk\WasmEdge\build\lib\api"
+          cargo test --workspace --exclude async-wasi --features aot,ffi --locked -- --nocapture --test-threads=1
