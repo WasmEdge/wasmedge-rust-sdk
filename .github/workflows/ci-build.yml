@@ -6,11 +6,15 @@ concurrency:
 
 on:
   push:
+    branches:
+      - 'bump/**'
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
       - ".github/workflows/rust-static-lib.yml"
   pull_request:
+    branches:
+      - 'bump/**'
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
