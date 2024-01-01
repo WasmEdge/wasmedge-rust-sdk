@@ -205,6 +205,7 @@ impl Subscription {
     }
 }
 
+#[derive(Debug)]
 pub enum PrePoll {
     OnlyFd(Vec<SubscriptionFd>),
     OnlyClock(SubscriptionClock),

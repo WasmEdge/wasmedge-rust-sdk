@@ -4,7 +4,6 @@ use crate::snapshots::{
         net::{self, ConnectState, SubscriptionClock},
         types::*,
     },
-    env::VFD,
     Errno, WasiCtx,
 };
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -45,47 +44,62 @@ async fn wait_fd(
 ) -> Result<(__wasi_event_t, Option<usize>), Errno> {
     let connecting = ConnectState::Connecting == socket.state.so_conn_state;
 
-    let handler = |r: Result<(), std::io::Error>, userdata, type_| match r {
-        Ok(_) => (
-            __wasi_event_t {
-                userdata,
-                error: 0,
-                type_,
-                fd_readwrite: __wasi_event_fd_readwrite_t {
-                    nbytes: 0,
-                    flags: 0,
+    let handler = |r: Result<(), std::io::Error>, userdata, type_| {
+        log::trace!("wait_fd {fd_index} {r:?}");
+        match r {
+            Ok(_) => (
+                __wasi_event_t {
+                    userdata,
+                    error: 0,
+                    type_,
+                    fd_readwrite: __wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: 0,
+                    },
                 },
-            },
-            if connecting { Some(fd_index) } else { None },
-        ),
-        Err(e) => (
-            __wasi_event_t {
-                userdata,
-                error: Errno::from(e).0,
-                type_,
-                fd_readwrite: __wasi_event_fd_readwrite_t {
-                    nbytes: 0,
-                    flags: __wasi_eventrwflags_t::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
+                if connecting { Some(fd_index) } else { None },
+            ),
+            Err(e) => (
+                __wasi_event_t {
+                    userdata,
+                    error: Errno::from(e).0,
+                    type_,
+                    fd_readwrite: __wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: __wasi_eventrwflags_t::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
+                    },
                 },
-            },
-            None,
-        ),
+                None,
+            ),
+        }
     };
 
     match type_ {
-        SubscriptionFdType::Write(userdata) => Ok(handler(
-            socket.writable().await,
-            userdata,
-            __wasi_eventtype_t::__WASI_EVENTTYPE_FD_WRITE,
-        )),
-        SubscriptionFdType::Read(userdata) => Ok(handler(
-            socket.readable().await,
-            userdata,
-            __wasi_eventtype_t::__WASI_EVENTTYPE_FD_READ,
-        )),
+        SubscriptionFdType::Write(userdata) => {
+            let write_result = socket.writable().await;
+            log::trace!("wait_fd {fd_index} writeable");
+
+            Ok(handler(
+                write_result,
+                userdata,
+                __wasi_eventtype_t::__WASI_EVENTTYPE_FD_WRITE,
+            ))
+        }
+        SubscriptionFdType::Read(userdata) => {
+            let read_result = socket.readable().await;
+            log::trace!("wait_fd {fd_index} readable");
+
+            Ok(handler(
+                read_result,
+                userdata,
+                __wasi_eventtype_t::__WASI_EVENTTYPE_FD_READ,
+            ))
+        }
         SubscriptionFdType::Both { read, write } => {
             tokio::select! {
                 read_result=socket.readable()=>{
+                    log::trace!("wait_fd {fd_index} readable");
+
                     Ok(handler(
                         read_result,
                         read,
@@ -93,6 +107,8 @@ async fn wait_fd(
                     ))
                 }
                 write_result=socket.writable()=>{
+                    log::trace!("wait_fd {fd_index} writeable");
+
                     Ok(handler(
                         write_result,
                         write,
@@ -119,16 +135,12 @@ async fn poll_only_fd<M: Memory>(
         let mut wait = FuturesUnordered::new();
         let mut i = 0;
         for SubscriptionFd { fd, type_ } in fd_vec {
-            match ctx.get_vfd(fd) {
-                Ok(VFD::AsyncSocket(s)) => {
+            match ctx.vfs.get_socket(fd as usize) {
+                Ok(s) => {
                     wait.push(wait_fd(fd as usize, s, type_));
                 }
-                Ok(VFD::Closed) => {
-                    r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_IO);
-                    i += 1;
-                }
-                _ => {
-                    r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_NOTSOCK);
+                Err(e) => {
+                    r_events[i] = handle_event_err(type_, e);
                     i += 1;
                 }
             }
@@ -166,7 +178,7 @@ async fn poll_only_fd<M: Memory>(
             drop(wait);
 
             for fd in connected_fds.into_iter().flatten() {
-                if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
+                if let Ok(socket) = ctx.vfs.get_mut_socket(fd) {
                     socket.state.so_conn_state = ConnectState::Connected;
                     socket.writable.set_writable();
                 }
@@ -193,16 +205,12 @@ async fn poll_fd_timeout<M: Memory>(
     let mut i = 0;
 
     for SubscriptionFd { fd, type_ } in fd_vec {
-        match ctx.get_vfd(fd) {
-            Ok(VFD::AsyncSocket(s)) => {
+        match ctx.vfs.get_socket(fd as usize) {
+            Ok(s) => {
                 wait.push(wait_fd(fd as usize, s, type_));
             }
-            Ok(VFD::Closed) => {
-                r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_IO);
-                i += 1;
-            }
-            _ => {
-                r_events[i] = handle_event_err(type_, Errno::__WASI_ERRNO_NOTSOCK);
+            Err(e) => {
+                r_events[i] = handle_event_err(type_, e);
                 i += 1;
             }
         }
@@ -252,7 +260,7 @@ async fn poll_fd_timeout<M: Memory>(
         drop(wait);
 
         for fd in connected_fds.into_iter().flatten() {
-            if let Ok(VFD::AsyncSocket(socket)) = ctx.get_mut_vfd(fd as i32) {
+            if let Ok(socket) = ctx.vfs.get_mut_socket(fd) {
                 socket.state.so_conn_state = ConnectState::Connected;
             }
         }
@@ -260,79 +268,6 @@ async fn poll_fd_timeout<M: Memory>(
 
     mem.write_data(revents_num_ptr, i as u32)?;
     Ok(())
-}
-
-#[cfg(feature = "serialize")]
-use crate::snapshots::serialize::IoState;
-#[cfg(feature = "serialize")]
-fn record_state(
-    ctx: &mut WasiCtx,
-    ddl: Option<std::time::SystemTime>,
-    fds: &[SubscriptionFd],
-) -> IoState {
-    use crate::snapshots::serialize::PollFdState;
-    let mut save_fds = vec![];
-    for fd in fds {
-        let poll_read;
-        let poll_write;
-
-        match fd.type_ {
-            SubscriptionFdType::Read(_) => {
-                poll_read = true;
-                poll_write = false;
-            }
-            SubscriptionFdType::Write(_) => {
-                poll_read = false;
-                poll_write = true;
-            }
-            SubscriptionFdType::Both { .. } => {
-                poll_read = true;
-                poll_write = true;
-            }
-        }
-
-        if let Ok(VFD::AsyncSocket(s)) = ctx.get_mut_vfd(fd.fd) {
-            match s.state.sock_type.1 {
-                net::SocketType::Datagram => {
-                    // save
-                    save_fds.push(PollFdState::UdpSocket {
-                        fd: fd.fd,
-                        socket_type: s.state.sock_type.into(),
-                        local_addr: s.get_local().ok(),
-                        peer_addr: s.get_peer().ok(),
-                        poll_read,
-                        poll_write,
-                    })
-                }
-                net::SocketType::Stream if s.state.shutdown.is_none() => {
-                    // save
-                    match s.state.so_conn_state {
-                        net::ConnectState::Empty => {}
-                        net::ConnectState::Listening => save_fds.push(PollFdState::TcpListener {
-                            fd: fd.fd,
-                            socket_type: s.state.sock_type.into(),
-                            local_addr: s.get_local().ok(),
-                            peer_addr: s.get_peer().ok(),
-                            poll_read,
-                            poll_write,
-                        }),
-                        net::ConnectState::Connected | net::ConnectState::Connecting => save_fds
-                            .push(PollFdState::TcpStream {
-                                fd: fd.fd,
-                                socket_type: s.state.sock_type.into(),
-                                local_addr: s.get_local().ok(),
-                                peer_addr: s.get_peer().ok(),
-                                poll_read,
-                                poll_write,
-                            }),
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    IoState::Poll { fds: save_fds, ddl }
 }
 
 pub async fn poll_oneoff<M: Memory>(
@@ -343,16 +278,8 @@ pub async fn poll_oneoff<M: Memory>(
     nsubscriptions: __wasi_size_t,
     revents_num_ptr: WasmPtr<__wasi_size_t>,
 ) -> Result<(), Errno> {
-    #[cfg(feature = "serialize")]
-    {
-        let r = poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await;
-        ctx.io_state = IoState::Empty;
-        r
-    }
-    #[cfg(not(feature = "serialize"))]
-    {
-        poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
-    }
+    log::trace!("poll_oneoff");
+    poll_oneoff_impl(ctx, mem, in_ptr, out_ptr, nsubscriptions, revents_num_ptr).await
 }
 
 async fn poll_oneoff_impl<M: Memory>(
@@ -372,29 +299,13 @@ async fn poll_oneoff_impl<M: Memory>(
     let subs = mem.get_slice(in_ptr, nsubscriptions)?;
     let prepoll = PrePoll::from_wasi_subscription(subs)?;
 
+    log::trace!("poll_oneoff subs prepoll={:#?}", prepoll);
+
     match prepoll {
         PrePoll::OnlyFd(fd_vec) => {
-            #[cfg(feature = "serialize")]
-            {
-                if let IoState::Empty = ctx.io_state {
-                    ctx.io_state = record_state(ctx, None, &fd_vec);
-                }
-            }
             poll_only_fd(ctx, mem, out_ptr, nsubscriptions, revents_num_ptr, fd_vec).await?;
         }
         PrePoll::ClockAndFd(clock, fd_vec) => {
-            #[cfg(feature = "serialize")]
-            let clock = {
-                // resume
-                if let IoState::Poll { ddl, .. } = ctx.io_state {
-                    let mut clock_clone = clock;
-                    clock_clone.timeout = ddl;
-                    clock_clone
-                } else {
-                    ctx.io_state = record_state(ctx, clock.timeout, &fd_vec);
-                    clock
-                }
-            };
             poll_fd_timeout(
                 ctx,
                 mem,
@@ -416,16 +327,6 @@ async fn poll_oneoff_impl<M: Memory>(
                 return Ok(());
             }
             if let Some(ddl) = clock.timeout {
-                #[cfg(feature = "serialize")]
-                let ddl = {
-                    // resume
-                    if let IoState::Sleep { ddl } = ctx.io_state {
-                        ddl
-                    } else {
-                        ctx.io_state = IoState::Sleep { ddl };
-                        ddl
-                    }
-                };
                 let now = std::time::SystemTime::now();
                 let dur = ddl.duration_since(now).unwrap_or(Duration::from_secs(0));
                 tokio::time::sleep(dur).await;

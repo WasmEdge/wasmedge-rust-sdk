@@ -7,9 +7,10 @@ license = "Apache-2.0"
 name = "async-wasi"
 readme = "README.md"
 repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
-version = "0.1.0"
+version = "0.2.0-alpha"
 
 [dependencies]
+log = "0.4"
 bitflags = "2.0.2"
 cfg-if = "1.0.0"
 futures = { version = "0.3" }
@@ -20,6 +21,7 @@ serde = { version = "1", features = ["derive"] }
 socket2 = { version = "^0.4.9", features = ["all"] }
 tokio = { version = "1", features = ["full"], optional = true }
 parking_lot.workspace = true
+slab = "0.4.9"
 
 [dev-dependencies]
 serde_json = { version = "1" }
@@ -27,4 +29,3 @@ serde_json = { version = "1" }
 [features]
 async_tokio = ["tokio"]
 default = ["async_tokio"]
-serialize = []

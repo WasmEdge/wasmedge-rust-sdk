@@ -1,4 +1,4 @@
-name: Continuous integration
+name: Continuous integration with the release version of Wasmedge
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -6,15 +6,11 @@ concurrency:
 
 on:
   push:
-    branches:
-      - 'bump/**'
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
       - ".github/workflows/rust-static-lib.yml"
   pull_request:
-    branches:
-      - 'bump/**'
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
@@ -37,20 +33,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout WasmEdge Runtime
-        uses: actions/checkout@v3
-        with:
-          repository: WasmEdge/WasmEdge
-          path: WasmEdge
-
-      - name: Build WasmEdge with Release mode
-        working-directory: WasmEdge
+      - name: Install WasmEdge
         run: |
-          apt update
-          apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build libssl-dev
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On -DWASMEDGE_PLUGIN_WASI_CRYPTO=On .
-          cmake --build build
-          cmake --install build
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
           ldconfig
 
       - name: Install Rust-nightly
@@ -85,10 +70,12 @@ jobs:
 
       - name: Test Rust SDK
         run: |
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
           cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1
 
       - name: Test Rust SDK with async feature
         run: |
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
           cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
 
   build_fedora:
@@ -105,21 +92,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout WasmEdge Runtime
-        uses: actions/checkout@v3
-        with:
-          repository: WasmEdge/WasmEdge
-          path: WasmEdge
-
-      - name: Build WasmEdge with Release mode
-        working-directory: WasmEdge
+      - name: Install WasmEdge
         run: |
           dnf update -y
           dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
+          dnf install -y which python python3-pip
           git config --global --add safe.directory $(pwd)
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On -DWASMEDGE_BUILD_TESTS=ON -DWASMEDGE_BUILD_PACKAGE="TGZ;DEB;RPM" .
-          cmake --build build
-          cmake --install build
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
+          ldconfig
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -153,18 +133,12 @@ jobs:
 
       - name: Test Rust SDK
         run: |
-          export WASMEDGE_DIR="$(pwd)/WasmEdge"
-          export WASMEDGE_BUILD_DIR="$(pwd)/WasmEdge/build"
-          export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
-          export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
           cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
       - name: Test Rust SDK with async feature
         run: |
-          export WASMEDGE_DIR="$(pwd)/WasmEdge"
-          export WASMEDGE_BUILD_DIR="$(pwd)/WasmEdge/build"
-          export WASMEDGE_PLUGIN_PATH="$(pwd)/WasmEdge/build/plugins/wasmedge_process"
-          export LD_LIBRARY_PATH="$(pwd)/WasmEdge/build/lib/api"
+          export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
           cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
   build_macos:
@@ -181,25 +155,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout WasmEdge Runtime
-        uses: actions/checkout@v3
-        with:
-          repository: WasmEdge/WasmEdge
-          path: WasmEdge
-
-      - name: Install build tools
-        run: brew install llvm ninja boost cmake
-
-      - name: Build WasmEdge with Release mode
-        working-directory: WasmEdge
+      - name: Install WasmEdge
         run: |
-          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
-          export CC=clang
-          export CXX=clang++
-          rm -rf build
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release .
-          cmake --build build
-          cmake --install build
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
 
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -221,6 +179,7 @@ jobs:
 
       - name: Test Rust Bindings
         run: |
+          export DYLD_LIBRARY_PATH="/Users/runner/.wasmedge/lib"
           cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --nocapture --test-threads=1
 
   build_windows:
@@ -244,6 +203,7 @@ jobs:
         with:
           repository: WasmEdge/WasmEdge
           path: WasmEdge
+          fetch-depth: 0
 
       - name: Install dependency
         uses: crazy-max/ghaction-chocolatey@v2
@@ -258,6 +218,7 @@ jobs:
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
+          git checkout $(git describe --tags --abbrev=0)
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
