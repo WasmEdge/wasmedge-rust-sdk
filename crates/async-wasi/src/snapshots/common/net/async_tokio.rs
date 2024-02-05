@@ -7,7 +7,7 @@ use socket2::{SockAddr, Socket};
 use std::{
     ops::DerefMut,
     os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, AtomicI8, AtomicU8},
 };
 use tokio::io::{
     unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
@@ -150,25 +150,25 @@ impl AsyncWasiSocketInner {
 }
 
 #[derive(Debug)]
-pub(crate) struct SocketWritable(pub(crate) AtomicBool);
+pub(crate) struct SocketWritable(pub(crate) AtomicI8);
 impl SocketWritable {
     pub(crate) async fn writable(&self) {
-        let b = self.0.swap(false, std::sync::atomic::Ordering::Acquire);
+        let b = self.0.fetch_sub(1, std::sync::atomic::Ordering::Acquire);
         SocketWritableFuture(b).await;
     }
 
     pub(crate) fn set_writable(&self) {
-        self.0.store(true, std::sync::atomic::Ordering::Release)
+        self.0.store(2, std::sync::atomic::Ordering::Release)
     }
 }
 impl Default for SocketWritable {
     fn default() -> Self {
-        Self(AtomicBool::new(true))
+        Self(AtomicI8::new(2))
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct SocketWritableFuture(bool);
+pub(crate) struct SocketWritableFuture(i8);
 
 impl Future for SocketWritableFuture {
     type Output = ();
@@ -177,7 +177,8 @@ impl Future for SocketWritableFuture {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        if self.0 {
+        log::trace!("SocketWritableFuture self.0={}", self.0);
+        if self.0 >= 0 {
             std::task::Poll::Ready(())
         } else {
             std::task::Poll::Pending

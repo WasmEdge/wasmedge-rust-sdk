@@ -173,6 +173,7 @@ pub async fn sock_recv<M: Memory>(
         )?;
     }
 
+    s.writable.set_writable();
     mem.write_data(ro_data_len_ptr, (n as u32).to_le())?;
     Ok(())
 }
@@ -245,6 +246,7 @@ pub async fn sock_recv_from<M: Memory>(
         )?;
     }
 
+    s.writable.set_writable();
     mem.write_data(ro_data_len_ptr, (n as u32).to_le())?;
     Ok(())
 }
