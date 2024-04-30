@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.5-newapi] - 2024-04-30
+
+### 🚜 Refactor
+
+- [BREAKING] Significant refactoring was done to fix memory leaks ([#98](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/98))
+
 ## [0.13.2] - 2023-11-15
 
 ### 🐛 Bug Fixes
