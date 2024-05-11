@@ -48,14 +48,21 @@ unsafe extern "C" fn wrap_fn<Data>(
     });
     let data = &mut *(data as *mut Data);
 
-    let input = {
+    let input = if params.is_null() || param_len == 0 {
+        vec![]
+    } else {
         let raw_input = unsafe { std::slice::from_raw_parts(params, param_len as usize) };
         raw_input.iter().map(|r| (*r).into()).collect::<Vec<_>>()
     };
 
     let return_len = return_len as usize;
 
-    let raw_returns = unsafe { std::slice::from_raw_parts_mut(returns, return_len) };
+    let mut empty_return = [];
+    let raw_returns = if returns.is_null() || return_len == 0 {
+        &mut empty_return
+    } else {
+        unsafe { std::slice::from_raw_parts_mut(returns, return_len) }
+    };
 
     let real_fn: SyncFn<Data> = std::mem::transmute(key_ptr);
 
