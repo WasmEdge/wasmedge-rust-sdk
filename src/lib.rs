@@ -96,8 +96,8 @@
 mod compiler;
 pub mod config;
 
-#[cfg(feature = "dock")]
-pub mod dock;
+// #[cfg(feature = "dock")]
+// pub mod dock;
 
 mod import;
 mod instance;
