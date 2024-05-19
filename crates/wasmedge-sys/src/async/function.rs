@@ -132,7 +132,10 @@ impl AsMut<Function> for AsyncFunction {
 mod tests {
     use super::*;
     use crate::{
-        instance::function::AsFunc, r#async::fiber::AsyncState, types::WasmValue, Executor,
+        instance::function::AsFunc,
+        r#async::{fiber::AsyncState, module::AsyncImportObject},
+        types::WasmValue,
+        AsInstance, Executor,
     };
 
     use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
@@ -147,7 +150,7 @@ mod tests {
             _s: Vec<S>,
         }
 
-        let mut data: Data<i32, &str> = Data {
+        let data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
@@ -189,13 +192,19 @@ mod tests {
             })
         }
 
+        let mut import_module = AsyncImportObject::create("test_module", Box::new(data)).unwrap();
+
         // create a FuncType
         let func_ty = FuncType::new(vec![ValType::I32; 2], vec![ValType::I32]);
         // create a host function
-        let result =
-            AsyncFunction::create_async_func(&func_ty, real_add::<Data<i32, &str>>, &mut data, 0);
+        let result = AsyncFunction::create_async_func(
+            &func_ty,
+            real_add::<Data<i32, &str>>,
+            import_module.get_host_data_mut(),
+            0,
+        );
         assert!(result.is_ok());
-        let mut host_func = result.unwrap();
+        let host_func = result.unwrap();
 
         // get func type
         let result = host_func.ty();
@@ -210,17 +219,21 @@ mod tests {
         assert_eq!(ty.returns_len(), 1);
         assert_eq!(ty.returns(), &[ValType::I32]);
 
+        import_module.add_async_func("add", host_func);
+
         // run this function
         let result = Executor::create(None, None);
         assert!(result.is_ok());
         let mut executor = result.unwrap();
+
+        let mut add_func = import_module.get_func_mut("add").unwrap();
 
         let async_state = AsyncState::new();
 
         let result = executor
             .call_func_async(
                 &async_state,
-                host_func.as_mut(),
+                &mut add_func,
                 vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
             )
             .await;
