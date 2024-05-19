@@ -9,8 +9,8 @@ use std::{
     path::Path,
 };
 use wasmedge_types::error::{
-    CoreCommonError, CoreError, CoreExecutionError, CoreInstantiationError, CoreLoadError,
-    CoreValidationError, WasmEdgeError,
+    CoreCommonError, CoreComponentError, CoreError, CoreExecutionError, CoreInstantiationError,
+    CoreLoadError, CoreValidationError, WasmEdgeError,
 };
 
 #[cfg(unix)]
@@ -54,359 +54,570 @@ pub(crate) fn check(result: WasmEdge_Result) -> WasmEdgeResult<()> {
         } else {
             0u32
         }
-    };
+    } as ffi::WasmEdge_ErrCode;
 
     match category {
-        ffi::WasmEdge_ErrCategory_UserLevelError => Err(Box::new(WasmEdgeError::User(code))),
+        ffi::WasmEdge_ErrCategory_UserLevelError => Err(Box::new(WasmEdgeError::User(code as _))),
         ffi::WasmEdge_ErrCategory_WASM => gen_runtime_error(code),
         _ => panic!("Invalid category value: {category}"),
     }
 }
 
-fn gen_runtime_error(code: u32) -> WasmEdgeResult<()> {
+fn gen_runtime_error(code: ffi::WasmEdge_ErrCode) -> WasmEdgeResult<()> {
     match code {
         // Success or terminated (exit and return success)
-        0x00 => Ok(()),
-        0x01 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
+        ffi::WasmEdge_ErrCode_Success => Ok(()),
+        ffi::WasmEdge_ErrCode_Terminated => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
             CoreCommonError::Terminated,
         )))),
         // Common errors
-        0x02 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
-            CoreCommonError::RuntimeError,
-        )))),
-        0x03 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
-            CoreCommonError::CostLimitExceeded,
-        )))),
-        0x04 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
-            CoreCommonError::WrongVMWorkflow,
-        )))),
-        0x05 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
-            CoreCommonError::FuncNotFound,
-        )))),
-        0x06 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
+        ffi::WasmEdge_ErrCode_RuntimeError => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::RuntimeError),
+        ))),
+        ffi::WasmEdge_ErrCode_CostLimitExceeded => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::CostLimitExceeded),
+        ))),
+        ffi::WasmEdge_ErrCode_WrongVMWorkflow => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::WrongVMWorkflow),
+        ))),
+        ffi::WasmEdge_ErrCode_FuncNotFound => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::FuncNotFound),
+        ))),
+        ffi::WasmEdge_ErrCode_AOTDisabled => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
             CoreCommonError::AOTDisabled,
         )))),
-        0x07 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
+        ffi::WasmEdge_ErrCode_Interrupted => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
             CoreCommonError::Interrupted,
         )))),
-        0x08 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
-            CoreCommonError::NotValidated,
-        )))),
-        0x09 => Err(Box::new(WasmEdgeError::Core(CoreError::Common(
-            CoreCommonError::UserDefError,
-        )))),
+        ffi::WasmEdge_ErrCode_NotValidated => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::NotValidated),
+        ))),
+        ffi::WasmEdge_ErrCode_NonNullRequired => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::NonNullRequired),
+        ))),
+        ffi::WasmEdge_ErrCode_SetValueToConst => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::SetValueToConst),
+        ))),
+        ffi::WasmEdge_ErrCode_SetValueErrorType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::SetValueErrorType),
+        ))),
+        ffi::WasmEdge_ErrCode_UserDefError => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Common(CoreCommonError::UserDefError),
+        ))),
 
         // Load phase
-        0x20 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_IllegalPath => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::IllegalPath,
         )))),
-        0x21 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_ReadError => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::ReadError,
         )))),
-        0x22 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_UnexpectedEnd => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::UnexpectedEnd,
         )))),
-        0x23 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedMagic,
-        )))),
-        0x24 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedVersion,
-        )))),
-        0x25 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedSection,
-        )))),
-        0x26 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::SectionSizeMismatch,
-        )))),
-        0x27 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::NameSizeOutOfBounds,
-        )))),
-        0x28 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_MalformedMagic => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedMagic),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedVersion => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedVersion),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedSection => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedSection),
+        ))),
+        ffi::WasmEdge_ErrCode_SectionSizeMismatch => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::SectionSizeMismatch),
+        ))),
+        ffi::WasmEdge_ErrCode_LengthOutOfBounds => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::LengthOutOfBounds),
+        ))),
+        ffi::WasmEdge_ErrCode_JunkSection => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::JunkSection,
         )))),
-        0x29 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::IncompatibleFuncCode,
-        )))),
-        0x2A => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::IncompatibleDataCount,
-        )))),
-        0x2B => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::DataCountRequired,
-        )))),
-        0x2C => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedImportKind,
-        )))),
-        0x2D => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedExportKind,
-        )))),
-        0x2E => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::ExpectedZeroByte,
-        )))),
-        0x2F => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_IncompatibleFuncCode => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::IncompatibleFuncCode),
+        ))),
+        ffi::WasmEdge_ErrCode_IncompatibleDataCount => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::IncompatibleDataCount),
+        ))),
+        ffi::WasmEdge_ErrCode_DataCountRequired => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::DataCountRequired),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedImportKind => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedImportKind),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedExportKind => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedExportKind),
+        ))),
+        ffi::WasmEdge_ErrCode_ExpectedZeroByte => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::ExpectedZeroByte),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidMut => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::InvalidMut,
         )))),
-        0x30 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_TooManyLocals => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::TooManyLocals,
         )))),
-        0x31 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedValType,
-        )))),
-        0x32 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedElemType,
-        )))),
-        0x33 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::MalformedRefType,
-        )))),
-        0x34 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_MalformedValType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedValType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedElemType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedElemType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedRefType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedRefType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedUTF8 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::MalformedUTF8,
         )))),
-        0x35 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::IntegerTooLarge,
-        )))),
-        0x36 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::IntegerTooLong,
-        )))),
-        0x37 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
+        ffi::WasmEdge_ErrCode_IntegerTooLarge => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::IntegerTooLarge),
+        ))),
+        ffi::WasmEdge_ErrCode_IntegerTooLong => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::IntegerTooLong),
+        ))),
+        ffi::WasmEdge_ErrCode_IllegalOpCode => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
             CoreLoadError::IllegalOpCode,
         )))),
-        0x38 => Err(Box::new(WasmEdgeError::Core(CoreError::Load(
-            CoreLoadError::IllegalGrammar,
-        )))),
+        ffi::WasmEdge_ErrCode_IllegalGrammar => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::IllegalGrammar),
+        ))),
+        ffi::WasmEdge_ErrCode_SharedMemoryNoMax => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::SharedMemoryNoMax),
+        ))),
+        ffi::WasmEdge_ErrCode_IntrinsicsTableNotFound => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::IntrinsicsTableNotFound),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedTable => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Load(CoreLoadError::MalformedTable),
+        ))),
 
         // Validation phase
-        0x40 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidAlignment,
-        )))),
-        0x41 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::TypeCheckFailed,
-        )))),
-        0x42 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidLabelIdx,
-        )))),
-        0x43 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidLocalIdx,
-        )))),
-        0x44 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidFuncTypeIdx,
-        )))),
-        0x45 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidFuncIdx,
-        )))),
-        0x46 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidTableIdx,
-        )))),
-        0x47 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidMemoryIdx,
-        )))),
-        0x48 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidGlobalIdx,
-        )))),
-        0x49 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidElemIdx,
-        )))),
-        0x4A => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidDataIdx,
-        )))),
-        0x4B => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidRefIdx,
-        )))),
-        0x4C => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::ConstExprRequired,
-        )))),
-        0x4D => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::DupExportName,
-        )))),
-        0x4E => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::ImmutableGlobal,
-        )))),
-        0x4F => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidResultArity,
-        )))),
-        0x50 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::MultiTables,
-        )))),
-        0x51 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::MultiMemories,
-        )))),
-        0x52 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidLimit,
-        )))),
-        0x53 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidMemPages,
-        )))),
-        0x54 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidStartFunc,
-        )))),
-        0x55 => Err(Box::new(WasmEdgeError::Core(CoreError::Validation(
-            CoreValidationError::InvalidLaneIdx,
-        )))),
+        ffi::WasmEdge_ErrCode_InvalidAlignment => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidAlignment),
+        ))),
+        ffi::WasmEdge_ErrCode_TypeCheckFailed => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::TypeCheckFailed),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidLabelIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidLabelIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidLocalIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidLocalIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidFieldIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidFieldIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidFuncTypeIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidFuncTypeIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidFuncIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidFuncIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidTableIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidTableIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidMemoryIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidMemoryIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidGlobalIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidGlobalIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidElemIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidElemIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidDataIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidDataIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidRefIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidRefIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_ConstExprRequired => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::ConstExprRequired),
+        ))),
+        ffi::WasmEdge_ErrCode_DupExportName => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::DupExportName),
+        ))),
+        ffi::WasmEdge_ErrCode_ImmutableGlobal => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::ImmutableGlobal),
+        ))),
+        ffi::WasmEdge_ErrCode_ImmutableField => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::ImmutableField),
+        ))),
+        ffi::WasmEdge_ErrCode_ImmutableArray => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::ImmutableArray),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidResultArity => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidResultArity),
+        ))),
+        ffi::WasmEdge_ErrCode_MultiTables => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::MultiTables),
+        ))),
+        ffi::WasmEdge_ErrCode_MultiMemories => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::MultiMemories),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidLimit => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidLimit),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidMemPages => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidMemPages),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidStartFunc => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidStartFunc),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidLaneIdx => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidLaneIdx),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidUninitLocal => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidUninitLocal),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidNotDefaultableField => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidNotDefaultableField),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidNotDefaultableArray => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidNotDefaultableArray),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidPackedField => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidPackedField),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidPackedArray => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidPackedArray),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidUnpackedField => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidUnpackedField),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidUnpackedArray => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidUnpackedArray),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidBrRefType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidBrRefType),
+        ))),
+        ffi::WasmEdge_ErrCode_ArrayTypesMismatch => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::ArrayTypesMismatch),
+        ))),
+        ffi::WasmEdge_ErrCode_ArrayTypesNumtypeRequired => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::ArrayTypesNumtypeRequired),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidSubType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Validation(CoreValidationError::InvalidSubType),
+        ))),
 
         // Instantiation phase
-        0x60 => Err(Box::new(WasmEdgeError::Core(CoreError::Instantiation(
-            CoreInstantiationError::ModuleNameConflict,
-        )))),
-        0x61 => Err(Box::new(WasmEdgeError::Core(CoreError::Instantiation(
-            CoreInstantiationError::IncompatibleImportType,
-        )))),
-        0x62 => Err(Box::new(WasmEdgeError::Core(CoreError::Instantiation(
-            CoreInstantiationError::UnknownImport,
-        )))),
-        0x63 => Err(Box::new(WasmEdgeError::Core(CoreError::Instantiation(
-            CoreInstantiationError::DataSegDoesNotFit,
-        )))),
-        0x64 => Err(Box::new(WasmEdgeError::Core(CoreError::Instantiation(
-            CoreInstantiationError::ElemSegDoesNotFit,
-        )))),
+        ffi::WasmEdge_ErrCode_ModuleNameConflict => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Instantiation(CoreInstantiationError::ModuleNameConflict),
+        ))),
+        ffi::WasmEdge_ErrCode_IncompatibleImportType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Instantiation(CoreInstantiationError::IncompatibleImportType),
+        ))),
+        ffi::WasmEdge_ErrCode_UnknownImport => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Instantiation(CoreInstantiationError::UnknownImport),
+        ))),
+        ffi::WasmEdge_ErrCode_DataSegDoesNotFit => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Instantiation(CoreInstantiationError::DataSegDoesNotFit),
+        ))),
+        ffi::WasmEdge_ErrCode_ElemSegDoesNotFit => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Instantiation(CoreInstantiationError::ElemSegDoesNotFit),
+        ))),
 
         // Execution phase
-        0x80 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::WrongInstanceAddress,
-        )))),
-        0x81 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::WrongInstanceIndex,
-        )))),
-        0x82 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::InstrTypeMismatch,
-        )))),
-        0x83 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::FuncTypeMismatch,
-        )))),
-        0x84 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::DivideByZero,
-        )))),
-        0x85 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::IntegerOverflow,
-        )))),
-        0x86 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::InvalidConvToInt,
-        )))),
-        0x87 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::TableOutOfBounds,
-        )))),
-        0x88 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::MemoryOutOfBounds,
-        )))),
-        0x89 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::Unreachable,
-        )))),
-        0x8A => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::UninitializedElement,
-        )))),
-        0x8B => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::UndefinedElement,
-        )))),
-        0x8C => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::IndirectCallTypeMismatch,
-        )))),
-        0x8D => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::HostFuncFailed,
-        )))),
-        0x8E => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::RefTypeMismatch,
-        )))),
-        0x8F => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::UnalignedAtomicAccess,
-        )))),
-        0x90 => Err(Box::new(WasmEdgeError::Core(CoreError::Execution(
-            CoreExecutionError::ExpectSharedMemory,
-        )))),
+        ffi::WasmEdge_ErrCode_WrongInstanceAddress => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::WrongInstanceAddress),
+        ))),
+        ffi::WasmEdge_ErrCode_WrongInstanceIndex => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::WrongInstanceIndex),
+        ))),
+        ffi::WasmEdge_ErrCode_InstrTypeMismatch => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::InstrTypeMismatch),
+        ))),
+        ffi::WasmEdge_ErrCode_FuncSigMismatch => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::FuncSigMismatch),
+        ))),
+        ffi::WasmEdge_ErrCode_DivideByZero => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::DivideByZero),
+        ))),
+        ffi::WasmEdge_ErrCode_IntegerOverflow => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::IntegerOverflow),
+        ))),
+        ffi::WasmEdge_ErrCode_InvalidConvToInt => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::InvalidConvToInt),
+        ))),
+        ffi::WasmEdge_ErrCode_TableOutOfBounds => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::TableOutOfBounds),
+        ))),
+        ffi::WasmEdge_ErrCode_MemoryOutOfBounds => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::MemoryOutOfBounds),
+        ))),
+        ffi::WasmEdge_ErrCode_ArrayOutOfBounds => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::ArrayOutOfBounds),
+        ))),
+        ffi::WasmEdge_ErrCode_Unreachable => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::Unreachable),
+        ))),
+        ffi::WasmEdge_ErrCode_UninitializedElement => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::UninitializedElement),
+        ))),
+        ffi::WasmEdge_ErrCode_UndefinedElement => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::UndefinedElement),
+        ))),
+        ffi::WasmEdge_ErrCode_IndirectCallTypeMismatch => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::IndirectCallTypeMismatch),
+        ))),
+        ffi::WasmEdge_ErrCode_HostFuncError => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::HostFuncFailed),
+        ))),
+        ffi::WasmEdge_ErrCode_RefTypeMismatch => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::RefTypeMismatch),
+        ))),
+        ffi::WasmEdge_ErrCode_UnalignedAtomicAccess => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::UnalignedAtomicAccess),
+        ))),
+        ffi::WasmEdge_ErrCode_ExpectSharedMemory => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::ExpectSharedMemory),
+        ))),
+        ffi::WasmEdge_ErrCode_CastNullToNonNull => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::CastNullToNonNull),
+        ))),
+        ffi::WasmEdge_ErrCode_AccessNullFunc => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::AccessNullFunc),
+        ))),
+        ffi::WasmEdge_ErrCode_AccessNullStruct => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::AccessNullStruct),
+        ))),
+        ffi::WasmEdge_ErrCode_AccessNullArray => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::AccessNullArray),
+        ))),
+        ffi::WasmEdge_ErrCode_AccessNullI31 => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::AccessNullI31),
+        ))),
+        ffi::WasmEdge_ErrCode_CastFailed => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Execution(CoreExecutionError::CastFailed),
+        ))),
 
-        _ => panic!("unknown error code: {code}"),
+        // Component model phase
+        ffi::WasmEdge_ErrCode_MalformedSort => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedSort),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedAliasTarget => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedAliasTarget),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedCoreInstance => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedCoreInstance),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedInstance => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedInstance),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedDefType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedDefType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedRecordType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedRecordType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedVariantType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedVariantType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedTupleType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedTupleType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedFlagsType => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedFlagsType),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedCanonical => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedCanonical),
+        ))),
+        ffi::WasmEdge_ErrCode_UnknownCanonicalOption => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::UnknownCanonicalOption),
+        ))),
+        ffi::WasmEdge_ErrCode_MalformedName => Err(Box::new(WasmEdgeError::Core(
+            CoreError::Component(CoreComponentError::MalformedName),
+        ))),
+        c => Err(Box::new(WasmEdgeError::Core(CoreError::UnknownError(
+            c as _,
+        )))),
     }
 }
 
 impl From<CoreError> for WasmEdge_Result {
     fn from(val: CoreError) -> WasmEdge_Result {
         let code = match val {
-            CoreError::Common(CoreCommonError::Terminated) => 0x01,
             // Common errors
-            CoreError::Common(CoreCommonError::RuntimeError) => 0x02,
-            CoreError::Common(CoreCommonError::CostLimitExceeded) => 0x03,
-            CoreError::Common(CoreCommonError::WrongVMWorkflow) => 0x04,
-            CoreError::Common(CoreCommonError::FuncNotFound) => 0x05,
-            CoreError::Common(CoreCommonError::AOTDisabled) => 0x06,
-            CoreError::Common(CoreCommonError::Interrupted) => 0x07,
-            CoreError::Common(CoreCommonError::NotValidated) => 0x08,
-            CoreError::Common(CoreCommonError::UserDefError) => 0x09,
+            CoreError::Common(e) => match e {
+                CoreCommonError::Terminated => ffi::WasmEdge_ErrCode_Terminated,
+                CoreCommonError::RuntimeError => ffi::WasmEdge_ErrCode_RuntimeError,
+                CoreCommonError::CostLimitExceeded => ffi::WasmEdge_ErrCode_CostLimitExceeded,
+                CoreCommonError::WrongVMWorkflow => ffi::WasmEdge_ErrCode_WrongVMWorkflow,
+                CoreCommonError::FuncNotFound => ffi::WasmEdge_ErrCode_FuncNotFound,
+                CoreCommonError::AOTDisabled => ffi::WasmEdge_ErrCode_AOTDisabled,
+                CoreCommonError::Interrupted => ffi::WasmEdge_ErrCode_Interrupted,
+                CoreCommonError::UserDefError => ffi::WasmEdge_ErrCode_UserDefError,
+                CoreCommonError::NotValidated => ffi::WasmEdge_ErrCode_NotValidated,
+                CoreCommonError::NonNullRequired => ffi::WasmEdge_ErrCode_NonNullRequired,
+                CoreCommonError::SetValueToConst => ffi::WasmEdge_ErrCode_SetValueToConst,
+                CoreCommonError::SetValueErrorType => ffi::WasmEdge_ErrCode_SetValueErrorType,
+            },
 
             // Load phase
-            CoreError::Load(CoreLoadError::IllegalPath) => 0x20,
-            CoreError::Load(CoreLoadError::ReadError) => 0x21,
-            CoreError::Load(CoreLoadError::UnexpectedEnd) => 0x22,
-            CoreError::Load(CoreLoadError::MalformedMagic) => 0x23,
-            CoreError::Load(CoreLoadError::MalformedVersion) => 0x24,
-            CoreError::Load(CoreLoadError::MalformedSection) => 0x25,
-            CoreError::Load(CoreLoadError::SectionSizeMismatch) => 0x26,
-            CoreError::Load(CoreLoadError::NameSizeOutOfBounds) => 0x27,
-            CoreError::Load(CoreLoadError::JunkSection) => 0x28,
-            CoreError::Load(CoreLoadError::IncompatibleFuncCode) => 0x29,
-            CoreError::Load(CoreLoadError::IncompatibleDataCount) => 0x2A,
-            CoreError::Load(CoreLoadError::DataCountRequired) => 0x2B,
-            CoreError::Load(CoreLoadError::MalformedImportKind) => 0x2C,
-            CoreError::Load(CoreLoadError::MalformedExportKind) => 0x2D,
-            CoreError::Load(CoreLoadError::ExpectedZeroByte) => 0x2E,
-            CoreError::Load(CoreLoadError::InvalidMut) => 0x2F,
-            CoreError::Load(CoreLoadError::TooManyLocals) => 0x30,
-            CoreError::Load(CoreLoadError::MalformedValType) => 0x31,
-            CoreError::Load(CoreLoadError::MalformedElemType) => 0x32,
-            CoreError::Load(CoreLoadError::MalformedRefType) => 0x33,
-            CoreError::Load(CoreLoadError::MalformedUTF8) => 0x34,
-            CoreError::Load(CoreLoadError::IntegerTooLarge) => 0x35,
-            CoreError::Load(CoreLoadError::IntegerTooLong) => 0x36,
-            CoreError::Load(CoreLoadError::IllegalOpCode) => 0x37,
-            CoreError::Load(CoreLoadError::IllegalGrammar) => 0x38,
+            CoreError::Load(e) => match e {
+                CoreLoadError::IllegalPath => ffi::WasmEdge_ErrCode_IllegalPath,
+                CoreLoadError::ReadError => ffi::WasmEdge_ErrCode_ReadError,
+                CoreLoadError::UnexpectedEnd => ffi::WasmEdge_ErrCode_UnexpectedEnd,
+                CoreLoadError::MalformedMagic => ffi::WasmEdge_ErrCode_MalformedMagic,
+                CoreLoadError::MalformedVersion => ffi::WasmEdge_ErrCode_MalformedVersion,
+                CoreLoadError::MalformedSection => ffi::WasmEdge_ErrCode_MalformedSection,
+                CoreLoadError::SectionSizeMismatch => ffi::WasmEdge_ErrCode_SectionSizeMismatch,
+                CoreLoadError::LengthOutOfBounds => ffi::WasmEdge_ErrCode_LengthOutOfBounds,
+                CoreLoadError::JunkSection => ffi::WasmEdge_ErrCode_JunkSection,
+                CoreLoadError::IncompatibleFuncCode => ffi::WasmEdge_ErrCode_IncompatibleFuncCode,
+                CoreLoadError::IncompatibleDataCount => ffi::WasmEdge_ErrCode_IncompatibleDataCount,
+                CoreLoadError::DataCountRequired => ffi::WasmEdge_ErrCode_DataCountRequired,
+                CoreLoadError::MalformedImportKind => ffi::WasmEdge_ErrCode_MalformedImportKind,
+                CoreLoadError::MalformedExportKind => ffi::WasmEdge_ErrCode_MalformedExportKind,
+                CoreLoadError::ExpectedZeroByte => ffi::WasmEdge_ErrCode_ExpectedZeroByte,
+                CoreLoadError::InvalidMut => ffi::WasmEdge_ErrCode_InvalidMut,
+                CoreLoadError::TooManyLocals => ffi::WasmEdge_ErrCode_TooManyLocals,
+                CoreLoadError::MalformedValType => ffi::WasmEdge_ErrCode_MalformedValType,
+                CoreLoadError::MalformedElemType => ffi::WasmEdge_ErrCode_MalformedElemType,
+                CoreLoadError::MalformedRefType => ffi::WasmEdge_ErrCode_MalformedRefType,
+                CoreLoadError::MalformedUTF8 => ffi::WasmEdge_ErrCode_MalformedUTF8,
+                CoreLoadError::IntegerTooLarge => ffi::WasmEdge_ErrCode_IntegerTooLarge,
+                CoreLoadError::IntegerTooLong => ffi::WasmEdge_ErrCode_IntegerTooLong,
+                CoreLoadError::IllegalOpCode => ffi::WasmEdge_ErrCode_IllegalOpCode,
+                CoreLoadError::IllegalGrammar => ffi::WasmEdge_ErrCode_IllegalGrammar,
+                CoreLoadError::SharedMemoryNoMax => ffi::WasmEdge_ErrCode_SharedMemoryNoMax,
+                CoreLoadError::IntrinsicsTableNotFound => {
+                    ffi::WasmEdge_ErrCode_IntrinsicsTableNotFound
+                }
+                CoreLoadError::MalformedTable => ffi::WasmEdge_ErrCode_MalformedTable,
+            },
 
             // Validation phase
-            CoreError::Validation(CoreValidationError::InvalidAlignment) => 0x40,
-            CoreError::Validation(CoreValidationError::TypeCheckFailed) => 0x41,
-            CoreError::Validation(CoreValidationError::InvalidLabelIdx) => 0x42,
-            CoreError::Validation(CoreValidationError::InvalidLocalIdx) => 0x43,
-            CoreError::Validation(CoreValidationError::InvalidFuncTypeIdx) => 0x44,
-            CoreError::Validation(CoreValidationError::InvalidFuncIdx) => 0x45,
-            CoreError::Validation(CoreValidationError::InvalidTableIdx) => 0x46,
-            CoreError::Validation(CoreValidationError::InvalidMemoryIdx) => 0x47,
-            CoreError::Validation(CoreValidationError::InvalidGlobalIdx) => 0x48,
-            CoreError::Validation(CoreValidationError::InvalidElemIdx) => 0x49,
-            CoreError::Validation(CoreValidationError::InvalidDataIdx) => 0x4A,
-            CoreError::Validation(CoreValidationError::InvalidRefIdx) => 0x4B,
-            CoreError::Validation(CoreValidationError::ConstExprRequired) => 0x4C,
-            CoreError::Validation(CoreValidationError::DupExportName) => 0x4D,
-            CoreError::Validation(CoreValidationError::ImmutableGlobal) => 0x4E,
-            CoreError::Validation(CoreValidationError::InvalidResultArity) => 0x4F,
-            CoreError::Validation(CoreValidationError::MultiTables) => 0x50,
-            CoreError::Validation(CoreValidationError::MultiMemories) => 0x51,
-            CoreError::Validation(CoreValidationError::InvalidLimit) => 0x52,
-            CoreError::Validation(CoreValidationError::InvalidMemPages) => 0x53,
-            CoreError::Validation(CoreValidationError::InvalidStartFunc) => 0x54,
-            CoreError::Validation(CoreValidationError::InvalidLaneIdx) => 0x55,
+            CoreError::Validation(e) => match e {
+                CoreValidationError::InvalidAlignment => ffi::WasmEdge_ErrCode_InvalidAlignment,
+                CoreValidationError::TypeCheckFailed => ffi::WasmEdge_ErrCode_TypeCheckFailed,
+                CoreValidationError::InvalidLabelIdx => ffi::WasmEdge_ErrCode_InvalidLabelIdx,
+                CoreValidationError::InvalidLocalIdx => ffi::WasmEdge_ErrCode_InvalidLocalIdx,
+                CoreValidationError::InvalidFieldIdx => ffi::WasmEdge_ErrCode_InvalidFieldIdx,
+                CoreValidationError::InvalidFuncTypeIdx => ffi::WasmEdge_ErrCode_InvalidFuncTypeIdx,
+                CoreValidationError::InvalidFuncIdx => ffi::WasmEdge_ErrCode_InvalidFuncIdx,
+                CoreValidationError::InvalidTableIdx => ffi::WasmEdge_ErrCode_InvalidTableIdx,
+                CoreValidationError::InvalidMemoryIdx => ffi::WasmEdge_ErrCode_InvalidMemoryIdx,
+                CoreValidationError::InvalidGlobalIdx => ffi::WasmEdge_ErrCode_InvalidGlobalIdx,
+                CoreValidationError::InvalidElemIdx => ffi::WasmEdge_ErrCode_InvalidElemIdx,
+                CoreValidationError::InvalidDataIdx => ffi::WasmEdge_ErrCode_InvalidDataIdx,
+                CoreValidationError::InvalidRefIdx => ffi::WasmEdge_ErrCode_InvalidRefIdx,
+                CoreValidationError::ConstExprRequired => ffi::WasmEdge_ErrCode_ConstExprRequired,
+                CoreValidationError::DupExportName => ffi::WasmEdge_ErrCode_DupExportName,
+                CoreValidationError::ImmutableGlobal => ffi::WasmEdge_ErrCode_ImmutableGlobal,
+                CoreValidationError::ImmutableField => ffi::WasmEdge_ErrCode_ImmutableField,
+                CoreValidationError::ImmutableArray => ffi::WasmEdge_ErrCode_ImmutableArray,
+                CoreValidationError::InvalidResultArity => ffi::WasmEdge_ErrCode_InvalidResultArity,
+                CoreValidationError::MultiTables => ffi::WasmEdge_ErrCode_MultiTables,
+                CoreValidationError::MultiMemories => ffi::WasmEdge_ErrCode_MultiMemories,
+                CoreValidationError::InvalidLimit => ffi::WasmEdge_ErrCode_InvalidLimit,
+                CoreValidationError::InvalidMemPages => ffi::WasmEdge_ErrCode_InvalidMemPages,
+                CoreValidationError::InvalidStartFunc => ffi::WasmEdge_ErrCode_InvalidStartFunc,
+                CoreValidationError::InvalidLaneIdx => ffi::WasmEdge_ErrCode_InvalidLaneIdx,
+                CoreValidationError::InvalidUninitLocal => ffi::WasmEdge_ErrCode_InvalidUninitLocal,
+                CoreValidationError::InvalidNotDefaultableField => {
+                    ffi::WasmEdge_ErrCode_InvalidNotDefaultableField
+                }
+                CoreValidationError::InvalidNotDefaultableArray => {
+                    ffi::WasmEdge_ErrCode_InvalidNotDefaultableArray
+                }
+                CoreValidationError::InvalidPackedField => ffi::WasmEdge_ErrCode_InvalidPackedField,
+                CoreValidationError::InvalidPackedArray => ffi::WasmEdge_ErrCode_InvalidPackedArray,
+                CoreValidationError::InvalidUnpackedField => {
+                    ffi::WasmEdge_ErrCode_InvalidUnpackedField
+                }
+                CoreValidationError::InvalidUnpackedArray => {
+                    ffi::WasmEdge_ErrCode_InvalidUnpackedArray
+                }
+                CoreValidationError::InvalidBrRefType => ffi::WasmEdge_ErrCode_InvalidBrRefType,
+                CoreValidationError::ArrayTypesMismatch => ffi::WasmEdge_ErrCode_ArrayTypesMismatch,
+                CoreValidationError::ArrayTypesNumtypeRequired => {
+                    ffi::WasmEdge_ErrCode_ArrayTypesNumtypeRequired
+                }
+                CoreValidationError::InvalidSubType => ffi::WasmEdge_ErrCode_InvalidSubType,
+            },
 
             // Instantiation phase
-            CoreError::Instantiation(CoreInstantiationError::ModuleNameConflict) => 0x60,
-            CoreError::Instantiation(CoreInstantiationError::IncompatibleImportType) => 0x61,
-            CoreError::Instantiation(CoreInstantiationError::UnknownImport) => 0x62,
-            CoreError::Instantiation(CoreInstantiationError::DataSegDoesNotFit) => 0x63,
-            CoreError::Instantiation(CoreInstantiationError::ElemSegDoesNotFit) => 0x64,
+            CoreError::Instantiation(e) => match e {
+                CoreInstantiationError::ModuleNameConflict => {
+                    ffi::WasmEdge_ErrCode_ModuleNameConflict
+                }
+                CoreInstantiationError::IncompatibleImportType => {
+                    ffi::WasmEdge_ErrCode_IncompatibleImportType
+                }
+                CoreInstantiationError::UnknownImport => ffi::WasmEdge_ErrCode_UnknownImport,
+                CoreInstantiationError::DataSegDoesNotFit => {
+                    ffi::WasmEdge_ErrCode_DataSegDoesNotFit
+                }
+                CoreInstantiationError::ElemSegDoesNotFit => {
+                    ffi::WasmEdge_ErrCode_ElemSegDoesNotFit
+                }
+            },
 
             // Execution phase
-            CoreError::Execution(CoreExecutionError::WrongInstanceAddress) => 0x80,
-            CoreError::Execution(CoreExecutionError::WrongInstanceIndex) => 0x81,
-            CoreError::Execution(CoreExecutionError::InstrTypeMismatch) => 0x82,
-            CoreError::Execution(CoreExecutionError::FuncTypeMismatch) => 0x83,
-            CoreError::Execution(CoreExecutionError::DivideByZero) => 0x84,
-            CoreError::Execution(CoreExecutionError::IntegerOverflow) => 0x85,
-            CoreError::Execution(CoreExecutionError::InvalidConvToInt) => 0x86,
-            CoreError::Execution(CoreExecutionError::TableOutOfBounds) => 0x87,
-            CoreError::Execution(CoreExecutionError::MemoryOutOfBounds) => 0x88,
-            CoreError::Execution(CoreExecutionError::Unreachable) => 0x89,
-            CoreError::Execution(CoreExecutionError::UninitializedElement) => 0x8A,
-            CoreError::Execution(CoreExecutionError::UndefinedElement) => 0x8B,
-            CoreError::Execution(CoreExecutionError::IndirectCallTypeMismatch) => 0x8C,
-            CoreError::Execution(CoreExecutionError::HostFuncFailed) => 0x8D,
-            CoreError::Execution(CoreExecutionError::RefTypeMismatch) => 0x8E,
-            CoreError::Execution(CoreExecutionError::UnalignedAtomicAccess) => 0x8F,
-            CoreError::Execution(CoreExecutionError::ExpectSharedMemory) => 0x90,
+            CoreError::Execution(e) => match e {
+                CoreExecutionError::WrongInstanceAddress => {
+                    ffi::WasmEdge_ErrCode_WrongInstanceAddress
+                }
+                CoreExecutionError::WrongInstanceIndex => ffi::WasmEdge_ErrCode_WrongInstanceIndex,
+                CoreExecutionError::InstrTypeMismatch => ffi::WasmEdge_ErrCode_InstrTypeMismatch,
+                CoreExecutionError::FuncSigMismatch => ffi::WasmEdge_ErrCode_FuncSigMismatch,
+                CoreExecutionError::DivideByZero => ffi::WasmEdge_ErrCode_DivideByZero,
+                CoreExecutionError::IntegerOverflow => ffi::WasmEdge_ErrCode_IntegerOverflow,
+                CoreExecutionError::InvalidConvToInt => ffi::WasmEdge_ErrCode_InvalidConvToInt,
+                CoreExecutionError::TableOutOfBounds => ffi::WasmEdge_ErrCode_TableOutOfBounds,
+                CoreExecutionError::MemoryOutOfBounds => ffi::WasmEdge_ErrCode_MemoryOutOfBounds,
+                CoreExecutionError::ArrayOutOfBounds => ffi::WasmEdge_ErrCode_ArrayOutOfBounds,
+                CoreExecutionError::Unreachable => ffi::WasmEdge_ErrCode_Unreachable,
+                CoreExecutionError::UninitializedElement => {
+                    ffi::WasmEdge_ErrCode_UninitializedElement
+                }
+                CoreExecutionError::UndefinedElement => ffi::WasmEdge_ErrCode_UndefinedElement,
+                CoreExecutionError::IndirectCallTypeMismatch => {
+                    ffi::WasmEdge_ErrCode_IndirectCallTypeMismatch
+                }
+                CoreExecutionError::HostFuncFailed => ffi::WasmEdge_ErrCode_HostFuncError,
+                CoreExecutionError::RefTypeMismatch => ffi::WasmEdge_ErrCode_RefTypeMismatch,
+                CoreExecutionError::UnalignedAtomicAccess => {
+                    ffi::WasmEdge_ErrCode_UnalignedAtomicAccess
+                }
+                CoreExecutionError::ExpectSharedMemory => ffi::WasmEdge_ErrCode_ExpectSharedMemory,
+                CoreExecutionError::CastNullToNonNull => ffi::WasmEdge_ErrCode_CastNullToNonNull,
+                CoreExecutionError::AccessNullFunc => ffi::WasmEdge_ErrCode_AccessNullFunc,
+                CoreExecutionError::AccessNullStruct => ffi::WasmEdge_ErrCode_AccessNullStruct,
+                CoreExecutionError::AccessNullArray => ffi::WasmEdge_ErrCode_AccessNullArray,
+                CoreExecutionError::AccessNullI31 => ffi::WasmEdge_ErrCode_AccessNullI31,
+                CoreExecutionError::CastFailed => ffi::WasmEdge_ErrCode_CastFailed,
+            },
+
+            CoreError::Component(e) => match e {
+                CoreComponentError::MalformedSort => ffi::WasmEdge_ErrCode_MalformedSort,
+                CoreComponentError::MalformedAliasTarget => {
+                    ffi::WasmEdge_ErrCode_MalformedAliasTarget
+                }
+                CoreComponentError::MalformedCoreInstance => {
+                    ffi::WasmEdge_ErrCode_MalformedCoreInstance
+                }
+                CoreComponentError::MalformedInstance => ffi::WasmEdge_ErrCode_MalformedInstance,
+                CoreComponentError::MalformedDefType => ffi::WasmEdge_ErrCode_MalformedDefType,
+                CoreComponentError::MalformedRecordType => {
+                    ffi::WasmEdge_ErrCode_MalformedRecordType
+                }
+                CoreComponentError::MalformedVariantType => {
+                    ffi::WasmEdge_ErrCode_MalformedVariantType
+                }
+                CoreComponentError::MalformedTupleType => ffi::WasmEdge_ErrCode_MalformedTupleType,
+                CoreComponentError::MalformedFlagsType => ffi::WasmEdge_ErrCode_MalformedFlagsType,
+                CoreComponentError::MalformedCanonical => ffi::WasmEdge_ErrCode_MalformedCanonical,
+                CoreComponentError::UnknownCanonicalOption => {
+                    ffi::WasmEdge_ErrCode_UnknownCanonicalOption
+                }
+                CoreComponentError::MalformedName => ffi::WasmEdge_ErrCode_MalformedName,
+            },
+            CoreError::UnknownError(c) => c as ffi::WasmEdge_ErrCode,
         };
-        unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code) }
+        unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code as _) }
     }
 }
 

@@ -1010,19 +1010,19 @@ mod tests {
         inputs: Vec<WasmValue>,
     ) -> Result<Vec<WasmValue>, CoreError> {
         if inputs.len() != 2 {
-            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+            return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
         }
 
         let a = if inputs[0].ty() == ValType::I32 {
             inputs[0].to_i32()
         } else {
-            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+            return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
         };
 
         let b = if inputs[1].ty() == ValType::I32 {
             inputs[1].to_i32()
         } else {
-            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+            return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
         };
 
         let c = a + b;

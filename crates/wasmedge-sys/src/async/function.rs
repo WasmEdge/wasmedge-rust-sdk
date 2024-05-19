@@ -164,19 +164,19 @@ mod tests {
                 println!("Rust: Entering Rust function real_add");
 
                 if input.len() != 2 {
-                    return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                    return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
                 }
 
                 let a = if input[0].ty() == ValType::I32 {
                     input[0].to_i32()
                 } else {
-                    return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                    return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
                 };
 
                 let b = if input[1].ty() == ValType::I32 {
                     input[1].to_i32()
                 } else {
-                    return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                    return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
                 };
 
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;

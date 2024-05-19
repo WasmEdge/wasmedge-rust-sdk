@@ -299,6 +299,10 @@ pub enum CoreError {
     Instantiation(CoreInstantiationError),
     #[error("{0}")]
     Execution(CoreExecutionError),
+    #[error("{0}")]
+    Component(CoreComponentError),
+    #[error("unknown error code {0}")]
+    UnknownError(u32),
 }
 
 /// The error type for the common errors from WasmEdge Core.
@@ -322,6 +326,12 @@ pub enum CoreCommonError {
     UserDefError,
     #[error("wasm module hasn't passed validation yet")]
     NotValidated,
+    #[error("set null value into non-nullable value type")]
+    NonNullRequired,
+    #[error("set value into const")]
+    SetValueToConst,
+    #[error("set value type mismatch")]
+    SetValueErrorType,
 }
 
 /// The error type for the load phase from WasmEdge Core.
@@ -342,7 +352,7 @@ pub enum CoreLoadError {
     #[error("section size mismatch")]
     SectionSizeMismatch,
     #[error("length out of bounds")]
-    NameSizeOutOfBounds,
+    LengthOutOfBounds,
     #[error("unexpected content after last section")]
     JunkSection,
     #[error("function and code section have inconsistent lengths")]
@@ -377,6 +387,12 @@ pub enum CoreLoadError {
     IllegalOpCode,
     #[error("invalid wasm grammar")]
     IllegalGrammar,
+    #[error("shared memory must have maximum")]
+    SharedMemoryNoMax,
+    #[error("intrinsics table not found")]
+    IntrinsicsTableNotFound,
+    #[error("malformed table")]
+    MalformedTable,
 }
 
 /// The error type for the validation phase from WasmEdge Core.
@@ -390,6 +406,8 @@ pub enum CoreValidationError {
     InvalidLabelIdx,
     #[error("unknown local")]
     InvalidLocalIdx,
+    #[error("unknown field")]
+    InvalidFieldIdx,
     #[error("unknown type")]
     InvalidFuncTypeIdx,
     #[error("unknown function")]
@@ -412,6 +430,10 @@ pub enum CoreValidationError {
     DupExportName,
     #[error("global is immutable")]
     ImmutableGlobal,
+    #[error("field is immutable")]
+    ImmutableField,
+    #[error("array is immutable")]
+    ImmutableArray,
     #[error("invalid result arity")]
     InvalidResultArity,
     #[error("multiple tables")]
@@ -426,6 +448,28 @@ pub enum CoreValidationError {
     InvalidStartFunc,
     #[error("invalid lane index")]
     InvalidLaneIdx,
+    #[error("uninitialized local")]
+    InvalidUninitLocal,
+    #[error("field type is not defaultable")]
+    InvalidNotDefaultableField,
+    #[error("array type is not defaultable")]
+    InvalidNotDefaultableArray,
+    #[error("field is packed")]
+    InvalidPackedField,
+    #[error("array is packed")]
+    InvalidPackedArray,
+    #[error("field is unpacked")]
+    InvalidUnpackedField,
+    #[error("array is unpacked")]
+    InvalidUnpackedArray,
+    #[error("invalid br ref type")]
+    InvalidBrRefType,
+    #[error("array types do not match")]
+    ArrayTypesMismatch,
+    #[error("array type is not numeric or vector")]
+    ArrayTypesNumtypeRequired,
+    #[error("sub type")]
+    InvalidSubType,
 }
 
 /// The error type for the instantiation phase from WasmEdge Core.
@@ -452,8 +496,8 @@ pub enum CoreExecutionError {
     WrongInstanceIndex,
     #[error("instruction type mismatch")]
     InstrTypeMismatch,
-    #[error("function type mismatch")]
-    FuncTypeMismatch,
+    #[error("function signature mismatch")]
+    FuncSigMismatch,
     #[error("integer divide by zero")]
     DivideByZero,
     #[error("integer overflow")]
@@ -464,6 +508,8 @@ pub enum CoreExecutionError {
     TableOutOfBounds,
     #[error("out of bounds memory access")]
     MemoryOutOfBounds,
+    #[error("out of bounds array access")]
+    ArrayOutOfBounds,
     #[error("unreachable")]
     Unreachable,
     #[error("uninitialized element")]
@@ -480,6 +526,47 @@ pub enum CoreExecutionError {
     UnalignedAtomicAccess,
     #[error("expected shared memory")]
     ExpectSharedMemory,
+    #[error("null reference")]
+    CastNullToNonNull,
+    #[error("null function reference")]
+    AccessNullFunc,
+    #[error("null structure reference")]
+    AccessNullStruct,
+    #[error("null array reference")]
+    AccessNullArray,
+    #[error("null i31 reference")]
+    AccessNullI31,
+    #[error("cast failure")]
+    CastFailed,
+}
+
+/// The error type for the component model phase from WasmEdge Core.
+#[derive(Error, Clone, Debug, PartialEq, Eq)]
+pub enum CoreComponentError {
+    #[error("malformed sort")]
+    MalformedSort,
+    #[error("malformed alias target")]
+    MalformedAliasTarget,
+    #[error("malformed core instance")]
+    MalformedCoreInstance,
+    #[error("malformed instance")]
+    MalformedInstance,
+    #[error("malformed defined type")]
+    MalformedDefType,
+    #[error("malformed record type")]
+    MalformedRecordType,
+    #[error("malformed variant type")]
+    MalformedVariantType,
+    #[error("malformed tuple type")]
+    MalformedTupleType,
+    #[error("malformed flags type")]
+    MalformedFlagsType,
+    #[error("malformed canonical")]
+    MalformedCanonical,
+    #[error("unknown canonical option")]
+    UnknownCanonicalOption,
+    #[error("malformed name")]
+    MalformedName,
 }
 
 /// The error type for the host function definition.

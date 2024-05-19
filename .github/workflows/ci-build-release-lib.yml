@@ -6,6 +6,8 @@ concurrency:
 
 on:
   push:
+    branches:
+      - '!bump/**'
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"

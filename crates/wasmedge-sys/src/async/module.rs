@@ -212,7 +212,7 @@ fn args_get(
             WasmPtr::from(argv_buf),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -236,7 +236,7 @@ fn args_sizes_get(
             WasmPtr::from(argv_buf_size),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -260,7 +260,7 @@ fn environ_get(
             WasmPtr::from(environ_buf),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -284,7 +284,7 @@ fn environ_sizes_get(
             WasmPtr::from(environ_buf_size),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -308,7 +308,7 @@ fn clock_res_get(
             WasmPtr::from(resolution_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -335,7 +335,7 @@ fn clock_time_get(
             WasmPtr::from(time_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -360,7 +360,7 @@ fn random_get(
             buf_len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -385,7 +385,7 @@ fn fd_prestat_get(
             WasmPtr::from(prestat_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -412,7 +412,7 @@ fn fd_prestat_dir_name(
             path_max_len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -437,7 +437,7 @@ fn fd_renumber(
             to,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -466,7 +466,7 @@ fn fd_advise(
             advice,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -493,7 +493,7 @@ fn fd_allocate(
             len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -516,7 +516,7 @@ fn fd_close(
             fd,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -545,7 +545,7 @@ fn fd_seek(
             WasmPtr::from(newoffset_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -568,7 +568,7 @@ fn fd_sync(
             fd,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -591,7 +591,7 @@ fn fd_datasync(
             fd,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -616,7 +616,7 @@ fn fd_tell(
             WasmPtr::from(offset),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -641,7 +641,7 @@ fn fd_fdstat_get(
             WasmPtr::from(buf_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -666,7 +666,7 @@ fn fd_fdstat_set_flags(
             flags,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -693,7 +693,7 @@ fn fd_fdstat_set_rights(
             fs_rights_inheriting,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -718,7 +718,7 @@ fn fd_filestat_get(
             WasmPtr::from(buf),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -743,7 +743,7 @@ fn fd_filestat_set_size(
             WasmPtr::from(buf),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -772,7 +772,7 @@ fn fd_filestat_set_times(
             fst_flags,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -801,7 +801,7 @@ fn fd_read(
             WasmPtr::from(nread),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -832,7 +832,7 @@ fn fd_pread(
             WasmPtr::from(nread),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -861,7 +861,7 @@ fn fd_write(
             WasmPtr::from(nwritten),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -892,7 +892,7 @@ fn fd_pwrite(
             WasmPtr::from(nwritten),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -923,7 +923,7 @@ fn fd_readdir(
             WasmPtr::from(bufused_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -950,7 +950,7 @@ fn path_create_directory(
             path_len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -981,7 +981,7 @@ fn path_filestat_get(
             WasmPtr::from(file_stat_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1042,7 +1042,7 @@ fn path_open(
             WasmPtr::from(fd_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1080,7 +1080,7 @@ fn path_remove_directory(
             path_len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1113,7 +1113,7 @@ fn path_rename(
             new_path_len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1151,7 +1151,7 @@ fn path_unlink_file(
             path_len,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1170,7 +1170,7 @@ fn proc_exit(
         p::proc_exit(data, &mut mem as &mut Memory, code);
         Err(CoreError::Common(CoreCommonError::Terminated))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1223,7 +1223,7 @@ fn sock_open(
             WasmPtr::from(ro_fd_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1249,7 +1249,7 @@ fn sock_bind(
             port,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1274,7 +1274,7 @@ fn sock_listen(
             backlog,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1308,7 +1308,7 @@ where
                 .await,
             ))
         } else {
-            Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+            Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
         }
     })
 }
@@ -1333,7 +1333,7 @@ async fn sock_connect(
                 .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1369,7 +1369,7 @@ async fn sock_recv(
             .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1409,7 +1409,7 @@ async fn sock_recv_from(
             .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1443,7 +1443,7 @@ async fn sock_send(
             .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1481,7 +1481,7 @@ async fn sock_send_to(
             .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1505,7 +1505,7 @@ fn sock_shutdown(
             how,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1533,7 +1533,7 @@ fn sock_getpeeraddr(
             WasmPtr::from(port_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1561,7 +1561,7 @@ fn sock_getlocaladdr(
             WasmPtr::from(port_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1591,7 +1591,7 @@ fn sock_getsockopt(
             WasmPtr::from(flag_size_ptr),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1621,7 +1621,7 @@ fn sock_setsockopt(
             flag_size,
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1658,7 +1658,7 @@ fn sock_getaddrinfo(
             WasmPtr::from(res_len),
         )))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1690,7 +1690,7 @@ async fn poll_oneoff(
             .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
@@ -1725,7 +1725,7 @@ async fn sock_lookup_ip(
             .await,
         ))
     } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch))
+        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
     }
 }
 
