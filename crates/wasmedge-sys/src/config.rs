@@ -752,11 +752,7 @@ unsafe impl Sync for InnerConfig {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        borrow::BorrowMut,
-        sync::{Arc, Mutex},
-        thread,
-    };
+    use std::thread;
 
     #[test]
     fn test_config_options() {
@@ -809,7 +805,6 @@ mod tests {
         config.annotations(true);
         config.bulk_memory_operations(false);
         config.exception_handling(true);
-        config.function_references(true);
         config.memory64(true);
         config.multi_value(false);
         config.mutable_globals(false);
@@ -819,7 +814,6 @@ mod tests {
         config.simd(false);
         config.tail_call(true);
         config.threads(true);
-        config.gc(true);
         config.measure_cost(true);
         config.measure_time(true);
         #[cfg(feature = "aot")]
@@ -834,7 +828,7 @@ mod tests {
         assert!(config.annotations_enabled());
         assert!(!config.bulk_memory_operations_enabled());
         assert!(config.exception_handling_enabled());
-        assert!(config.function_references_enabled());
+        assert!(!config.function_references_enabled());
         assert!(config.memory64_enabled());
         assert!(!config.multi_value_enabled());
         assert!(!config.mutable_globals_enabled());
@@ -844,7 +838,6 @@ mod tests {
         assert!(!config.simd_enabled());
         assert!(config.tail_call_enabled());
         assert!(config.threads_enabled());
-        assert!(config.gc_enabled());
         assert!(config.is_cost_measuring());
         #[cfg(feature = "aot")]
         assert!(config.dump_ir_enabled());
@@ -853,6 +846,28 @@ mod tests {
         assert!(config.is_instruction_counting());
         assert!(config.is_time_measuring());
         assert!(config.interpreter_mode_enabled());
+
+        // check function_references
+        // Enabling function_references also enables reference_types.
+        config.function_references(true);
+        assert!(config.function_references_enabled());
+        assert!(config.reference_types_enabled());
+
+        config.function_references(false);
+        assert!(!config.function_references_enabled());
+        assert!(config.reference_types_enabled());
+
+        // check gc
+        // Enabling gc also enables reference_types and function_references.
+        config.gc(true);
+        assert!(config.function_references_enabled());
+        assert!(config.reference_types_enabled());
+        assert!(config.gc_enabled());
+
+        config.gc(false);
+        assert!(config.function_references_enabled());
+        assert!(config.reference_types_enabled());
+        assert!(!config.gc_enabled());
 
         // set maximum memory pages
         config.set_max_memory_pages(10);
@@ -917,13 +932,11 @@ mod tests {
             config.annotations(true);
             config.bulk_memory_operations(false);
             config.exception_handling(true);
-            config.function_references(true);
             config.memory64(true);
             config.reference_types(false);
             config.simd(false);
             config.tail_call(true);
             config.threads(true);
-            config.gc(true);
             config.measure_cost(true);
             config.measure_time(true);
             #[cfg(feature = "aot")]
@@ -937,13 +950,13 @@ mod tests {
             assert!(config.annotations_enabled());
             assert!(!config.bulk_memory_operations_enabled());
             assert!(config.exception_handling_enabled());
-            assert!(config.function_references_enabled());
+            assert!(!config.function_references_enabled());
             assert!(config.memory64_enabled());
             assert!(!config.reference_types_enabled());
             assert!(!config.simd_enabled());
             assert!(config.tail_call_enabled());
             assert!(config.threads_enabled());
-            assert!(config.gc_enabled());
+            assert!(!config.gc_enabled());
             assert!(config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(config.dump_ir_enabled());
@@ -961,87 +974,31 @@ mod tests {
         // create a Config instance
         let result = Config::create();
         assert!(result.is_ok());
-        let config = Arc::new(Mutex::new(result.unwrap()));
+        let config = result.unwrap();
 
-        let config_cloned = Arc::clone(&config);
-        let handle = thread::spawn(move || {
-            let result = config_cloned.lock();
-            assert!(result.is_ok());
-            let mut config = result.unwrap();
-
-            // check default settings
-            assert!(!config.multi_memories_enabled());
-            assert!(!config.annotations_enabled());
-            assert!(config.bulk_memory_operations_enabled());
-            assert!(!config.exception_handling_enabled());
-            assert!(!config.function_references_enabled());
-            assert!(!config.memory64_enabled());
-            assert!(config.reference_types_enabled());
-            assert!(config.simd_enabled());
-            assert!(!config.tail_call_enabled());
-            assert!(!config.threads_enabled());
-            assert!(!config.gc_enabled());
-            assert!(!config.is_cost_measuring());
-            #[cfg(feature = "aot")]
-            assert!(!config.dump_ir_enabled());
-            #[cfg(feature = "aot")]
-            assert!(!config.generic_binary_enabled());
-            assert!(!config.is_instruction_counting());
-            assert!(!config.is_time_measuring());
-            assert_eq!(config.get_max_memory_pages(), 65536);
-            #[cfg(feature = "aot")]
-            assert_eq!(
-                config.get_aot_optimization_level(),
-                CompilerOptimizationLevel::O3,
-            );
-            #[cfg(feature = "aot")]
-            assert_eq!(
-                config.get_aot_compiler_output_format(),
-                CompilerOutputFormat::Wasm,
-            );
-
-            // set options
-            let config_mut = config.borrow_mut();
-            config_mut.multi_memories(true);
-            config_mut.annotations(true);
-            config_mut.bulk_memory_operations(false);
-            config_mut.exception_handling(true);
-            config_mut.function_references(true);
-            config_mut.memory64(true);
-            config_mut.reference_types(false);
-            config_mut.simd(false);
-            config_mut.tail_call(true);
-            config_mut.threads(true);
-            config_mut.gc(true);
-            config_mut.measure_cost(true);
-            config_mut.measure_time(true);
-            #[cfg(feature = "aot")]
-            config_mut.dump_ir(true);
-            #[cfg(feature = "aot")]
-            config_mut.generic_binary(true);
-            config_mut.count_instructions(true);
-
-            // check new settings
-            assert!(config.multi_memories_enabled());
-            assert!(config.annotations_enabled());
-            assert!(!config.bulk_memory_operations_enabled());
-            assert!(config.exception_handling_enabled());
-            assert!(config.function_references_enabled());
-            assert!(config.memory64_enabled());
-            assert!(!config.reference_types_enabled());
-            assert!(!config.simd_enabled());
-            assert!(config.tail_call_enabled());
-            assert!(config.threads_enabled());
-            assert!(config.gc_enabled());
-            assert!(config.is_cost_measuring());
-            #[cfg(feature = "aot")]
-            assert!(config.dump_ir_enabled());
-            #[cfg(feature = "aot")]
-            assert!(config.generic_binary_enabled());
-            assert!(config.is_instruction_counting());
-            assert!(config.is_time_measuring());
+        thread::scope(|s| {
+            s.spawn(|| {
+                {
+                    // check default settings
+                    assert!(!config.multi_memories_enabled());
+                    assert!(!config.annotations_enabled());
+                    assert!(config.bulk_memory_operations_enabled());
+                    assert!(!config.exception_handling_enabled());
+                    assert!(!config.function_references_enabled());
+                    assert!(!config.memory64_enabled());
+                    assert!(config.reference_types_enabled());
+                    assert!(config.simd_enabled());
+                    assert!(!config.tail_call_enabled());
+                    assert!(!config.threads_enabled());
+                    assert!(!config.gc_enabled());
+                    assert!(!config.is_cost_measuring());
+                    assert!(!config.is_instruction_counting());
+                    assert!(!config.is_time_measuring());
+                    assert_eq!(config.get_max_memory_pages(), 65536);
+                }
+            })
+            .join()
+            .unwrap();
         });
-
-        handle.join().unwrap();
     }
 }
