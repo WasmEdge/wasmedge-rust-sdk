@@ -120,6 +120,9 @@ fn main() {
         let success = std::process::Command::new(bindgen_path)
             .arg("--no-prepend-enum-name") // The API already prepends the name.
             .arg("--dynamic-link-require-all")
+            .arg("--allowlist-item")
+            .arg("WasmEdge.*")
+            .arg("--no-layout-tests")
             .arg("--formatter=none")
             .arg("-o")
             .arg(out_file)
@@ -136,6 +139,8 @@ fn main() {
             .clang_arg(format!("-I{inc_dir}"))
             .prepend_enum_name(false)
             .dynamic_link_require_all(true)
+            .allowlist_item("WasmEdge.*")
+            .layout_tests(false)
             .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
             .generate()
             .expect("failed to generate bindings")

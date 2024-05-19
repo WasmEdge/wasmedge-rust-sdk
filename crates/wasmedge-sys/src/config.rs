@@ -444,6 +444,26 @@ impl Config {
         unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_Threads) }
     }
 
+    /// Enables or disables the GC option. By default, the option is disabled.
+    ///
+    /// # Argument
+    ///
+    /// * `enable` - Whether the option turns on or not.
+    pub fn gc(&mut self, enable: bool) {
+        unsafe {
+            if enable {
+                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_GC)
+            } else {
+                ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::WasmEdge_Proposal_GC)
+            }
+        }
+    }
+
+    /// Checks if the GC option turns on or not.
+    pub fn gc_enabled(&self) -> bool {
+        unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_GC) }
+    }
+
     /// Enables or disables the ExceptionHandling option. By default, the option is disabled.
     ///
     /// # Argument
@@ -760,6 +780,7 @@ mod tests {
         assert!(config.simd_enabled());
         assert!(!config.tail_call_enabled());
         assert!(!config.threads_enabled());
+        assert!(!config.gc_enabled());
         assert!(!config.is_cost_measuring());
         #[cfg(feature = "aot")]
         assert!(!config.dump_ir_enabled());
@@ -798,6 +819,7 @@ mod tests {
         config.simd(false);
         config.tail_call(true);
         config.threads(true);
+        config.gc(true);
         config.measure_cost(true);
         config.measure_time(true);
         #[cfg(feature = "aot")]
@@ -822,6 +844,7 @@ mod tests {
         assert!(!config.simd_enabled());
         assert!(config.tail_call_enabled());
         assert!(config.threads_enabled());
+        assert!(config.gc_enabled());
         assert!(config.is_cost_measuring());
         #[cfg(feature = "aot")]
         assert!(config.dump_ir_enabled());
@@ -869,6 +892,7 @@ mod tests {
             assert!(config.simd_enabled());
             assert!(!config.tail_call_enabled());
             assert!(!config.threads_enabled());
+            assert!(!config.gc_enabled());
             assert!(!config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(!config.dump_ir_enabled());
@@ -899,6 +923,7 @@ mod tests {
             config.simd(false);
             config.tail_call(true);
             config.threads(true);
+            config.gc(true);
             config.measure_cost(true);
             config.measure_time(true);
             #[cfg(feature = "aot")]
@@ -918,6 +943,7 @@ mod tests {
             assert!(!config.simd_enabled());
             assert!(config.tail_call_enabled());
             assert!(config.threads_enabled());
+            assert!(config.gc_enabled());
             assert!(config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(config.dump_ir_enabled());
@@ -954,6 +980,7 @@ mod tests {
             assert!(config.simd_enabled());
             assert!(!config.tail_call_enabled());
             assert!(!config.threads_enabled());
+            assert!(!config.gc_enabled());
             assert!(!config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(!config.dump_ir_enabled());
@@ -985,6 +1012,7 @@ mod tests {
             config_mut.simd(false);
             config_mut.tail_call(true);
             config_mut.threads(true);
+            config_mut.gc(true);
             config_mut.measure_cost(true);
             config_mut.measure_time(true);
             #[cfg(feature = "aot")]
@@ -1004,6 +1032,7 @@ mod tests {
             assert!(!config.simd_enabled());
             assert!(config.tail_call_enabled());
             assert!(config.threads_enabled());
+            assert!(config.gc_enabled());
             assert!(config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(config.dump_ir_enabled());

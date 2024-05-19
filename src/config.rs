@@ -82,6 +82,7 @@ impl ConfigBuilder {
         inner.simd(self.common_config.simd);
         inner.multi_memories(self.common_config.multi_memories);
         inner.threads(self.common_config.threads);
+        inner.gc(self.common_config.gc);
         inner.tail_call(self.common_config.tail_call);
         inner.function_references(self.common_config.function_references);
         inner.interpreter_mode(self.common_config.interpreter_mode);
@@ -307,6 +308,7 @@ pub struct CommonConfigOptions {
     simd: bool,
     multi_memories: bool,
     threads: bool,
+    gc: bool,
     tail_call: bool,
     function_references: bool,
     interpreter_mode: bool,
@@ -324,6 +326,7 @@ impl CommonConfigOptions {
     /// * simd: true,
     /// * multi_memories: false,
     /// * threads: false,
+    /// * gc: false,
     /// * tail_call: false,
     /// * function_references: false,
     /// * interpreter_mode: false,
@@ -338,6 +341,7 @@ impl CommonConfigOptions {
             simd: true,
             multi_memories: false,
             threads: false,
+            gc: false,
             tail_call: false,
             function_references: false,
             interpreter_mode: false,
@@ -450,6 +454,15 @@ impl CommonConfigOptions {
             threads: enable,
             ..self
         }
+    }
+
+    /// Enables or disables the GC option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn gc(self, enable: bool) -> Self {
+        Self { gc: enable, ..self }
     }
 
     /// Enables or disables the TailCall option.

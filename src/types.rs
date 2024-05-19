@@ -1,7 +1,7 @@
 //! Defines the general types.
 
 use wasmedge_sys::WasmValue;
-use wasmedge_types::{self};
+use wasmedge_types;
 
 /// Defines runtime values that a WebAssembly module can either consume or produce.
 #[derive(Debug, Clone)]
