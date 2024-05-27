@@ -67,6 +67,10 @@ impl From<WasmValue> for Val {
                     Val::ExternRef(Some(ExternRef { inner: value }))
                 }
             }
+            wasmedge_types::ValType::UnsupportedRef => {
+                // Waiting for more GC-related C APIs.
+                Val::ExternRef(None)
+            }
         }
     }
 }

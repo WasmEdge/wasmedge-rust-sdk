@@ -381,16 +381,18 @@ impl From<ffi::WasmEdge_ValType> for ValType {
                 } else if ffi::WasmEdge_ValTypeIsExternRef(value) {
                     ValType::ExternRef
                 } else {
-                    panic!(
+                    log::warn!(
                         "capi unsupport WasmEdge_RefType `{:x}`",
                         u64::from_be_bytes(value.Data)
-                    )
+                    );
+                    ValType::UnsupportedRef
                 }
             } else {
-                panic!(
+                log::warn!(
                     "unknown WasmEdge_ValType `{:x}`",
                     u64::from_be_bytes(value.Data)
-                )
+                );
+                ValType::UnsupportedRef
             }
         }
     }
@@ -406,6 +408,8 @@ impl From<ValType> for ffi::WasmEdge_ValType {
                 ValType::V128 => ffi::WasmEdge_ValTypeGenV128(),
                 ValType::FuncRef => ffi::WasmEdge_ValTypeGenFuncRef(),
                 ValType::ExternRef => ffi::WasmEdge_ValTypeGenExternRef(),
+                // C API is temporarily unsupported.
+                ValType::UnsupportedRef => ffi::WasmEdge_ValTypeGenExternRef(),
             }
         }
     }

@@ -64,6 +64,8 @@ pub enum ValType {
     FuncRef,
     /// A reference to object.
     ExternRef,
+    /// A reference that unsupported by c-api.
+    UnsupportedRef,
 }
 
 /// Defines the mutability property of WasmEdge Global variables.
