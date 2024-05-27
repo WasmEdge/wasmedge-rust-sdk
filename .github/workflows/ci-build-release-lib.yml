@@ -220,7 +220,7 @@ jobs:
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
-          git checkout $(git describe --abbrev=0)
+          git checkout $(git tag -l --sort=-version:refname | Where-Object { $_ -match '^0.[0-9][0-9].[0-9]$' } | Select-Object -First 1)
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
