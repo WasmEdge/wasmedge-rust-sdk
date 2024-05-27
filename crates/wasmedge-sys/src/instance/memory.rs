@@ -112,8 +112,7 @@ impl Memory {
     ///
     /// * `offset` - The data start offset in the [Memory].
     ///
-    /// * `len` - The requested data length. If the size of `offset` + `len` is larger
-    /// than the data size in the [Memory]
+    /// * `len` - The requested data length. If the size of `offset` + `len` is larger than the data size in the [Memory]
     ///
     ///
     /// # Errors
