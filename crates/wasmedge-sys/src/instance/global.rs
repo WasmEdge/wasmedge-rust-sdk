@@ -83,7 +83,10 @@ impl Global {
                 GlobalError::UnmatchedValType,
             )));
         }
-        unsafe { ffi::WasmEdge_GlobalInstanceSetValue(self.inner.0, val.as_raw()) }
+        unsafe {
+            let result = ffi::WasmEdge_GlobalInstanceSetValue(self.inner.0, val.as_raw());
+            crate::utils::check(result)?;
+        }
         Ok(())
     }
 

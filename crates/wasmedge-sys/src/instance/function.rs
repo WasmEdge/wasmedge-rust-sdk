@@ -370,7 +370,7 @@ unsafe impl Sync for InnerFuncType {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{types::WasmValue, Executor};
+    use crate::{types::WasmValue, AsInstance, Executor, ImportModule};
 
     use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
 
@@ -441,7 +441,7 @@ mod tests {
             _s: Vec<S>,
         }
 
-        let mut data: Data<i32, &str> = Data {
+        let data: Data<i32, &str> = Data {
             _x: 12,
             _y: "hello".to_string(),
             _v: vec![1, 2, 3],
@@ -457,19 +457,19 @@ mod tests {
             println!("Rust: Entering Rust function real_add");
 
             if input.len() != 2 {
-                return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
             }
 
             let a = if input[0].ty() == ValType::I32 {
                 input[0].to_i32()
             } else {
-                return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
             };
 
             let b = if input[1].ty() == ValType::I32 {
                 input[1].to_i32()
             } else {
-                return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+                return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
             };
 
             let c = a + b;
@@ -479,14 +479,21 @@ mod tests {
             Ok(vec![WasmValue::from_i32(c)])
         }
 
+        let mut import_module = ImportModule::create("test_module", Box::new(data)).unwrap();
+
         // create a FuncType
         let func_ty = FuncType::new(vec![ValType::I32; 2], vec![ValType::I32]);
         // create a host function
         let result = unsafe {
-            Function::create_sync_func(&func_ty, real_add::<Data<i32, &str>>, &mut data, 0)
+            Function::create_sync_func(
+                &func_ty,
+                real_add::<Data<i32, &str>>,
+                import_module.get_host_data_mut(),
+                0,
+            )
         };
         assert!(result.is_ok());
-        let mut host_func = result.unwrap();
+        let host_func = result.unwrap();
 
         // get func type
         let result = host_func.ty();
@@ -501,13 +508,17 @@ mod tests {
         assert_eq!(ty.returns_len(), 1);
         assert_eq!(ty.returns(), &[ValType::I32]);
 
+        import_module.add_func("add", host_func);
+
         // run this function
         let result = Executor::create(None, None);
         assert!(result.is_ok());
         let mut executor = result.unwrap();
 
+        let mut add_func = import_module.get_func_mut("add").unwrap();
+
         let result = executor.call_func(
-            &mut host_func,
+            &mut add_func,
             vec![WasmValue::from_i32(1), WasmValue::from_i32(2)],
         );
 

@@ -467,8 +467,7 @@ impl Executor {
     ///
     /// # Arguments
     ///
-    /// * `store` - The [store](crate::Store), in which the [module](crate::Module) to be instantiated
-    /// is stored.
+    /// * `store` - The [store](crate::Store), in which the [module](crate::Module) to be instantiated is stored.
     ///
     /// * `ast_mod` - The target [module](crate::Module) to be instantiated.
     ///

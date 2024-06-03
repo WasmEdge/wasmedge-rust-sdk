@@ -3,7 +3,7 @@
 use crate::{ffi, instance::function::AsFunc, FuncRef, Function};
 use core::ffi::c_void;
 use std::ffi::CString;
-use wasmedge_types::{RefType, ValType};
+use wasmedge_types::ValType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WasmEdgeLimit {
@@ -273,21 +273,6 @@ impl WasmValue {
         unsafe { ffi::WasmEdge_ValueGetV128(self.ctx) }
     }
 
-    /// Creates a [WasmValue] from a [RefType](wasmedge_types::RefType) value.
-    ///
-    /// # Argument
-    ///
-    /// * `val` - The `[`RefType`] value.
-    pub fn from_null_ref(ref_ty: RefType) -> Self {
-        Self {
-            ctx: unsafe { ffi::WasmEdge_ValueGenNullRef(ref_ty.into()) },
-            ty: match ref_ty {
-                RefType::FuncRef => ValType::FuncRef,
-                RefType::ExternRef => ValType::ExternRef,
-            },
-        }
-    }
-
     /// Checks if a [WasmValue] is NullRef or not.
     pub fn is_null_ref(&self) -> bool {
         unsafe { ffi::WasmEdge_ValueIsNullRef(self.ctx) }
@@ -342,6 +327,18 @@ impl WasmValue {
         }
     }
 
+    /// Creates a null [WasmValue] with a [ExternRef](wasmedge_types::RefType::ExternRef).
+    ///
+    /// # Argument
+    ///
+    /// * `val` - The `[`RefType`] value.
+    pub fn null_extern_ref() -> Self {
+        Self {
+            ctx: unsafe { ffi::WasmEdge_ValueGenExternRef(std::ptr::null_mut()) },
+            ty: ValType::ExternRef,
+        }
+    }
+
     /// Returns the reference to an external object.
     ///
     /// If the [WasmValue] is a `NullRef`, then `None` is returned.
@@ -360,36 +357,60 @@ impl WasmValue {
 }
 impl From<ffi::WasmEdge_Value> for WasmValue {
     fn from(raw_val: ffi::WasmEdge_Value) -> Self {
-        match raw_val.Type {
-            ffi::WasmEdge_ValType_I32 => Self {
-                ctx: raw_val,
-                ty: ValType::I32,
-            },
-            ffi::WasmEdge_ValType_I64 => Self {
-                ctx: raw_val,
-                ty: ValType::I64,
-            },
-            ffi::WasmEdge_ValType_F32 => Self {
-                ctx: raw_val,
-                ty: ValType::F32,
-            },
-            ffi::WasmEdge_ValType_F64 => Self {
-                ctx: raw_val,
-                ty: ValType::F64,
-            },
-            ffi::WasmEdge_ValType_V128 => Self {
-                ctx: raw_val,
-                ty: ValType::V128,
-            },
-            ffi::WasmEdge_ValType_FuncRef => Self {
-                ctx: raw_val,
-                ty: ValType::FuncRef,
-            },
-            ffi::WasmEdge_ValType_ExternRef => Self {
-                ctx: raw_val,
-                ty: ValType::ExternRef,
-            },
-            _ => panic!("unknown WasmEdge_ValType `{}`", raw_val.Type),
+        let ty = raw_val.Type.into();
+        Self { ctx: raw_val, ty }
+    }
+}
+
+impl From<ffi::WasmEdge_ValType> for ValType {
+    fn from(value: ffi::WasmEdge_ValType) -> Self {
+        unsafe {
+            if ffi::WasmEdge_ValTypeIsI32(value) {
+                ValType::I32
+            } else if ffi::WasmEdge_ValTypeIsI64(value) {
+                ValType::I64
+            } else if ffi::WasmEdge_ValTypeIsF32(value) {
+                ValType::F32
+            } else if ffi::WasmEdge_ValTypeIsF64(value) {
+                ValType::F64
+            } else if ffi::WasmEdge_ValTypeIsV128(value) {
+                ValType::V128
+            } else if ffi::WasmEdge_ValTypeIsRef(value) {
+                if ffi::WasmEdge_ValTypeIsFuncRef(value) {
+                    ValType::FuncRef
+                } else if ffi::WasmEdge_ValTypeIsExternRef(value) {
+                    ValType::ExternRef
+                } else {
+                    log::warn!(
+                        "capi unsupport WasmEdge_RefType `{:x}`",
+                        u64::from_be_bytes(value.Data)
+                    );
+                    ValType::UnsupportedRef
+                }
+            } else {
+                log::warn!(
+                    "unknown WasmEdge_ValType `{:x}`",
+                    u64::from_be_bytes(value.Data)
+                );
+                ValType::UnsupportedRef
+            }
+        }
+    }
+}
+impl From<ValType> for ffi::WasmEdge_ValType {
+    fn from(value: ValType) -> Self {
+        unsafe {
+            match value {
+                ValType::I32 => ffi::WasmEdge_ValTypeGenI32(),
+                ValType::I64 => ffi::WasmEdge_ValTypeGenI64(),
+                ValType::F32 => ffi::WasmEdge_ValTypeGenF32(),
+                ValType::F64 => ffi::WasmEdge_ValTypeGenF64(),
+                ValType::V128 => ffi::WasmEdge_ValTypeGenV128(),
+                ValType::FuncRef => ffi::WasmEdge_ValTypeGenFuncRef(),
+                ValType::ExternRef => ffi::WasmEdge_ValTypeGenExternRef(),
+                // C API is temporarily unsupported.
+                ValType::UnsupportedRef => ffi::WasmEdge_ValTypeGenExternRef(),
+            }
         }
     }
 }
@@ -438,18 +459,6 @@ mod tests {
         assert_eq!(value.ty(), ValType::ExternRef);
         assert!(value.extern_ref::<Table>().is_some());
 
-        // NullRef(FuncRef)
-        let val = WasmValue::from_null_ref(RefType::FuncRef);
-        assert_eq!(val.ty(), ValType::FuncRef);
-        assert!(val.is_null_ref());
-        assert_eq!(val.ty(), ValType::FuncRef);
-
-        // NullRef(ExternRef)
-        let val = WasmValue::from_null_ref(RefType::ExternRef);
-        assert_eq!(val.ty(), ValType::ExternRef);
-        assert!(val.is_null_ref());
-        assert_eq!(val.ty(), ValType::ExternRef);
-
         let val1 = WasmValue::from_i32(1314);
         let val2 = WasmValue::from_i32(1314);
         assert_eq!(val1.to_i32(), val2.to_i32());
@@ -476,12 +485,6 @@ mod tests {
         let mut table = result.unwrap();
         let val_extern_ref = WasmValue::from_extern_ref(&mut table);
 
-        // NullRef(FuncRef)
-        let val_null_func_ref = WasmValue::from_null_ref(RefType::FuncRef);
-
-        // NullRef(ExternRef)
-        let val_null_extern_ref = WasmValue::from_null_ref(RefType::ExternRef);
-
         let handle = thread::spawn(move || {
             let val_i32_c = val_i32;
             assert_eq!(val_i32_c.ty(), ValType::I32);
@@ -501,16 +504,6 @@ mod tests {
             let val_extern_ref_c = val_extern_ref;
             assert_eq!(val_extern_ref_c.ty(), ValType::ExternRef);
             assert!(val_extern_ref_c.extern_ref::<Table>().is_some());
-
-            let val_null_func_ref_c = val_null_func_ref;
-            assert_eq!(val_null_func_ref_c.ty(), ValType::FuncRef);
-            assert!(val_null_func_ref_c.is_null_ref());
-            assert_eq!(val_null_func_ref_c.ty(), ValType::FuncRef);
-
-            let val_null_extern_ref_c = val_null_extern_ref;
-            assert_eq!(val_null_extern_ref_c.ty(), ValType::ExternRef);
-            assert!(val_null_extern_ref_c.is_null_ref());
-            assert_eq!(val_null_extern_ref_c.ty(), ValType::ExternRef);
         });
 
         handle.join().unwrap();
@@ -547,15 +540,6 @@ mod tests {
         let val_extern_ref = Arc::new(Mutex::new(WasmValue::from_extern_ref(&mut table)));
         let val_extern_ref_cloned = Arc::clone(&val_extern_ref);
 
-        // NullRef(FuncRef)
-        let val_null_func_ref = Arc::new(Mutex::new(WasmValue::from_null_ref(RefType::FuncRef)));
-        let val_null_func_ref_cloned = Arc::clone(&val_null_func_ref);
-
-        // NullRef(ExternRef)
-        let val_null_extern_ref =
-            Arc::new(Mutex::new(WasmValue::from_null_ref(RefType::ExternRef)));
-        let val_null_extern_ref_cloned = Arc::clone(&val_null_extern_ref);
-
         let handle = thread::spawn(move || {
             let result = val_i32_cloned.lock();
             assert!(result.is_ok());
@@ -587,20 +571,6 @@ mod tests {
             let val_extern_ref_c = result.unwrap();
             assert_eq!(val_extern_ref_c.ty(), ValType::ExternRef);
             assert!(val_extern_ref_c.extern_ref::<Table>().is_some());
-
-            let result = val_null_func_ref_cloned.lock();
-            assert!(result.is_ok());
-            let val_null_func_ref_c = result.unwrap();
-            assert_eq!(val_null_func_ref_c.ty(), ValType::FuncRef);
-            assert!(val_null_func_ref_c.is_null_ref());
-            assert_eq!(val_null_func_ref_c.ty(), ValType::FuncRef);
-
-            let result = val_null_extern_ref_cloned.lock();
-            assert!(result.is_ok());
-            let val_null_extern_ref_c = result.unwrap();
-            assert_eq!(val_null_extern_ref_c.ty(), ValType::ExternRef);
-            assert!(val_null_extern_ref_c.is_null_ref());
-            assert_eq!(val_null_extern_ref_c.ty(), ValType::ExternRef);
         });
 
         handle.join().unwrap();

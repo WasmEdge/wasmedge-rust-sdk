@@ -202,7 +202,7 @@ impl<'module> ImportType<'module> {
                     false => {
                         // get the element type
                         let elem_ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(ctx_tab_ty) };
-                        let elem_ty: RefType = elem_ty.into();
+                        let elem_ty = RefType::from(ValType::from(elem_ty));
 
                         // get the limit
                         let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
@@ -317,7 +317,7 @@ impl<'module> ExportType<'module> {
                     false => {
                         // get the element type
                         let elem_ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(ctx_tab_ty) };
-                        let elem_ty: RefType = elem_ty.into();
+                        let elem_ty = RefType::from(ValType::from(elem_ty));
 
                         // get the limit
                         let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };

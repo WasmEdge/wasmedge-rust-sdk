@@ -1,7 +1,6 @@
 //! Defines the general types.
 
 use wasmedge_sys::WasmValue;
-use wasmedge_types::{self, RefType};
 
 /// Defines runtime values that a WebAssembly module can either consume or produce.
 #[derive(Debug, Clone)]
@@ -45,7 +44,7 @@ impl From<Val> for WasmValue {
             // Val::FuncRef(Some(func_ref)) => WasmValue::from_func_ref(func_ref.inner),
             // Val::FuncRef(None) => WasmValue::from_null_ref(RefType::FuncRef),
             Val::ExternRef(Some(extern_ref)) => extern_ref.inner,
-            Val::ExternRef(None) => WasmValue::from_null_ref(RefType::ExternRef),
+            Val::ExternRef(None) => WasmValue::null_extern_ref(),
         }
     }
 }
@@ -67,6 +66,10 @@ impl From<WasmValue> for Val {
                 } else {
                     Val::ExternRef(Some(ExternRef { inner: value }))
                 }
+            }
+            wasmedge_types::ValType::UnsupportedRef => {
+                // Waiting for more GC-related C APIs.
+                Val::ExternRef(None)
             }
         }
     }

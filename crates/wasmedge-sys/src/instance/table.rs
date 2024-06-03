@@ -14,7 +14,7 @@ use crate::{
 
 use wasmedge_types::{
     error::{TableError, WasmEdgeError},
-    RefType,
+    RefType, ValType,
 };
 
 /// A WasmEdge [Table] defines a WebAssembly table instance described by its [type](crate::TableType). A table is an array-like structure and stores function references.
@@ -189,11 +189,9 @@ impl TableType {
     /// ```
     ///
     pub(crate) fn create(elem_ty: RefType, min: u32, max: Option<u32>) -> WasmEdgeResult<Self> {
+        let ty: ValType = elem_ty.into();
         let ctx = unsafe {
-            ffi::WasmEdge_TableTypeCreate(
-                elem_ty.into(),
-                WasmEdgeLimit::new(min, max, false).into(),
-            )
+            ffi::WasmEdge_TableTypeCreate(ty.into(), WasmEdgeLimit::new(min, max, false).into())
         };
         if ctx.is_null() {
             Err(Box::new(WasmEdgeError::TableTypeCreate))
@@ -207,6 +205,7 @@ impl TableType {
     /// Returns the element type.
     pub(crate) fn elem_ty(&self) -> RefType {
         let ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(self.inner.0) };
+        let ty: ValType = ty.into();
         ty.into()
     }
 
@@ -417,19 +416,19 @@ mod tests {
         println!("Rust: Entering Rust function real_add");
 
         if input.len() != 2 {
-            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+            return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
         }
 
         let a = if input[0].ty() == ValType::I32 {
             input[0].to_i32()
         } else {
-            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+            return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
         };
 
         let b = if input[1].ty() == ValType::I32 {
             input[0].to_i32()
         } else {
-            return Err(CoreError::Execution(CoreExecutionError::FuncTypeMismatch));
+            return Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch));
         };
 
         let c = a + b;
