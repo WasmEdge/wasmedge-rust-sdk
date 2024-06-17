@@ -50,7 +50,8 @@ impl PluginManager {
             .iter()
             .map(|&x| std::ffi::CString::new(x).unwrap())
             .collect();
-        let c_strs: Vec<*const i8> = c_args.iter().map(|x| x.as_ptr()).collect();
+        let c_strs: Vec<*const ::std::os::raw::c_char> =
+            c_args.iter().map(|x| x.as_ptr()).collect();
         let len = c_strs.len() as u32;
         unsafe { ffi::WasmEdge_PluginInitWASINN(c_strs.as_ptr(), len) }
     }
