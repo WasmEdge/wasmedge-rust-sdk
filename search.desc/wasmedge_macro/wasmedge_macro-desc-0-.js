@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wasmedge_macro", 0, "Overview\nDeclare a native async function that will be used to …\nDeclare a native function that will be used to create a …")

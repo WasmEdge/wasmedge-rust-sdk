@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["__WASI_OFLAGS_CREAT","__WASI_OFLAGS_DIRECTORY","__WASI_OFLAGS_EXCL","__WASI_OFLAGS_TRUNC"],"type":["Type"]};

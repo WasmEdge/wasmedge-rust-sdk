@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Function"],"trait":["AsFunc"],"type":["CustomFnWrapper","FuncRef","SyncFn"]};

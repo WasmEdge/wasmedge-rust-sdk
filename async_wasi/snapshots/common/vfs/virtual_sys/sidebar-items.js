@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DiskInode","Inode"],"struct":["DiskDir","DiskFile","DiskFileSys","InPipline","OutPipeline","StdioSys","WasiVirtualSys"],"trait":["WasiVirtualDir","WasiVirtualFile"]};
