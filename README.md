@@ -16,6 +16,8 @@ This crate depends on the WasmEdge C API. In linux/macOS the crate can download 
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+  | 0.14.1        | 0.14.0        | 0.19.2        | 0.6.0         | 0.6.1         | 0.2.0     |
+  | 0.14.0        | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
   | 0.13.5-newapi | 0.13.5        | 0.18.0        | 0.5.0         | 0.6.1         | 0.2.0     |
   | 0.13.2        | 0.13.5        | 0.17.5        | 0.4.4         | 0.6.1         | 0.1.0     |
   | 0.13.1        | 0.13.5        | 0.17.4        | 0.4.4         | 0.6.1         | 0.1.0     |
