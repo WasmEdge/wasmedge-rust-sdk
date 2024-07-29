@@ -95,9 +95,10 @@ fn main() {
         // Tell cargo to look for static libraries in the specified directory
         println!("cargo:rustc-link-search=native={lib_dir}");
 
-        // Tell cargo to tell rustc to link our `wasmedge` library. Cargo will
-        // automatically know it must look for a `libwasmedge.a` file.
+        // Tell cargo to tell rustc to link our `wasmedge` and `fmt` library. Cargo will
+        // automatically know it must look for a `libwasmedge.a` and `libfmt.a` file.
         println!("cargo:rustc-link-lib=static=wasmedge");
+        println!("cargo:rustc-link-lib=static=fmt");
         for dep in ["rt", "dl", "pthread", "m", "zstd", "stdc++"] {
             link_lib(dep);
         }
