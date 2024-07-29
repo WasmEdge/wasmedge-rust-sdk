@@ -154,16 +154,16 @@ pub(crate) struct SocketWritable(pub(crate) AtomicI8);
 impl SocketWritable {
     pub(crate) async fn writable(&self) {
         let b = self.0.fetch_sub(1, std::sync::atomic::Ordering::Acquire);
-        SocketWritableFuture(b).await;
+        tokio::time::timeout(Duration::from_secs(10), SocketWritableFuture(b)).await;
     }
 
     pub(crate) fn set_writable(&self) {
-        self.0.store(2, std::sync::atomic::Ordering::Release)
+        self.0.store(5, std::sync::atomic::Ordering::Release)
     }
 }
 impl Default for SocketWritable {
     fn default() -> Self {
-        Self(AtomicI8::new(2))
+        Self(AtomicI8::new(5))
     }
 }
 
