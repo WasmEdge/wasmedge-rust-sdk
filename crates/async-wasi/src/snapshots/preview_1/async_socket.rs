@@ -778,8 +778,7 @@ pub mod addrinfo {
         let addr = if node.is_empty() {
             None
         } else {
-            // let node = format!("{node}:0");
-            (node, 0).to_socket_addrs()?.next()
+            (node, 0).to_socket_addrs()?.find(|addr| addr.is_ipv4())
         };
 
         if let Some(std::net::SocketAddr::V4(ipv4)) = addr {
