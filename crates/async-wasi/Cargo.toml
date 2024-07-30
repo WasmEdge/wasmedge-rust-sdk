@@ -1,5 +1,5 @@
 [package]
-categories = ["WebAssembly"]
+categories = ["wasm"]
 description = "Async WASI for WasmEdge"
 documentation = "https://docs.rs/async-wasi/"
 edition = "2021"
