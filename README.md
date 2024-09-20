@@ -66,6 +66,10 @@ This crate uses `rust-bindgen` during the build process. If you would like to us
 
 **Notice:** The minimum supported Rust version is 1.71.
 
+## Upgrade to 0.14.0
+
+If you are upgrading from 0.13.2 to 0.14.0, refer to [docs/Upgrade_to_0.14.0.md](docs/Upgrade_to_0.14.0.md).
+
 ## API Reference
 
 - [API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/index.html)
