@@ -122,7 +122,7 @@ pub struct ImportType<'module> {
     inner: sys::ImportType<'module>,
     _marker: PhantomData<&'module Module>,
 }
-impl<'module> ImportType<'module> {
+impl ImportType<'_> {
     /// Returns the imported name of the WasmEdge instance.
     pub fn name(&self) -> Cow<'_, str> {
         self.inner.name()
@@ -146,7 +146,7 @@ pub struct ExportType<'module> {
     inner: sys::ExportType<'module>,
     _marker: PhantomData<&'module Module>,
 }
-impl<'module> ExportType<'module> {
+impl ExportType<'_> {
     /// Returns the exported name of the WasmEdge instance.
     pub fn name(&self) -> Cow<'_, str> {
         self.inner.name()
