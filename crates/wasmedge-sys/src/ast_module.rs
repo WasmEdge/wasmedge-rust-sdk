@@ -89,14 +89,14 @@ pub struct ImportType<'module> {
     pub(crate) inner: InnerImportType,
     pub(crate) module: &'module Module,
 }
-impl<'module> Drop for ImportType<'module> {
+impl Drop for ImportType<'_> {
     fn drop(&mut self) {
         if !self.inner.0.is_null() {
             self.inner.0 = std::ptr::null();
         }
     }
 }
-impl<'module> ImportType<'module> {
+impl ImportType<'_> {
     /// Returns the type of this import.
     pub fn ty(&self) -> WasmEdgeResult<ExternalInstanceType> {
         let ty = unsafe { ffi::WasmEdge_ImportTypeGetExternalType(self.inner.0) };
@@ -257,7 +257,7 @@ pub struct ExportType<'module> {
     pub(crate) module: &'module Module,
 }
 
-impl<'module> ExportType<'module> {
+impl ExportType<'_> {
     /// Returns the type of this export.
     pub fn ty(&self) -> WasmEdgeResult<ExternalInstanceType> {
         let ty = unsafe { ffi::WasmEdge_ExportTypeGetExternalType(self.inner.0) };
