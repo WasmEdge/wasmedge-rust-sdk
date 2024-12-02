@@ -70,7 +70,7 @@ impl<'a> FiberFuture<'a> {
         ASYNC_CX.set(&async_cx, || self.fiber.resume(val))
     }
 }
-impl<'a> Future for FiberFuture<'a> {
+impl Future for FiberFuture<'_> {
     type Output = Result<(), ()>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {
@@ -164,7 +164,7 @@ impl<'a> TimeoutFiberFuture<'a> {
     }
 }
 
-impl<'a> Future for TimeoutFiberFuture<'a> {
+impl Future for TimeoutFiberFuture<'_> {
     type Output = Result<(), ()>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {

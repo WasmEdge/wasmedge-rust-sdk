@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-20.04]
-        rust: [1.78, 1.77, 1.76]
+        rust: [1.83, 1.82, 1.81]
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
@@ -53,28 +53,24 @@ jobs:
           cmake --install build
           ldconfig
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
-
-      - name: Rustfmt
-        run: cargo +nightly fmt --all -- --check
-
-      - name: Clippy check
-        run: |
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
-
-      - name: Clippy check for async feature
-        run: |
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
-
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           toolchain: ${{ matrix.rust }}
+
+      - name: Rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy check
+        run: |
+          cargo clippy -V
+          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
+        run: |
+          cargo clippy -V
+          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
@@ -96,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.78, 1.77, 1.76]
+        rust: [1.83, 1.82, 1.81]
     container:
       image: fedora:latest
 
@@ -121,28 +117,24 @@ jobs:
           cmake --build build
           cmake --install build
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
-
-      - name: Rustfmt
-        run: cargo +nightly fmt --all -- --check
-
-      - name: Clippy check
-        run: |
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
-
-      - name: Clippy check for async feature
-        run: |
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
-
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           toolchain: ${{ matrix.rust }}
+
+      - name: Rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy check
+        run: |
+          cargo clippy -V
+          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+
+      - name: Clippy check for async feature
+        run: |
+          cargo clippy -V
+          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
@@ -172,8 +164,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-12, macos-13]
-        rust: [1.78, 1.77, 1.76]
+        os: [macos-14, macos-13]
+        rust: [1.83, 1.82, 1.81]
 
     steps:
       - name: Checkout sources
@@ -201,23 +193,19 @@ jobs:
           cmake --build build
           cmake --install build
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
-
-      - name: Run cargo fmt
-        run: cargo +nightly fmt --all -- --check
-
-      - name: Clippy
-        run: |
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,ffi -- -D warnings
-
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           toolchain: ${{ matrix.rust }}
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: |
+          cargo clippy -V
+          cargo clippy --lib --examples --features aot,ffi -- -D warnings
 
       - name: Test Rust Bindings
         run: |
@@ -228,7 +216,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        rust: [1.78, 1.77, 1.76]
+        rust: [1.83, 1.82, 1.81]
     env:
       WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
       WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build
@@ -271,26 +259,22 @@ jobs:
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
           cmake --build build
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          toolchain: ${{ matrix.rust }}
 
       - name: Rustfmt
-        run: cargo +nightly fmt --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Clippy
         run: |
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
-          cargo +nightly clippy -V
-          cargo +nightly clippy --lib --examples --features aot,ffi -- -D warnings
-
-      - name: Install Rust-stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
+          cargo clippy -V
+          cargo clippy --lib --examples --features aot,ffi -- -D warnings
 
       - name: Test Rust Bindings
         run: |

@@ -36,12 +36,12 @@ jobs:
           curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -v ${{ inputs.wasmedge_version }} -p /usr/local
           ldconfig
 
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build Async API document
         run: |
-          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
+          RUSTDOCFLAGS="--cfg docsrs" cargo doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
       - name: Deploy Async API document
         if: github.ref == 'refs/heads/main'
