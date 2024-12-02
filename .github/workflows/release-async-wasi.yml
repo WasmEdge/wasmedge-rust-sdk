@@ -19,10 +19,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Rust v1.75
+      - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.75
 
       - name: Dry run cargo publish
         env:

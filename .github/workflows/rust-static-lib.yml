@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        rust: [1.78, 1.77, 1.76]
+        rust: [1.83, 1.82, 1.81]
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
