@@ -22,10 +22,10 @@ const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = ph
     "macos/x86_64"                 => ("96d01cf083d4f7e1c55683dc4b60acca6d8517ad901e2d7b4b5d64ca9a6532e0", "darwin_x86_64"),
     "linux/aarch64/gnu"            => ("d5ac5c2405ff8a878558379740498e5fe4b126fe746eac585f7efa9bb7f32e28", "manylinux2014_aarch64"),
     "linux/x86_64/gnu"             => ("a82f9fb01a6a6f1dfbd1cb069dc96d116f22c15cdb01207a5d0e65096055d092", "manylinux2014_x86_64"),
-    "linux/aarch64/gnu/static"     => ("073117b8f330ee470cdc574e1c1348dc6775e3b5c2b4662a820d9b4922342662", "debian11_aarch64_static"),
-    "linux/x86_64/gnu/static"      => ("2ad4d84d32fcfadc141fb6b985bad273de5379a33da813ec108efa10b4cb0dc7", "debian11_x86_64_static"),
-    "linux/aarch64/musl/static"    => ("a06a4f10ba960893896331eb3ff7146c13afbfba09ea305f4b56213f2c7d0a93", "alpine3.16_aarch64_static"),
-    "linux/x86_64/musl/static"     => ("b3652a010ac0703177651ce46d5e93cc6acf6bbb8d20ddcb86d26a189775cc00", "alpine3.16_x86_64_static"),
+    "linux/aarch64/gnu/static"     => ("01b4e731951ae2dbe9a9bdcbd6d5747e1e33f8b41dc8da13387f4670dec6f743", "debian11_aarch64_static"),
+    "linux/x86_64/gnu/static"      => ("0ae494f0e251d7fe1b07e421a1989ce2a9f2bf32841ce3086dfc08ef18c9fcf8", "debian11_x86_64_static"),
+    "linux/aarch64/musl/static"    => ("6de03d1c545d329c6aa872732ceb74295afa6acd1e59a7801b3d00553933acdf", "alpine3.16_aarch64_static"),
+    "linux/x86_64/musl/static"     => ("41c78e8c555a33374f90335593fd4684a8f613932d6fe9a77e4e40486517808a", "alpine3.16_x86_64_static"),
 };
 
 lazy_static! {
