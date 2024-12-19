@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creation of the WasmEdge_FunctionInstanceContext for host functions."><title>WasmEdge_FunctionInstanceCreateBinding in wasmedge_sys::ffi - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmedge_sys" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0-nightly (4ba4ac612 2024-12-18)" data-channel="nightly" data-search-js="search-036cda7a.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/cncf/artwork/49169bdbc88a7ce3c4a722c641cc2d548bd5c340/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../wasmedge_sys/index.html"><img src="https://github.com/cncf/artwork/blob/master/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.png?raw=true" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../wasmedge_sys/index.html"><img src="https://github.com/cncf/artwork/blob/master/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.png?raw=true" alt="logo"></a><h2><a href="../../wasmedge_sys/index.html">wasmedge_<wbr>sys</a><span class="version">0.19.4</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In wasmedge_<wbr>sys::<wbr>ffi</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">wasmedge_sys</a>::<wbr><a href="index.html">ffi</a></span><h1>Function <span class="fn">WasmEdge_FunctionInstanceCreateBinding</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/wasmedge_sys/__w/wasmedge-rust-sdk/wasmedge-rust-sdk/target/debug/build/wasmedge-sys-8425d5502c04cfd8/out/wasmedge.rs.html#3">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe extern &quot;C&quot; fn WasmEdge_FunctionInstanceCreateBinding(
+    Type: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.pointer.html">*const </a><a class="struct" href="struct.WasmEdge_FunctionTypeContext.html" title="struct wasmedge_sys::ffi::WasmEdge_FunctionTypeContext">WasmEdge_FunctionTypeContext</a>,
+    WrapFunc: <a class="type" href="type.WasmEdge_WrapFunc_t.html" title="type wasmedge_sys::ffi::WasmEdge_WrapFunc_t">WasmEdge_WrapFunc_t</a>,
+    Binding: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.pointer.html">*mut </a><a class="type" href="https://doc.rust-lang.org/nightly/std/os/raw/type.c_void.html" title="type std::os::raw::c_void">c_void</a>,
+    Data: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.pointer.html">*mut </a><a class="type" href="https://doc.rust-lang.org/nightly/std/os/raw/type.c_void.html" title="type std::os::raw::c_void">c_void</a>,
+    Cost: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.pointer.html">*mut </a><a class="struct" href="struct.WasmEdge_FunctionInstanceContext.html" title="struct wasmedge_sys::ffi::WasmEdge_FunctionInstanceContext">WasmEdge_FunctionInstanceContext</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creation of the WasmEdge_FunctionInstanceContext for host functions.</p>
+<p>This function is for the languages which cannot pass the function pointer of
+the host function into this shared library directly. The caller owns the
+object and should call <code>WasmEdge_FunctionInstanceDelete</code> to destroy it if
+the returned object is not added into a <code>WasmEdge_ModuleInstanceContext</code>.
+The following is an example to create a host function context for other
+languages.</p>
+<div class="example-wrap"><pre class="language-c"><code>// `RealFunc` is the pointer to the function in other languages.
+
+WasmEdge_Result FuncAddWrap(
+    void *This, void *Data,
+    const WasmEdge_CallingFrameContext *CallFrameCxt,
+    const WasmEdge_Value *In, const uint32_t InLen, WasmEdge_Value *Out,
+    const uint32_t OutLen) {
+  // Wrapper function of host function to return A + B.
+
+  // `This` is the same as `RealFunc`.
+  int32_t A = WasmEdge_ValueGetI32(In[0]);
+  int32_t B = WasmEdge_ValueGetI32(In[1]);
+
+  // Call the function of `This` in the host language ...
+  int32_t Result = ...;
+
+  Out[0] = Result;
+  // Return the execution status.
+  return WasmEdge_Result_Success;
+}
+
+WasmEdge_ValType Params[2] = {WasmEdge_ValTypeGenI32(),
+                              WasmEdge_ValTypeGenI32()};
+WasmEdge_ValType Returns[1] = {WasmEdge_ValTypeGenI32()};
+WasmEdge_FunctionTypeContext *FuncType =
+    WasmEdge_FunctionTypeCreate(Params, 2, Returns, 1);
+WasmEdge_FunctionInstanceContext *HostFunc =
+    WasmEdge_FunctionInstanceCreateBinding(
+        FuncType, FuncAddWrap, RealFunc, NULL, 0);
+WasmEdge_FunctionTypeDelete(FuncType);
+...</code></pre></div>
+<p>\param Type the function type context to describe the host function
+signature.
+\param WrapFunc the wrapper function pointer. The wrapper function signature
+must be as following:</p>
+<div class="example-wrap"><pre class="language-c"><code>typedef WasmEdge_Result (*WasmEdge_WrapFunc_t)(
+    void *This,
+    void *Data,
+    WasmEdge_CallingFrameContext *FrameCxt,
+    const WasmEdge_Value *Params,
+    const uint32_t ParamLen,
+    WasmEdge_Value *Returns,
+    const uint32_t ReturnLen);</code></pre></div>
+<p>The <code>This</code> is the pointer the same as the <code>Binding</code> parameter of this
+function. The <code>Params</code> is the input parameters array with length guaranteed
+to be the same as the parameter types in the <code>Type</code>, and the <code>ParamLen</code> is
+the length of the array. The <code>Returns</code> is the output results array with
+length guaranteed to be the same as the result types in the <code>Type</code>, and the
+<code>ReturnLen</code> is the length of the array. The return value is
+<code>WasmEdge_Result</code> for the execution status.
+\param Binding the <code>this</code> pointer of the host function target or the
+function indexing maintained by the caller which can specify the host
+function. When invoking the host function, this pointer will be the first
+argument of the wrapper function.
+\param Data the additional object, such as the pointer to a data structure,
+to set to this host function context. The caller should guarantee the life
+cycle of the object. NULL if the additional data object is not needed.
+\param Cost the function cost in statistics. Pass 0 if the calculation is
+not needed.</p>
+<p>\returns pointer to context, NULL if failed.</p>
+</div></details></section></div></main></body></html>

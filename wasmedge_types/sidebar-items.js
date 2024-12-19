@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompilerOptimizationLevel","CompilerOutputFormat","ExternalInstanceType","HostRegistration","Mutability","NeverType","RefType","ValType"],"fn":["wat2wasm"],"mod":["error"],"struct":["FuncType","GlobalType","MemoryType","TableType"],"type":["WasmEdgeResult"]};
