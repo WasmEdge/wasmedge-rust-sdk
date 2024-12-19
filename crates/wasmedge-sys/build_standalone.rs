@@ -104,7 +104,12 @@ fn get_remote_archive() -> Archive {
         .expect("target not supported with features `standalone` and `static`")
         .to_owned();
 
-    let url = format!("https://github.com/WasmEdge/WasmEdge/releases/download/{WASMEDGE_RELEASE_VERSION}/WasmEdge-{WASMEDGE_RELEASE_VERSION}-{slug}.tar.gz");
+    let asset_name = if cfg!(feature = "static") {
+        format!("WasmEdge-{WASMEDGE_RELEASE_VERSION}-fmt-patch-{slug}.tar.gz")
+    } else {
+        format!("WasmEdge-{WASMEDGE_RELEASE_VERSION}-{slug}.tar.gz")
+    };
+    let url = format!("https://github.com/WasmEdge/WasmEdge/releases/download/{WASMEDGE_RELEASE_VERSION}/{asset_name}");
 
     let checksum = sha.to_string();
     Archive::Remote { url, checksum }
