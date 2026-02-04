@@ -14,6 +14,8 @@ WasmEdge Rust SDK provides idiomatic [Rust](https://www.rust-lang.org/) language
 
 This crate depends on the WasmEdge C API. In linux/macOS the crate can download the API at build time by enabling the `standalone` feature. Otherwise the API needs to be installed in your system first. Please refer to [Install and uninstall WasmEdge](https://wasmedge.org/docs/start/install) to install the WasmEdge library. The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 
+> **Note:** `wasmedge-sdk` is the primary crate intended for most developers. The other crates in this table are lower-level components.
+
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
   | 0.14.1        | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
