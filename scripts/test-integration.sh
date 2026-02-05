@@ -42,20 +42,24 @@ echo_info "Cargo version: $(cargo --version)"
 
 # Check if WasmEdge is installed
 WASMEDGE_INSTALLED=false
-if command -v wasmedge &> /dev/null; then
-    WASMEDGE_VERSION=$(wasmedge --version 2>/dev/null | head -1)
-    echo_info "WasmEdge found: ${WASMEDGE_VERSION}"
-    WASMEDGE_INSTALLED=true
-elif [ -n "${WASMEDGE_DIR}" ]; then
+if [ -n "${WASMEDGE_DIR}" ] && [ -d "${WASMEDGE_DIR}" ]; then
     echo_info "WASMEDGE_DIR is set to: ${WASMEDGE_DIR}"
     WASMEDGE_INSTALLED=true
-elif [ -d "${HOME}/.wasmedge" ]; then
+elif [ -d "${HOME}/.wasmedge" ] && [ -d "${HOME}/.wasmedge/lib" ]; then
     echo_info "WasmEdge found in ~/.wasmedge"
     export WASMEDGE_DIR="${HOME}/.wasmedge"
     WASMEDGE_INSTALLED=true
-elif [ -d "/usr/local/lib" ] && [ -f "/usr/local/lib/libwasmedge.so" ]; then
+elif [ -f "/usr/local/lib/libwasmedge.so" ] || [ -f "/usr/local/lib/libwasmedge.dylib" ]; then
     echo_info "WasmEdge found in /usr/local"
     export WASMEDGE_DIR="/usr/local"
+    WASMEDGE_INSTALLED=true
+elif command -v wasmedge &> /dev/null; then
+    WASMEDGE_VERSION=$(wasmedge --version 2>/dev/null | head -1)
+    echo_info "WasmEdge found: ${WASMEDGE_VERSION}"
+    # Try to determine WASMEDGE_DIR from wasmedge binary location
+    WASMEDGE_BIN=$(which wasmedge)
+    export WASMEDGE_DIR=$(dirname $(dirname "${WASMEDGE_BIN}"))
+    echo_info "WASMEDGE_DIR set to: ${WASMEDGE_DIR}"
     WASMEDGE_INSTALLED=true
 fi
 
