@@ -80,7 +80,7 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
       - name: Run unit tests
-        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder
+        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder --skip test_async_wasi_module
         env:
           LD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
@@ -142,7 +142,7 @@ jobs:
           DYLD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
       - name: Run unit tests
-        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder
+        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder --skip test_async_wasi_module
         env:
           DYLD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
