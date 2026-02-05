@@ -79,7 +79,7 @@ static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
 pub(crate) unsafe fn init_signal_listen() {
     INIT_SIGNAL_LISTEN.call_once(|| {
         let mut new_act: libc::sigaction = std::mem::zeroed();
-        new_act.sa_sigaction = sync_timeout as usize;
+        new_act.sa_sigaction = sync_timeout as *const () as usize;
         new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
         libc::sigaction(timeout_signo(), &new_act, std::ptr::null_mut());
     });
