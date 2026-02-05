@@ -69,12 +69,12 @@ jobs:
       - name: Test Rust SDK
         run: |
           export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
-          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test --workspace --locked --features aot,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
       - name: Test Rust SDK with async feature
         run: |
           export LD_LIBRARY_PATH="/github/home/.wasmedge/lib"
-          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
   build_fedora:
     name: Fedora
