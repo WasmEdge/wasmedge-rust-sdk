@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
 
     steps:
       - name: Checkout WasmEdge Rust SDK
@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
 
     steps:
       - name: Checkout WasmEdge Rust SDK
@@ -92,7 +92,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-14, macos-13]
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
 
     steps:
       - name: Checkout sources
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
     container:
       image: fedora:latest
 
