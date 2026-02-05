@@ -79,8 +79,15 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
+      - name: Build Async-Hello for Testing
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
       - name: Run unit tests
-        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder --skip test_async_wasi_module
+        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder
         env:
           LD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
@@ -141,8 +148,15 @@ jobs:
         env:
           DYLD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
+      - name: Build Async-Hello for Testing
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
       - name: Run unit tests
-        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder --skip test_async_wasi_module
+        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1 --skip test_vmbuilder
         env:
           DYLD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
