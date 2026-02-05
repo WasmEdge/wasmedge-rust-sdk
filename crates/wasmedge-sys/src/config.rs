@@ -13,8 +13,8 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 /// - **WebAssembly Proposals**
 ///
-///     This group of options are used to turn on/off the WebAssembly proposals. They are effective to any WasmEdge
-///     context created with [Config](crate::Config).
+///   This group of options are used to turn on/off the WebAssembly proposals. They are effective to any WasmEdge
+///   context created with [Config](crate::Config).
 ///     
 ///     - `MultiMemories` enables to use multiple memories within a single Wasm module.
 ///
@@ -82,8 +82,8 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 /// - **AOT Compilation**
 ///
-///     The AOT compiler options configure the behavior about optimization level, output format, dump IR,
-///     and generic binary.
+///   The AOT compiler options configure the behavior about optimization level, output format, dump IR,
+///   and generic binary.
 ///
 ///     - Compiler Optimization Levels
 ///         - `O0` performs as many optimizations as possible.
@@ -91,12 +91,12 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///         - `O1` optimizes quickly without destroying debuggability.
 ///
 ///         - `02` optimizes for fast execution as much as possible without triggering significant incremental
-///                compile time or code size growth.
+///           compile time or code size growth.
 ///
 ///         - `O3` optimizes for fast execution as much as possible.
 ///
 ///         - `Os` optimizes for small code size as much as possible without triggering significant incremental
-///                compile time or execution time slowdowns.
+///           compile time or execution time slowdowns.
 ///
 ///         - `Oz` optimizes for small code size as much as possible.
 ///

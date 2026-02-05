@@ -213,6 +213,7 @@ impl Memory {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn mut_slice<T: Sized>(&self, offset: usize, len: usize) -> Option<&mut [T]> {
         unsafe {
             let r = std::mem::size_of::<T>() * len;
