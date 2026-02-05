@@ -910,17 +910,17 @@ mod tests {
             assert!(!config.annotations_enabled());
             assert!(config.bulk_memory_operations_enabled());
             // Note: exception_handling is enabled by default in WasmEdge 0.16.1+
-        assert!(config.exception_handling_enabled());
+            assert!(config.exception_handling_enabled());
             // Note: function_references is enabled by default in WasmEdge 0.16.1+
-        assert!(config.function_references_enabled());
+            assert!(config.function_references_enabled());
             assert!(!config.memory64_enabled());
             assert!(config.reference_types_enabled());
             assert!(config.simd_enabled());
             // Note: tail_call is enabled by default in WasmEdge 0.16.1+
-        assert!(config.tail_call_enabled());
+            assert!(config.tail_call_enabled());
             assert!(!config.threads_enabled());
             // Note: gc is enabled by default in WasmEdge 0.16.1+
-        assert!(config.gc_enabled());
+            assert!(config.gc_enabled());
             assert!(!config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(!config.dump_ir_enabled());
@@ -964,7 +964,7 @@ mod tests {
             assert!(!config.bulk_memory_operations_enabled());
             assert!(config.exception_handling_enabled());
             // Note: function_references is enabled by default in WasmEdge 0.16.1+
-        assert!(config.function_references_enabled());
+            assert!(config.function_references_enabled());
             assert!(config.memory64_enabled());
             // Note: reference_types stays enabled in WasmEdge 0.16.1+ because GC requires it
             assert!(config.reference_types_enabled());
@@ -972,7 +972,7 @@ mod tests {
             assert!(config.tail_call_enabled());
             assert!(config.threads_enabled());
             // Note: gc is enabled by default in WasmEdge 0.16.1+
-        assert!(config.gc_enabled());
+            assert!(config.gc_enabled());
             assert!(config.is_cost_measuring());
             #[cfg(feature = "aot")]
             assert!(config.dump_ir_enabled());
@@ -1001,17 +1001,17 @@ mod tests {
                     assert!(!config.annotations_enabled());
                     assert!(config.bulk_memory_operations_enabled());
                     // Note: exception_handling is enabled by default in WasmEdge 0.16.1+
-        assert!(config.exception_handling_enabled());
+                    assert!(config.exception_handling_enabled());
                     // Note: function_references is enabled by default in WasmEdge 0.16.1+
-        assert!(config.function_references_enabled());
+                    assert!(config.function_references_enabled());
                     assert!(!config.memory64_enabled());
                     assert!(config.reference_types_enabled());
                     assert!(config.simd_enabled());
                     // Note: tail_call is enabled by default in WasmEdge 0.16.1+
-        assert!(config.tail_call_enabled());
+                    assert!(config.tail_call_enabled());
                     assert!(!config.threads_enabled());
                     // Note: gc is enabled by default in WasmEdge 0.16.1+
-        assert!(config.gc_enabled());
+                    assert!(config.gc_enabled());
                     assert!(!config.is_cost_measuring());
                     assert!(!config.is_instruction_counting());
                     assert!(!config.is_time_measuring());

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasmedge_sdk::vm::SyncInst;
-use wasmedge_sdk::{params, Module, Store, Vm, WasmVal, wat2wasm};
+use wasmedge_sdk::{params, wat2wasm, Module, Store, Vm, WasmVal};
 
 /// Get path to the compiled test-wasm module
 fn get_test_wasm_path() -> PathBuf {
@@ -154,7 +154,15 @@ fn test_factorial_function() {
         .expect("Failed to register module");
 
     // Test factorial: 0! = 1, 1! = 1, 5! = 120, 10! = 3628800
-    let test_cases = vec![(0, 1), (1, 1), (2, 2), (3, 6), (4, 24), (5, 120), (10, 3628800)];
+    let test_cases = vec![
+        (0, 1),
+        (1, 1),
+        (2, 2),
+        (3, 6),
+        (4, 24),
+        (5, 120),
+        (10, 3628800),
+    ];
     for (n, expected) in test_cases {
         let result = vm
             .run_func(None, "factorial", params!(n))
@@ -581,7 +589,11 @@ fn test_rust_wasm_i64_operations() {
 
     // Test multiply_i64
     let result = vm
-        .run_func(Some("test"), "multiply_i64", params!(1_000_000i64, 1_000i64))
+        .run_func(
+            Some("test"),
+            "multiply_i64",
+            params!(1_000_000i64, 1_000i64),
+        )
         .expect("Failed to run multiply_i64");
     assert_eq!(result[0].to_i64(), 1_000_000_000i64);
 }
