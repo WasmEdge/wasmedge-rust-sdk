@@ -317,6 +317,130 @@ WebAssembly supports the following primitive types that can be used as function 
 
 For more complex data types (strings, arrays, structs), you'll need to use WebAssembly linear memory. See the [WasmEdge Rust SDK Examples](https://github.com/second-state/wasmedge-rustsdk-examples) for advanced usage patterns.
 
+## WASM Calling Host Functions
+
+WebAssembly modules can import and call functions provided by the host application. This enables powerful interactions where WASM can use native functionality, access system resources, or maintain state in the host.
+
+### Define Host Functions
+
+Host functions have a specific signature:
+
+```rust
+use wasmedge_sdk::{
+    error::CoreError, CallingFrame, Instance, WasmValue,
+};
+
+fn my_host_function(
+    data: &mut MyHostData,        // Mutable reference to host data
+    _inst: &mut Instance,         // The calling instance
+    _frame: &mut CallingFrame,    // The calling frame
+    args: Vec<WasmValue>,         // Arguments from WASM
+) -> Result<Vec<WasmValue>, CoreError> {
+    // Access arguments
+    let arg1 = args[0].to_i32();
+
+    // Do something with host data
+    data.counter += arg1;
+
+    // Return results
+    Ok(vec![WasmValue::from_i32(data.counter)])
+}
+```
+
+### Create Import Object with Host Functions
+
+```rust
+use std::collections::HashMap;
+use wasmedge_sdk::{
+    error::CoreError, params, vm::SyncInst, AsInstance, CallingFrame,
+    ImportObjectBuilder, Instance, Module, Store, Vm, WasmValue,
+};
+
+// Define host data structure
+#[derive(Default)]
+struct HostData {
+    counter: i32,
+}
+
+// Define host functions
+fn host_increment(
+    data: &mut HostData,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
+    args: Vec<WasmValue>,
+) -> Result<Vec<WasmValue>, CoreError> {
+    data.counter += args[0].to_i32();
+    Ok(vec![])
+}
+
+fn host_get_counter(
+    data: &mut HostData,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
+    _args: Vec<WasmValue>,
+) -> Result<Vec<WasmValue>, CoreError> {
+    Ok(vec![WasmValue::from_i32(data.counter)])
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create host data
+    let host_data = HostData::default();
+
+    // Build import object with host functions
+    let mut import_builder = ImportObjectBuilder::new("env", host_data)?;
+    import_builder.with_func::<i32, ()>("increment", host_increment)?;
+    import_builder.with_func::<(), i32>("get_counter", host_get_counter)?;
+    let mut import_object = import_builder.build();
+
+    // Create instances map
+    let mut instances: HashMap<String, &mut dyn SyncInst> = HashMap::new();
+    instances.insert(import_object.name().unwrap().to_string(), &mut import_object);
+
+    // Create VM with instances
+    let mut vm = Vm::new(Store::new(None, instances)?);
+
+    // Load WASM module that imports these functions
+    let module = Module::from_file(None, "module_with_imports.wasm")?;
+    vm.register_module(None, module)?;
+
+    // Run WASM function that uses host functions
+    let result = vm.run_func(None, "do_something", params!())?;
+
+    Ok(())
+}
+```
+
+### WASM Module with Imports (WAT)
+
+Here's an example WASM module that imports and uses host functions:
+
+```wat
+(module
+    ;; Import host functions from "env" module
+    (import "env" "increment" (func $increment (param i32)))
+    (import "env" "get_counter" (func $get_counter (result i32)))
+
+    ;; WASM function that uses host functions
+    (func $add_and_get (param $value i32) (result i32)
+        ;; Call host increment function
+        (call $increment (local.get $value))
+        ;; Call host get_counter and return result
+        (call $get_counter)
+    )
+
+    (export "add_and_get" (func $add_and_get))
+)
+```
+
+### Use Cases for Host Functions
+
+- **Logging and debugging**: WASM calls host to print messages
+- **File I/O**: WASM requests host to read/write files
+- **Network access**: WASM makes HTTP requests through host
+- **State management**: Host maintains state across WASM calls
+- **Native computations**: Offload heavy computations to native code
+- **System integration**: Access databases, APIs, or hardware
+
 ## Upgrade to 0.14.0
 
 If you are upgrading from 0.13.2 to 0.14.0, refer to [docs/Upgrade_to_0.14.0.md](docs/Upgrade_to_0.14.0.md).

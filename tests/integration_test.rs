@@ -4,8 +4,13 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use wasmedge_sdk::error::CoreError;
 use wasmedge_sdk::vm::SyncInst;
-use wasmedge_sdk::{params, wat2wasm, Module, Store, Vm, WasmVal};
+use wasmedge_sdk::AsInstance;
+use wasmedge_sdk::{
+    params, wat2wasm, CallingFrame, ImportObjectBuilder, Instance, Module, Store, Vm, WasmVal,
+    WasmValue,
+};
 
 /// Get path to the compiled test-wasm module
 fn get_test_wasm_path() -> PathBuf {
@@ -1012,4 +1017,241 @@ fn test_rust_wasm_complex_calculations() {
         )
         .expect("Failed to run quadratic_discriminant");
     assert!((result[0].to_f64() - 1.0f64).abs() < 0.0000001);
+}
+
+// ============================================================================
+// Tests for WASM calling host functions
+// ============================================================================
+
+/// Host data for tracking state across host function calls
+#[derive(Debug, Default)]
+struct HostState {
+    counter: i32,
+    log_messages: Vec<String>,
+}
+
+/// Host function: get the current counter value
+fn host_get_counter(
+    data: &mut HostState,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
+    _args: Vec<WasmValue>,
+) -> Result<Vec<WasmValue>, CoreError> {
+    Ok(vec![WasmValue::from_i32(data.counter)])
+}
+
+/// Host function: increment the counter by a given amount
+fn host_increment(
+    data: &mut HostState,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
+    args: Vec<WasmValue>,
+) -> Result<Vec<WasmValue>, CoreError> {
+    let amount = args[0].to_i32();
+    data.counter += amount;
+    Ok(vec![])
+}
+
+/// Host function: multiply two numbers (provided by host)
+fn host_multiply(
+    _data: &mut HostState,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
+    args: Vec<WasmValue>,
+) -> Result<Vec<WasmValue>, CoreError> {
+    let a = args[0].to_i32();
+    let b = args[1].to_i32();
+    Ok(vec![WasmValue::from_i32(a * b)])
+}
+
+/// Host function: log a value (stores in host state)
+fn host_log_value(
+    data: &mut HostState,
+    _inst: &mut Instance,
+    _frame: &mut CallingFrame,
+    args: Vec<WasmValue>,
+) -> Result<Vec<WasmValue>, CoreError> {
+    let value = args[0].to_i32();
+    data.log_messages.push(format!("logged: {}", value));
+    Ok(vec![])
+}
+
+/// Test WASM module calling host functions
+#[test]
+fn test_wasm_calls_host_function() {
+    // Create a WASM module that imports and calls host functions
+    let wasm_bytes = wat2wasm(
+        br#"
+        (module
+            ;; Import host functions
+            (import "host" "multiply" (func $host_multiply (param i32 i32) (result i32)))
+            (import "host" "get_counter" (func $host_get_counter (result i32)))
+            (import "host" "increment" (func $host_increment (param i32)))
+            (import "host" "log_value" (func $host_log_value (param i32)))
+
+            ;; WASM function that uses host multiply
+            (func $calculate (param $a i32) (param $b i32) (result i32)
+                ;; Call host multiply and return result
+                (call $host_multiply (local.get $a) (local.get $b))
+            )
+
+            ;; WASM function that increments counter and returns new value
+            (func $increment_and_get (param $amount i32) (result i32)
+                (call $host_increment (local.get $amount))
+                (call $host_get_counter)
+            )
+
+            ;; WASM function that does computation and logs intermediate results
+            (func $compute_with_logging (param $n i32) (result i32)
+                (local $result i32)
+                (local $i i32)
+
+                ;; Initialize result to 0
+                (local.set $result (i32.const 0))
+                (local.set $i (i32.const 1))
+
+                ;; Sum 1 to n, logging each step
+                (block $break
+                    (loop $continue
+                        ;; if i > n, break
+                        (br_if $break (i32.gt_s (local.get $i) (local.get $n)))
+
+                        ;; result += i
+                        (local.set $result (i32.add (local.get $result) (local.get $i)))
+
+                        ;; log the current result
+                        (call $host_log_value (local.get $result))
+
+                        ;; i++
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+
+                        ;; continue loop
+                        (br $continue)
+                    )
+                )
+
+                (local.get $result)
+            )
+
+            (export "calculate" (func $calculate))
+            (export "increment_and_get" (func $increment_and_get))
+            (export "compute_with_logging" (func $compute_with_logging))
+        )
+        "#,
+    )
+    .expect("Failed to convert WAT to WASM");
+
+    // Create host state
+    let host_state = HostState::default();
+
+    // Build import object with host functions
+    let mut import_builder = ImportObjectBuilder::new("host", host_state).unwrap();
+    import_builder
+        .with_func::<(i32, i32), i32>("multiply", host_multiply)
+        .unwrap();
+    import_builder
+        .with_func::<(), i32>("get_counter", host_get_counter)
+        .unwrap();
+    import_builder
+        .with_func::<i32, ()>("increment", host_increment)
+        .unwrap();
+    import_builder
+        .with_func::<i32, ()>("log_value", host_log_value)
+        .unwrap();
+    let mut import_object = import_builder.build();
+
+    // Create instances map with the import object
+    let mut instances: HashMap<String, &mut dyn SyncInst> = HashMap::new();
+    instances.insert(import_object.name().unwrap().to_string(), &mut import_object);
+
+    // Create VM with the instances
+    let mut vm = Vm::new(Store::new(None, instances).expect("Failed to create store"));
+
+    // Load and register the WASM module
+    let module = Module::from_bytes(None, wasm_bytes).expect("Failed to load module");
+    vm.register_module(None, module)
+        .expect("Failed to register module");
+
+    // Test 1: WASM calls host multiply function
+    let result = vm
+        .run_func(None, "calculate", params!(7i32, 8i32))
+        .expect("Failed to run calculate");
+    assert_eq!(result[0].to_i32(), 56, "7 * 8 should be 56");
+
+    // Test 2: WASM calls host increment and get_counter
+    let result = vm
+        .run_func(None, "increment_and_get", params!(10i32))
+        .expect("Failed to run increment_and_get");
+    assert_eq!(result[0].to_i32(), 10, "Counter should be 10 after incrementing by 10");
+
+    let result = vm
+        .run_func(None, "increment_and_get", params!(5i32))
+        .expect("Failed to run increment_and_get");
+    assert_eq!(result[0].to_i32(), 15, "Counter should be 15 after incrementing by 5");
+
+    // Test 3: WASM computes with logging (sum 1 to 5 = 15, with logging each step)
+    let result = vm
+        .run_func(None, "compute_with_logging", params!(5i32))
+        .expect("Failed to run compute_with_logging");
+    assert_eq!(result[0].to_i32(), 15, "Sum of 1 to 5 should be 15");
+}
+
+/// Test simple host function callback
+#[test]
+fn test_simple_host_callback() {
+    // Simple WASM that imports a "double" function from host
+    let wasm_bytes = wat2wasm(
+        br#"
+        (module
+            (import "env" "double" (func $double (param i32) (result i32)))
+
+            (func $quadruple (param $x i32) (result i32)
+                ;; Call double twice: double(double(x))
+                (call $double (call $double (local.get $x)))
+            )
+
+            (export "quadruple" (func $quadruple))
+        )
+        "#,
+    )
+    .expect("Failed to convert WAT to WASM");
+
+    // Host function that doubles a number
+    fn host_double(
+        _data: &mut (),
+        _inst: &mut Instance,
+        _frame: &mut CallingFrame,
+        args: Vec<WasmValue>,
+    ) -> Result<Vec<WasmValue>, CoreError> {
+        let x = args[0].to_i32();
+        Ok(vec![WasmValue::from_i32(x * 2)])
+    }
+
+    // Build import object
+    let mut import_builder = ImportObjectBuilder::new("env", ()).unwrap();
+    import_builder
+        .with_func::<i32, i32>("double", host_double)
+        .unwrap();
+    let mut import_object = import_builder.build();
+
+    let mut instances: HashMap<String, &mut dyn SyncInst> = HashMap::new();
+    instances.insert(import_object.name().unwrap().to_string(), &mut import_object);
+
+    let mut vm = Vm::new(Store::new(None, instances).expect("Failed to create store"));
+
+    let module = Module::from_bytes(None, wasm_bytes).expect("Failed to load module");
+    vm.register_module(None, module)
+        .expect("Failed to register module");
+
+    // Test: quadruple(5) = double(double(5)) = double(10) = 20
+    let result = vm
+        .run_func(None, "quadruple", params!(5i32))
+        .expect("Failed to run quadruple");
+    assert_eq!(result[0].to_i32(), 20, "quadruple(5) should be 20");
+
+    // Test: quadruple(3) = double(double(3)) = double(6) = 12
+    let result = vm
+        .run_func(None, "quadruple", params!(3i32))
+        .expect("Failed to run quadruple");
+    assert_eq!(result[0].to_i32(), 12, "quadruple(3) should be 12");
 }
