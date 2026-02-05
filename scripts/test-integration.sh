@@ -137,6 +137,13 @@ echo_info ""
 echo_info "Running integration tests..."
 echo_info "---------------------------"
 
+# Set library path based on OS
+if [[ "$(uname)" == "Darwin" ]]; then
+    export DYLD_LIBRARY_PATH="${WASMEDGE_DIR}/lib:${DYLD_LIBRARY_PATH}"
+else
+    export LD_LIBRARY_PATH="${WASMEDGE_DIR}/lib:${LD_LIBRARY_PATH}"
+fi
+
 # Run integration tests
 TEST_OUTPUT=$(mktemp)
 cargo test --test integration_test --release -- --nocapture 2>&1 | tee "${TEST_OUTPUT}"
