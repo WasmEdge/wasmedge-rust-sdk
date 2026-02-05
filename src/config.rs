@@ -531,10 +531,10 @@ impl Default for CommonConfigOptions {
 ///    
 ///    - `O1` optimizes quickly without destroying debuggability  
 ///    - `02` optimizes for fast execution as much as possible without triggering significant incremental
-///           compile time or code size growth  
+///      compile time or code size growth  
 ///    - `O3` optimizes for fast execution as much as possible  
 ///    - `Os` optimizes for small code size as much as possible without triggering significant incremental
-///           compile time or execution time slowdowns  
+///      compile time or execution time slowdowns  
 ///    - `Oz` optimizes for small code size as much as possible  
 ///  - Compiler Output Formats
 ///    - `Native` specifies the output format is native dynamic library (`*.wasm.so`)  
@@ -644,7 +644,7 @@ impl Default for CompilerConfigOptions {
 /// [RuntimeConfigOptions] is used to set the runtime configuration options, which are
 ///
 /// - `maximum_memory_page` limits the page size of [Memory](crate::Memory). This option is only effective to
-///       [Executor](crate::Executor).
+///   [Executor](crate::Executor).
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeConfigOptions {
     max_memory_pages: u32,
