@@ -37,7 +37,8 @@ jobs:
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s --           ldconfig
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+          ldconfig
 
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
@@ -95,7 +96,8 @@ jobs:
           dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
           dnf install -y which python python3-pip
           git config --global --add safe.directory $(pwd)
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s --           ldconfig
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+          ldconfig
 
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
@@ -149,7 +151,7 @@ jobs:
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- 
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
