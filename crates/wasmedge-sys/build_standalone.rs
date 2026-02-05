@@ -88,7 +88,9 @@ pub fn get_standalone_libwasmedge() -> std::path::PathBuf {
             .expect("failed to read archive directory")
             .filter_map(|entry| entry.ok())
             .find(|entry| match entry.file_type() {
-                Ok(ty) => ty.is_dir() && entry.file_name().to_string_lossy().starts_with("WasmEdge"),
+                Ok(ty) => {
+                    ty.is_dir() && entry.file_name().to_string_lossy().starts_with("WasmEdge")
+                }
                 _ => false,
             })
             .expect("failed to find WasmEdge in archive directory")

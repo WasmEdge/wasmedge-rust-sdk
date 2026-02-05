@@ -1162,7 +1162,10 @@ fn test_wasm_calls_host_function() {
 
     // Create instances map with the import object
     let mut instances: HashMap<String, &mut dyn SyncInst> = HashMap::new();
-    instances.insert(import_object.name().unwrap().to_string(), &mut import_object);
+    instances.insert(
+        import_object.name().unwrap().to_string(),
+        &mut import_object,
+    );
 
     // Create VM with the instances
     let mut vm = Vm::new(Store::new(None, instances).expect("Failed to create store"));
@@ -1182,12 +1185,20 @@ fn test_wasm_calls_host_function() {
     let result = vm
         .run_func(None, "increment_and_get", params!(10i32))
         .expect("Failed to run increment_and_get");
-    assert_eq!(result[0].to_i32(), 10, "Counter should be 10 after incrementing by 10");
+    assert_eq!(
+        result[0].to_i32(),
+        10,
+        "Counter should be 10 after incrementing by 10"
+    );
 
     let result = vm
         .run_func(None, "increment_and_get", params!(5i32))
         .expect("Failed to run increment_and_get");
-    assert_eq!(result[0].to_i32(), 15, "Counter should be 15 after incrementing by 5");
+    assert_eq!(
+        result[0].to_i32(),
+        15,
+        "Counter should be 15 after incrementing by 5"
+    );
 
     // Test 3: WASM computes with logging (sum 1 to 5 = 15, with logging each step)
     let result = vm
@@ -1235,7 +1246,10 @@ fn test_simple_host_callback() {
     let mut import_object = import_builder.build();
 
     let mut instances: HashMap<String, &mut dyn SyncInst> = HashMap::new();
-    instances.insert(import_object.name().unwrap().to_string(), &mut import_object);
+    instances.insert(
+        import_object.name().unwrap().to_string(),
+        &mut import_object,
+    );
 
     let mut vm = Vm::new(Store::new(None, instances).expect("Failed to create store"));
 
