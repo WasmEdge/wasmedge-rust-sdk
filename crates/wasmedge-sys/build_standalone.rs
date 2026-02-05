@@ -78,15 +78,28 @@ pub fn get_standalone_libwasmedge() -> std::path::PathBuf {
     // or if it's a flat structure (bin/, lib/, include/ directly in STANDALONE_DIR)
     let include_dir = STANDALONE_DIR.join("include");
     let lib_dir = STANDALONE_DIR.join("lib");
+    let lib64_dir = STANDALONE_DIR.join("lib64");
 
-    if include_dir.exists() && lib_dir.exists() {
-        // Flat structure: include/ and lib/ are directly in STANDALONE_DIR
+    if include_dir.exists() && (lib_dir.exists() || lib64_dir.exists()) {
+        // Flat structure: include/ and lib/ (or lib64/) are directly in STANDALONE_DIR
+        debug!("using flat structure");
         STANDALONE_DIR.clone()
     } else {
         // Nested structure: find the WasmEdge root directory
-        std::fs::read_dir(STANDALONE_DIR.as_path())
+        debug!("looking for nested WasmEdge directory");
+        let entries: Vec<_> = std::fs::read_dir(STANDALONE_DIR.as_path())
             .expect("failed to read archive directory")
             .filter_map(|entry| entry.ok())
+            .collect();
+
+        debug!(
+            "found {} entries in archive directory: {:?}",
+            entries.len(),
+            entries.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+        );
+
+        entries
+            .into_iter()
             .find(|entry| match entry.file_type() {
                 Ok(ty) => {
                     ty.is_dir() && entry.file_name().to_string_lossy().starts_with("WasmEdge")
