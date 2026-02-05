@@ -16,6 +16,7 @@ This crate depends on the WasmEdge C API. In linux/macOS the crate can download 
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+  | 0.16.1        | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.1        | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.0        | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
   | 0.13.5-newapi | 0.13.5        | 0.18.0        | 0.5.0         | 0.6.1         | 0.2.0     |
@@ -65,6 +66,87 @@ The following architectures are supported for automatic downloads:
 This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 
 **Notice:** The minimum supported Rust version is 1.71.
+
+## Quick Start
+
+Here's a simple example showing how to use the WasmEdge Rust SDK to run a WebAssembly module in your Rust application.
+
+### Add Dependencies
+
+Add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+wasmedge-sdk = "0.16.1"
+```
+
+Or with the `standalone` feature to automatically download the WasmEdge library:
+
+```toml
+[dependencies]
+wasmedge-sdk = { version = "0.16.1", features = ["standalone"] }
+```
+
+### Run a WebAssembly Function
+
+```rust
+use std::collections::HashMap;
+use wasmedge_sdk::{params, Module, Store, Vm, WasmVal, wat2wasm};
+use wasmedge_sdk::vm::SyncInst;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Define a simple WebAssembly module with an "add" function
+    let wasm_bytes = wat2wasm(
+        br#"
+        (module
+            (func $add (param $a i32) (param $b i32) (result i32)
+                (i32.add (local.get $a) (local.get $b))
+            )
+            (export "add" (func $add))
+        )
+        "#,
+    )?;
+
+    // Create a VM instance
+    let mut vm = Vm::new(Store::new(None, HashMap::<String, &mut dyn SyncInst>::new())?);
+
+    // Load and register the WebAssembly module
+    let module = Module::from_bytes(None, wasm_bytes)?;
+    vm.register_module(None, module)?;
+
+    // Call the "add" function with arguments 2 and 3
+    let result = vm.run_func(None, "add", params!(2i32, 3i32))?;
+
+    // Get the result
+    println!("2 + 3 = {}", result[0].to_i32()); // Output: 2 + 3 = 5
+
+    Ok(())
+}
+```
+
+### Load a WASM File
+
+```rust
+use std::collections::HashMap;
+use wasmedge_sdk::{params, Module, Store, Vm};
+use wasmedge_sdk::vm::SyncInst;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a VM instance
+    let mut vm = Vm::new(Store::new(None, HashMap::<String, &mut dyn SyncInst>::new())?);
+
+    // Load a WebAssembly module from a file
+    let module = Module::from_file(None, "path/to/your/module.wasm")?;
+    vm.register_module(Some("my_module"), module)?;
+
+    // Call an exported function
+    let result = vm.run_func(Some("my_module"), "your_function", params!())?;
+
+    Ok(())
+}
+```
+
+For more examples, see the [WasmEdge Rust SDK Examples](https://github.com/second-state/wasmedge-rustsdk-examples) repository.
 
 ## Upgrade to 0.14.0
 

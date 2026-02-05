@@ -1,0 +1,222 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'bump/**'
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    branches:
+      - main
+      - 'bump/**'
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-test-ubuntu:
+    name: Integration Tests (Ubuntu)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+        rust: [stable, '1.83']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -p $HOME/.wasmedge
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+
+      - name: Verify WasmEdge installation
+        run: |
+          wasmedge --version
+          ls -la $HOME/.wasmedge/lib/
+
+      - name: Build SDK
+        run: cargo build --release
+
+      - name: Install wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build test-wasm module
+        run: |
+          cd test-wasm
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Run integration tests
+        run: cargo test --test integration_test --release -- --nocapture
+
+      - name: Run unit tests
+        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1
+
+  integration-test-macos:
+    name: Integration Tests (macOS)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-13]
+        rust: [stable, '1.83']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -p $HOME/.wasmedge
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+
+      - name: Verify WasmEdge installation
+        run: |
+          wasmedge --version
+          ls -la $HOME/.wasmedge/lib/
+
+      - name: Build SDK
+        run: cargo build --release
+
+      - name: Install wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build test-wasm module
+        run: |
+          cd test-wasm
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Run integration tests
+        run: cargo test --test integration_test --release -- --nocapture
+
+      - name: Run unit tests
+        run: cargo test --workspace --release --exclude async-wasi -- --nocapture --test-threads=1
+
+  integration-test-standalone:
+    name: Integration Tests (Standalone)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14]
+        rust: [stable]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-standalone-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-standalone-${{ matrix.rust }}-
+
+      - name: Build SDK with standalone feature
+        run: cargo build --release --features standalone
+
+      - name: Install wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build test-wasm module
+        run: |
+          cd test-wasm
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Run integration tests with standalone feature
+        run: cargo test --test integration_test --release --features standalone -- --nocapture
+
+  integration-test-windows:
+    name: Integration Tests (Windows)
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, '1.83']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Build SDK with standalone feature
+        run: cargo build --release --features standalone
+
+      - name: Install wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build test-wasm module
+        run: |
+          cd test-wasm
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Run integration tests with standalone feature
+        run: cargo test --test integration_test --release --features standalone -- --nocapture

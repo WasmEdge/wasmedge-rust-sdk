@@ -9,7 +9,7 @@ use build_standalone::*;
 
 use crate::build_paths::AsPath;
 
-const WASMEDGE_RELEASE_VERSION: &str = "0.14.1";
+const WASMEDGE_RELEASE_VERSION: &str = "0.16.1";
 const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = phf_map! {
     // The key is: {os}/{arch}[/{libc}][/static]
     //  * The libc abi is only added on linux.
@@ -18,14 +18,14 @@ const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = ph
     // The value is a tuple containing the sha256sum of the archive, and the platform slug as it appears in the archive name:
     //  * The archive name is WasmEdge-{version}-{slug}.tar.gz
 
-    "macos/aarch64"                => ("38dd10f4e78d339be91e0c3501055d4dad9bf08c3dc648e07a30df9bea2d6c4a", "darwin_arm64"),
-    "macos/x86_64"                 => ("96d01cf083d4f7e1c55683dc4b60acca6d8517ad901e2d7b4b5d64ca9a6532e0", "darwin_x86_64"),
-    "linux/aarch64/gnu"            => ("d5ac5c2405ff8a878558379740498e5fe4b126fe746eac585f7efa9bb7f32e28", "manylinux2014_aarch64"),
-    "linux/x86_64/gnu"             => ("a82f9fb01a6a6f1dfbd1cb069dc96d116f22c15cdb01207a5d0e65096055d092", "manylinux2014_x86_64"),
-    "linux/aarch64/gnu/static"     => ("01b4e731951ae2dbe9a9bdcbd6d5747e1e33f8b41dc8da13387f4670dec6f743", "debian11_aarch64_static"),
-    "linux/x86_64/gnu/static"      => ("0ae494f0e251d7fe1b07e421a1989ce2a9f2bf32841ce3086dfc08ef18c9fcf8", "debian11_x86_64_static"),
-    "linux/aarch64/musl/static"    => ("6de03d1c545d329c6aa872732ceb74295afa6acd1e59a7801b3d00553933acdf", "alpine3.16_aarch64_static"),
-    "linux/x86_64/musl/static"     => ("41c78e8c555a33374f90335593fd4684a8f613932d6fe9a77e4e40486517808a", "alpine3.16_x86_64_static"),
+    "macos/aarch64"                => ("a63f78cd4eb5889777a78772f8c464b535af68ef1b3e6b875afbf35e66767008", "darwin_arm64"),
+    "macos/x86_64"                 => ("df343e262fe46f95af5739c85617f6e9270760725ac04ff25e2c46b2fb11d41e", "darwin_x86_64"),
+    "linux/aarch64/gnu"            => ("2d51e6b41322eddf17ebd69f0351d14dce4cf9acedfb34340e8ab3b13cc6f2a4", "manylinux_2_28_aarch64"),
+    "linux/x86_64/gnu"             => ("43756d546b580fa8cd874190ab1abc868de80a00c80551ae4d1d359d5f9628bc", "manylinux_2_28_x86_64"),
+    "linux/aarch64/gnu/static"     => ("20d59a97a422d1e23705a4cb89e5c195cf1488fe3225b1ce1d5ba3a295ec0a25", "debian11_aarch64_static"),
+    "linux/x86_64/gnu/static"      => ("49c77f8502d6c67e294f0ce8e6ed03fa5f6c47a34528ea4b979a86516e4473c3", "debian11_x86_64_static"),
+    "linux/aarch64/musl/static"    => ("b15c9c8cd5cb6c8aa388d108504af3df98a20f501339c5c003a47b69c732c5e3", "alpine3.23_aarch64_static"),
+    "linux/x86_64/musl/static"     => ("5afb2f0c678db2ba53264be0e73733ad6e03137bd49f0716820741bc44eb1fe2", "alpine3.23_x86_64_static"),
 };
 
 lazy_static! {
