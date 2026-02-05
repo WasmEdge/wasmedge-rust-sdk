@@ -74,15 +74,26 @@ pub fn get_standalone_libwasmedge() -> std::path::PathBuf {
         std::fs::write(STANDALONE_DIR.join(".stamp"), hash).expect("failed to write archive stamp");
     }
 
-    std::fs::read_dir(STANDALONE_DIR.as_path())
-        .expect("failed to read archive directory")
-        .filter_map(|entry| entry.ok())
-        .find(|entry| match entry.file_type() {
-            Ok(ty) => ty.is_dir(),
-            _ => false,
-        })
-        .expect("failed to find WasmEdge in archive directory")
-        .path()
+    // Check if the archive was extracted with a root directory (e.g., WasmEdge-0.16.1-darwin_arm64/)
+    // or if it's a flat structure (bin/, lib/, include/ directly in STANDALONE_DIR)
+    let include_dir = STANDALONE_DIR.join("include");
+    let lib_dir = STANDALONE_DIR.join("lib");
+
+    if include_dir.exists() && lib_dir.exists() {
+        // Flat structure: include/ and lib/ are directly in STANDALONE_DIR
+        STANDALONE_DIR.clone()
+    } else {
+        // Nested structure: find the WasmEdge root directory
+        std::fs::read_dir(STANDALONE_DIR.as_path())
+            .expect("failed to read archive directory")
+            .filter_map(|entry| entry.ok())
+            .find(|entry| match entry.file_type() {
+                Ok(ty) => ty.is_dir() && entry.file_name().to_string_lossy().starts_with("WasmEdge"),
+                _ => false,
+            })
+            .expect("failed to find WasmEdge in archive directory")
+            .path()
+    }
 }
 
 fn get_remote_archive() -> Archive {
