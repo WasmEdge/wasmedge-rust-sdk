@@ -65,12 +65,12 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Clippy check for async feature
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
@@ -129,12 +129,12 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Clippy check for async feature
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys

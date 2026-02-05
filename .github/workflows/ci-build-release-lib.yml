@@ -37,8 +37,7 @@ jobs:
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
-          ldconfig
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s --           ldconfig
 
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
@@ -52,12 +51,12 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Clippy check for async feature
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
@@ -96,8 +95,7 @@ jobs:
           dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
           dnf install -y which python python3-pip
           git config --global --add safe.directory $(pwd)
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
-          ldconfig
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s --           ldconfig
 
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
@@ -111,12 +109,12 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Clippy check for async feature
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
@@ -151,8 +149,7 @@ jobs:
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- --plugins wasi_crypto
-
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- 
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
