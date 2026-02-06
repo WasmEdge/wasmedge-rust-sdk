@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let module = Module::from_file(None, &wasm_path)?;
 
     // Get and display exported functions
-    let exports: Vec<_> = module.exports().collect();
+    let exports = module.exports();
     println!("Exported functions:");
     for export in &exports {
         println!("  - {}", export.name());
