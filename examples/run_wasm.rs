@@ -24,9 +24,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Usage: {} <wasm_file> [function_name] [args...]", args[0]);
         eprintln!();
         eprintln!("Examples:");
-        eprintln!("  {} module.wasm                    # List exported functions", args[0]);
-        eprintln!("  {} module.wasm add 2 3            # Call 'add' with args 2 and 3", args[0]);
-        eprintln!("  {} module.wasm factorial 10       # Call 'factorial' with arg 10", args[0]);
+        eprintln!(
+            "  {} module.wasm                    # List exported functions",
+            args[0]
+        );
+        eprintln!(
+            "  {} module.wasm add 2 3            # Call 'add' with args 2 and 3",
+            args[0]
+        );
+        eprintln!(
+            "  {} module.wasm factorial 10       # Call 'factorial' with arg 10",
+            args[0]
+        );
         std::process::exit(1);
     }
 
