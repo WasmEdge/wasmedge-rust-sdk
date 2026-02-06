@@ -47,6 +47,13 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Build test WASM modules
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
       - name: Test Rust SDK
         run: |
           cargo test --workspace --exclude async-wasi --features bundled,aot,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
