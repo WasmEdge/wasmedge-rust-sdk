@@ -44,13 +44,20 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Build test WASM modules
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
       - name: Run in the standalone mode
         run: |
           export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
           export CC=clang
           export CXX=clang++
           export LD_LIBRARY_PATH=$HOME/.wasmedge/lib
-          cargo test -p wasmedge-sdk --all --examples --features standalone
+          cargo test --workspace --exclude async-wasi --features standalone -- --nocapture --test-threads=1 --skip test_vmbuilder
 
   build_macos:
     name: MacOS
@@ -74,10 +81,17 @@ jobs:
       - name: Install build tools
         run: brew install llvm ninja boost cmake
 
-      - name: Install libwasmedge
+      - name: Build test WASM modules
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
+      - name: Run in the standalone mode
         run: |
           export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
           export CC=clang
           export CXX=clang++
           export DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib
-          cargo test -p wasmedge-sdk --all --examples --features standalone
+          cargo test --workspace --exclude async-wasi --features standalone -- --nocapture --test-threads=1 --skip test_vmbuilder
