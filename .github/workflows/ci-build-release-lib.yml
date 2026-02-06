@@ -21,10 +21,9 @@ on:
 jobs:
   build_ubuntu:
     name: Ubuntu
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-20.04]
         rust: [stable]
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
