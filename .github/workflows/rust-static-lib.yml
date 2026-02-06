@@ -38,6 +38,11 @@ jobs:
           apt update
           apt install -y software-properties-common llvm-15-dev liblld-15-dev ninja-build
 
+      - name: Install WasmEdge
+        run: |
+          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -p /usr/local
+          echo "WASMEDGE_DIR=/usr/local" >> $GITHUB_ENV
+
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
