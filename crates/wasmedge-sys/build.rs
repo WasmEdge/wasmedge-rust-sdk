@@ -95,10 +95,19 @@ fn main() {
         // Tell cargo to look for static libraries in the specified directory
         println!("cargo:rustc-link-search=native={lib_dir}");
 
-        // Tell cargo to tell rustc to link our `wasmedge` and `fmt` library. Cargo will
-        // automatically know it must look for a `libwasmedge.a` and `libfmt.a` file.
+        // Tell cargo to tell rustc to link our `wasmedge` library statically.
         println!("cargo:rustc-link-lib=static=wasmedge");
-        println!("cargo:rustc-link-lib=static=fmt");
+
+        // Check if libfmt.a exists in the lib_dir, otherwise link dynamically
+        let fmt_static = std::path::Path::new(&lib_dir).join("libfmt.a");
+        if fmt_static.exists() {
+            debug!("found static libfmt at {fmt_static:?}");
+            println!("cargo:rustc-link-lib=static=fmt");
+        } else {
+            debug!("static libfmt not found, linking dynamically");
+            println!("cargo:rustc-link-lib=dylib=fmt");
+        }
+
         for dep in ["rt", "dl", "pthread", "m", "zstd", "stdc++"] {
             link_lib(dep);
         }

@@ -222,7 +222,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libzstd-dev
+          sudo apt-get install -y libzstd-dev libfmt-dev
 
       - name: Cache cargo registry
         uses: actions/cache@v4
