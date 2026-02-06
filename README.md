@@ -30,6 +30,13 @@ Or with the `standalone` feature to automatically download the WasmEdge library:
 wasmedge-sdk = { version = "0.16.1", features = ["standalone"] }
 ```
 
+For a fully self-contained binary with the WasmEdge library statically linked (Linux only):
+
+```toml
+[dependencies]
+wasmedge-sdk = { version = "0.16.1", features = ["bundled"] }
+```
+
 ### Run a WebAssembly Function
 
 ```rust
@@ -115,6 +122,19 @@ The following architectures are supported for automatic downloads:
   | macos | -       | `x86_64`, `aarch64` | dynamic         |
   | linux | `glibc` | `x86_64`, `aarch64` | static, dynamic |
   | linux | `musl`  | `x86_64`, `aarch64` | static          |
+
+### Static Linking (Bundled)
+
+The `bundled` feature enables static linking of the WasmEdge library into your application binary. This creates a fully self-contained executable that doesn't require the WasmEdge library to be installed on the target system or any `LD_LIBRARY_PATH` configuration.
+
+```toml
+[dependencies]
+wasmedge-sdk = { version = "0.16.1", features = ["bundled"] }
+```
+
+The `bundled` feature is equivalent to enabling both `standalone` and `static` features together. It downloads the static WasmEdge library at build time and links it directly into your binary.
+
+**Note:** Static linking is only supported on Linux (glibc and musl). macOS currently only supports dynamic linking.
 
 This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 
