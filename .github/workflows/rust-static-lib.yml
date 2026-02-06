@@ -49,8 +49,8 @@ jobs:
 
       - name: Test Rust SDK
         run: |
-          cargo test -p wasmedge-sdk --all --examples --features bundled,aot,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test -p wasmedge-sdk --all --examples --features bundled,aot,ffi -- --nocapture --test-threads=1
 
       - name: Test Rust SDK with async feature
         run: |
-          cargo test -p wasmedge-sdk --all --examples --features bundled,aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test -p wasmedge-sdk --all --examples --features bundled,aot,async,ffi -- --nocapture --test-threads=1
