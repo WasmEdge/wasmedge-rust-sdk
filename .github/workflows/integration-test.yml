@@ -201,3 +201,82 @@ jobs:
 
       - name: Run integration tests with standalone feature
         run: cargo test --test integration_test --release --features standalone -- --nocapture
+
+  integration-test-bundled:
+    name: Integration Tests (Bundled/Static)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libzstd-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bundled-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-bundled-${{ matrix.rust }}-
+
+      - name: Install wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build test-wasm module
+        run: |
+          cd test-wasm
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Build SDK with bundled feature (static linking)
+        run: cargo build --release --features bundled
+
+      - name: Build example runner with bundled feature
+        run: cargo build --release --features bundled --example run_wasm
+
+      - name: Verify static linking (no libwasmedge.so dependency)
+        run: |
+          echo "Checking dynamic dependencies of the example binary..."
+          ldd target/release/examples/run_wasm || true
+          if ldd target/release/examples/run_wasm 2>/dev/null | grep -q "libwasmedge"; then
+            echo "ERROR: Binary has dynamic dependency on libwasmedge"
+            exit 1
+          fi
+          echo "SUCCESS: Binary is statically linked (no libwasmedge.so dependency)"
+
+      - name: Run integration tests with bundled feature (no LD_LIBRARY_PATH)
+        run: cargo test --test integration_test --release --features bundled -- --nocapture
+        env:
+          # Explicitly unset library paths to prove static linking works
+          LD_LIBRARY_PATH: ""
+
+      - name: Run example - List exported functions
+        run: |
+          ./target/release/examples/run_wasm test-wasm/target/wasm32-unknown-unknown/release/test_wasm.wasm
+
+      - name: Run example - Call add function
+        run: |
+          ./target/release/examples/run_wasm test-wasm/target/wasm32-unknown-unknown/release/test_wasm.wasm add 10 20
+
+      - name: Run example - Call multiply function
+        run: |
+          ./target/release/examples/run_wasm test-wasm/target/wasm32-unknown-unknown/release/test_wasm.wasm multiply 6 7
+
+      - name: Run example - Call subtract function
+        run: |
+          ./target/release/examples/run_wasm test-wasm/target/wasm32-unknown-unknown/release/test_wasm.wasm subtract 100 42

@@ -46,6 +46,10 @@ wasmedge_process = ["wasmedge-sys/wasmedge_process"]
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 
+[[example]]
+name = "run_wasm"
+path = "examples/run_wasm.rs"
+
 [package.metadata.docs.rs]
 features = ["aot", "wasi_crypto", "wasi_nn", "wasmedge_process", "ffi"]
 rustdoc-args = ["--cfg", "docsrs"]
