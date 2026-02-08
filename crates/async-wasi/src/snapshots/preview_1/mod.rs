@@ -168,7 +168,7 @@ pub fn fd_prestat_get<M: Memory>(
 
     let prestat = mem.mut_data(prestat_ptr)?;
 
-    let pr_name_len = ctx.vfs.fd_preopen_get(fd as usize)?.as_bytes().len() as u32;
+    let pr_name_len = ctx.vfs.fd_preopen_get(fd as usize)?.len() as u32;
 
     prestat.tag = __wasi_preopentype_t::__WASI_PREOPENTYPE_DIR;
     prestat.u = __wasi_prestat_u_t {

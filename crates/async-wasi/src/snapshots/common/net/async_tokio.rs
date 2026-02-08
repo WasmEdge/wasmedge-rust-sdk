@@ -134,14 +134,14 @@ impl AsyncWasiSocketInner {
         }
     }
 
-    pub(crate) async fn readable(&self) -> io::Result<AsyncFdReadyGuard<Socket>> {
+    pub(crate) async fn readable(&self) -> io::Result<AsyncFdReadyGuard<'_, Socket>> {
         match self {
             AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::ENOTCONN)),
             AsyncWasiSocketInner::AsyncFd(s) => Ok(s.readable().await?),
         }
     }
 
-    pub(crate) async fn writable(&self) -> io::Result<AsyncFdReadyGuard<Socket>> {
+    pub(crate) async fn writable(&self) -> io::Result<AsyncFdReadyGuard<'_, Socket>> {
         match self {
             AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::ENOTCONN)),
             AsyncWasiSocketInner::AsyncFd(s) => Ok(s.writable().await?),

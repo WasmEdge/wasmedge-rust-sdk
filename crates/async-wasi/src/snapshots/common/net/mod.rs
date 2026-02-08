@@ -37,18 +37,13 @@ pub enum SocketType {
     Stream,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConnectState {
+    #[default]
     Empty,
     Listening,
     Connected,
     Connecting,
-}
-
-impl Default for ConnectState {
-    fn default() -> Self {
-        Self::Empty
-    }
 }
 
 #[derive(Debug, Clone, Default)]

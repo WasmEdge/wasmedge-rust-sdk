@@ -23,11 +23,10 @@ on:
 jobs:
   build_ubuntu:
     name: Ubuntu
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-20.04]
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
@@ -65,19 +64,19 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Clippy check for async feature
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
         run: |
-          rustup target add wasm32-wasi
-          rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
-          rustc hello.rs --target=wasm32-wasi -o hello.wasm
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
 
       - name: Test Rust SDK
         run: |
@@ -92,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
     container:
       image: fedora:latest
 
@@ -129,19 +128,19 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Clippy check for async feature
         run: |
           cargo clippy -V
-          cargo clippy --lib --examples --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi -- -D warnings
+          cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
         run: |
-          rustup target add wasm32-wasi
-          rustc async_hello.rs --target=wasm32-wasi -o async_hello.wasm
-          rustc hello.rs --target=wasm32-wasi -o hello.wasm
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
 
       - name: Test Rust SDK
         run: |
@@ -164,8 +163,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-14, macos-13]
-        rust: [1.83, 1.82, 1.81]
+        os: [macos-14]
+        rust: [stable]
 
     steps:
       - name: Checkout sources
@@ -216,7 +215,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        rust: [1.83, 1.82, 1.81]
+        rust: [stable]
     env:
       WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
       WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build

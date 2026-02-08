@@ -47,6 +47,12 @@ impl Debug for VFS {
     }
 }
 
+impl Default for VFS {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VFS {
     pub fn new_with_stdio<IN, OUT, ERR>(stdio_sys: StdioSys<IN, OUT, ERR>) -> Self
     where

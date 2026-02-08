@@ -74,15 +74,41 @@ pub fn get_standalone_libwasmedge() -> std::path::PathBuf {
         std::fs::write(STANDALONE_DIR.join(".stamp"), hash).expect("failed to write archive stamp");
     }
 
-    std::fs::read_dir(STANDALONE_DIR.as_path())
-        .expect("failed to read archive directory")
-        .filter_map(|entry| entry.ok())
-        .find(|entry| match entry.file_type() {
-            Ok(ty) => ty.is_dir(),
-            _ => false,
-        })
-        .expect("failed to find WasmEdge in archive directory")
-        .path()
+    // Check if the archive was extracted with a root directory (e.g., WasmEdge-0.16.1-darwin_arm64/)
+    // or if it's a flat structure (bin/, lib/, include/ directly in STANDALONE_DIR)
+    let include_dir = STANDALONE_DIR.join("include");
+    let lib_dir = STANDALONE_DIR.join("lib");
+    let lib64_dir = STANDALONE_DIR.join("lib64");
+
+    if include_dir.exists() && (lib_dir.exists() || lib64_dir.exists()) {
+        // Flat structure: include/ and lib/ (or lib64/) are directly in STANDALONE_DIR
+        debug!("using flat structure");
+        STANDALONE_DIR.clone()
+    } else {
+        // Nested structure: find the WasmEdge root directory
+        debug!("looking for nested WasmEdge directory");
+        let entries: Vec<_> = std::fs::read_dir(STANDALONE_DIR.as_path())
+            .expect("failed to read archive directory")
+            .filter_map(|entry| entry.ok())
+            .collect();
+
+        debug!(
+            "found {} entries in archive directory: {:?}",
+            entries.len(),
+            entries.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+        );
+
+        entries
+            .into_iter()
+            .find(|entry| match entry.file_type() {
+                Ok(ty) => {
+                    ty.is_dir() && entry.file_name().to_string_lossy().starts_with("WasmEdge")
+                }
+                _ => false,
+            })
+            .expect("failed to find WasmEdge in archive directory")
+            .path()
+    }
 }
 
 fn get_remote_archive() -> Archive {
@@ -104,11 +130,7 @@ fn get_remote_archive() -> Archive {
         .expect("target not supported with features `standalone` and `static`")
         .to_owned();
 
-    let asset_name = if cfg!(feature = "static") {
-        format!("WasmEdge-{WASMEDGE_RELEASE_VERSION}-fmt-patch-{slug}.tar.gz")
-    } else {
-        format!("WasmEdge-{WASMEDGE_RELEASE_VERSION}-{slug}.tar.gz")
-    };
+    let asset_name = format!("WasmEdge-{WASMEDGE_RELEASE_VERSION}-{slug}.tar.gz");
     let url = format!("https://github.com/WasmEdge/WasmEdge/releases/download/{WASMEDGE_RELEASE_VERSION}/{asset_name}");
 
     let checksum = sha.to_string();

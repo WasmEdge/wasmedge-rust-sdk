@@ -68,7 +68,7 @@ impl Module {
     }
 
     /// Returns the [import types](crate::ImportType) of all imported WasmEdge instances in the [module](crate::Module).
-    pub fn imports(&self) -> Vec<ImportType> {
+    pub fn imports(&self) -> Vec<ImportType<'_>> {
         let mut imports = Vec::new();
         for inner_import in self.inner.imports() {
             let import = ImportType {
@@ -86,7 +86,7 @@ impl Module {
     }
 
     /// Returns the [export types](crate::ExportType) of all exported WasmEdge instances (including funcs, tables, globals and memories) from the [module](crate::Module).
-    pub fn exports(&self) -> Vec<ExportType> {
+    pub fn exports(&self) -> Vec<ExportType<'_>> {
         let mut exports = Vec::new();
         for inner_export in self.inner.export() {
             let export = ExportType {
