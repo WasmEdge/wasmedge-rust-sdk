@@ -38,15 +38,26 @@ jobs:
           apt update
           apt install -y software-properties-common llvm-15-dev liblld-15-dev ninja-build
 
+      - name: Install build dependencies
+        run: |
+          apt install -y libzstd-dev libfmt-dev
+
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Build test WASM modules
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
       - name: Test Rust SDK
         run: |
-          cargo test -p wasmedge-sdk --all --examples --features static,aot,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test --workspace --exclude async-wasi --features bundled,aot,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
       - name: Test Rust SDK with async feature
         run: |
-          cargo test -p wasmedge-sdk --all --examples --features static,aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
+          cargo test --workspace --features bundled,aot,async,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
