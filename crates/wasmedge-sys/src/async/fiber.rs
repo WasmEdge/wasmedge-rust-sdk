@@ -104,6 +104,11 @@ impl Drop for FiberFuture<'_> {
 }
 
 /// Defines a TimeoutFiberFuture.
+///
+/// Not available on musl targets because it depends on signal-based timeout
+/// mechanisms (sigsetjmp/siglongjmp, timer_create) that are gated behind
+/// `not(target_env = "musl")` in the executor module.
+#[cfg(not(target_env = "musl"))]
 pub(crate) struct TimeoutFiberFuture<'a> {
     fiber: Fiber<'a, Result<(), ()>, (), Result<(), ()>>,
     current_suspend: *mut *const Suspend<Result<(), ()>, (), Result<(), ()>>,
@@ -111,6 +116,7 @@ pub(crate) struct TimeoutFiberFuture<'a> {
     deadline: std::time::SystemTime,
 }
 
+#[cfg(not(target_env = "musl"))]
 impl<'a> TimeoutFiberFuture<'a> {
     /// Create a fiber to execute the given function.
     ///
@@ -164,6 +170,7 @@ impl<'a> TimeoutFiberFuture<'a> {
     }
 }
 
+#[cfg(not(target_env = "musl"))]
 impl Future for TimeoutFiberFuture<'_> {
     type Output = Result<(), ()>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -225,9 +232,12 @@ impl Future for TimeoutFiberFuture<'_> {
         }
     }
 }
+#[cfg(not(target_env = "musl"))]
 unsafe impl Send for TimeoutFiberFuture<'_> {}
+#[cfg(not(target_env = "musl"))]
 unsafe impl Sync for TimeoutFiberFuture<'_> {}
 
+#[cfg(not(target_env = "musl"))]
 impl Drop for TimeoutFiberFuture<'_> {
     fn drop(&mut self) {
         if !self.fiber.done() {
