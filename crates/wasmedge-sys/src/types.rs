@@ -28,25 +28,38 @@ impl WasmEdgeLimit {
         self.shared
     }
 }
-impl From<WasmEdgeLimit> for ffi::WasmEdge_Limit {
-    fn from(limit: WasmEdgeLimit) -> Self {
-        let max = limit.max().unwrap_or(u32::MAX);
-
-        Self {
-            Min: limit.min(),
-            Max: max,
-            HasMax: limit.max().is_some(),
-            Shared: limit.shared,
+impl WasmEdgeLimit {
+    /// Build an owned `WasmEdge_LimitContext`. Caller must release the
+    /// returned pointer with `WasmEdge_LimitDelete` once any downstream API
+    /// that needs it has been called — all current consumers (`MemoryTypeCreate`,
+    /// `TableTypeCreate`) borrow the limit (declared `const` in the C API),
+    /// so ownership stays with the caller.
+    pub(crate) fn to_context(&self) -> *mut ffi::WasmEdge_LimitContext {
+        unsafe {
+            match self.max {
+                Some(max) => ffi::WasmEdge_LimitCreateWithMax(
+                    self.min as u64,
+                    max as u64,
+                    false, // Is64Bit — wasm32 only for now
+                    self.shared,
+                ),
+                None => ffi::WasmEdge_LimitCreate(self.min as u64, false),
+            }
         }
     }
-}
-impl From<ffi::WasmEdge_Limit> for WasmEdgeLimit {
-    fn from(limit: ffi::WasmEdge_Limit) -> Self {
-        let max = match limit.HasMax {
-            true => Some(limit.Max),
-            false => None,
-        };
-        WasmEdgeLimit::new(limit.Min, max, limit.Shared)
+
+    /// Construct from a borrowed `WasmEdge_LimitContext` (does NOT delete).
+    pub(crate) fn from_context(ctx: *const ffi::WasmEdge_LimitContext) -> Self {
+        unsafe {
+            let min = ffi::WasmEdge_LimitGetMin(ctx) as u32;
+            let max = if ffi::WasmEdge_LimitHasMax(ctx) {
+                Some(ffi::WasmEdge_LimitGetMax(ctx) as u32)
+            } else {
+                None
+            };
+            let shared = ffi::WasmEdge_LimitIsShared(ctx);
+            Self { min, max, shared }
+        }
     }
 }
 

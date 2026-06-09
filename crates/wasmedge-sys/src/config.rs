@@ -154,12 +154,12 @@ impl Config {
     ///
     /// * `count` - The page count (64KB per page).
     pub fn set_max_memory_pages(&mut self, count: u32) {
-        unsafe { ffi::WasmEdge_ConfigureSetMaxMemoryPage(self.inner.0, count) }
+        unsafe { ffi::WasmEdge_ConfigureSetMaxMemoryPage(self.inner.0, count.into()) }
     }
 
     /// Returns the number of the memory pages available.
     pub fn get_max_memory_pages(&self) -> u32 {
-        unsafe { ffi::WasmEdge_ConfigureGetMaxMemoryPage(self.inner.0) }
+        unsafe { ffi::WasmEdge_ConfigureGetMaxMemoryPage(self.inner.0) as u32 }
     }
 
     /// Enables or disables the ImportExportMutGlobals option. By default, the option is enabled.
@@ -770,7 +770,8 @@ mod tests {
         assert!(config.exception_handling_enabled());
         // Note: function_references is enabled by default in WasmEdge 0.16.1+
         assert!(config.function_references_enabled());
-        assert!(!config.memory64_enabled());
+        // Note: memory64 is enabled by default in WasmEdge 0.17.0+
+        assert!(config.memory64_enabled());
         assert!(config.multi_value_enabled());
         assert!(config.mutable_globals_enabled());
         assert!(config.non_trap_conversions_enabled());
@@ -801,7 +802,8 @@ mod tests {
             config.get_aot_compiler_output_format(),
             CompilerOutputFormat::Wasm,
         );
-        assert!(!config.interpreter_mode_enabled());
+        // Note: interpreter_mode is enabled by default in WasmEdge 0.17.0+
+        assert!(config.interpreter_mode_enabled());
         #[cfg(feature = "aot")]
         assert!(!config.interruptible_enabled());
 
@@ -913,7 +915,8 @@ mod tests {
             assert!(config.exception_handling_enabled());
             // Note: function_references is enabled by default in WasmEdge 0.16.1+
             assert!(config.function_references_enabled());
-            assert!(!config.memory64_enabled());
+            // Note: memory64 is enabled by default in WasmEdge 0.17.0+
+            assert!(config.memory64_enabled());
             assert!(config.reference_types_enabled());
             assert!(config.simd_enabled());
             // Note: tail_call is enabled by default in WasmEdge 0.16.1+
@@ -1004,7 +1007,8 @@ mod tests {
                     assert!(config.exception_handling_enabled());
                     // Note: function_references is enabled by default in WasmEdge 0.16.1+
                     assert!(config.function_references_enabled());
-                    assert!(!config.memory64_enabled());
+                    // Note: memory64 is enabled by default in WasmEdge 0.17.0+
+                    assert!(config.memory64_enabled());
                     assert!(config.reference_types_enabled());
                     assert!(config.simd_enabled());
                     // Note: tail_call is enabled by default in WasmEdge 0.16.1+
