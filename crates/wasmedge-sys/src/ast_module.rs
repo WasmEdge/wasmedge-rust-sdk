@@ -181,7 +181,7 @@ impl ImportType<'_> {
                     )))),
                     false => {
                         let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(ctx_mem_ty) };
-                        let limit: WasmEdgeLimit = limit.into();
+                        let limit = WasmEdgeLimit::from_context(limit);
 
                         Ok(ExternalInstanceType::Memory(MemoryType::new(
                             limit.min(),
@@ -206,7 +206,7 @@ impl ImportType<'_> {
 
                         // get the limit
                         let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
-                        let limit: WasmEdgeLimit = limit.into();
+                        let limit = WasmEdgeLimit::from_context(limit);
 
                         Ok(ExternalInstanceType::Table(TableType::new(
                             elem_ty,
@@ -321,7 +321,7 @@ impl ExportType<'_> {
 
                         // get the limit
                         let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
-                        let limit: WasmEdgeLimit = limit.into();
+                        let limit = WasmEdgeLimit::from_context(limit);
 
                         Ok(ExternalInstanceType::Table(TableType::new(
                             elem_ty,
@@ -341,7 +341,7 @@ impl ExportType<'_> {
                     )))),
                     false => {
                         let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(ctx_mem_ty) };
-                        let limit: WasmEdgeLimit = limit.into();
+                        let limit = WasmEdgeLimit::from_context(limit);
 
                         Ok(ExternalInstanceType::Memory(MemoryType::new(
                             limit.min(),

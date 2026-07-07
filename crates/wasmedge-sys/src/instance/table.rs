@@ -79,7 +79,7 @@ impl Table {
             check(ffi::WasmEdge_TableInstanceGetData(
                 self.inner.0,
                 &mut data as *mut _,
-                idx,
+                idx.into(),
             ))?;
             data
         };
@@ -102,7 +102,7 @@ impl Table {
             check(ffi::WasmEdge_TableInstanceSetData(
                 self.inner.0,
                 data.as_raw(),
-                idx,
+                idx.into(),
             ))
         }
     }
@@ -125,7 +125,7 @@ impl Table {
     ///
     /// If fail to increase the size of the [Table], then an error is returned.
     pub fn grow(&mut self, size: u32) -> WasmEdgeResult<()> {
-        unsafe { check(ffi::WasmEdge_TableInstanceGrow(self.inner.0, size)) }
+        unsafe { check(ffi::WasmEdge_TableInstanceGrow(self.inner.0, size.into())) }
     }
 
     /// # Safety
@@ -190,9 +190,11 @@ impl TableType {
     ///
     pub(crate) fn create(elem_ty: RefType, min: u32, max: Option<u32>) -> WasmEdgeResult<Self> {
         let ty: ValType = elem_ty.into();
-        let ctx = unsafe {
-            ffi::WasmEdge_TableTypeCreate(ty.into(), WasmEdgeLimit::new(min, max, false).into())
-        };
+        // WasmEdge_TableTypeCreate borrows the limit (declared `const` in
+        // the 0.17.0 C API), so the caller owns and must delete the context.
+        let limit_ctx = WasmEdgeLimit::new(min, max, false).to_context();
+        let ctx = unsafe { ffi::WasmEdge_TableTypeCreate(ty.into(), limit_ctx) };
+        unsafe { ffi::WasmEdge_LimitDelete(limit_ctx) };
         if ctx.is_null() {
             Err(Box::new(WasmEdgeError::TableTypeCreate))
         } else {
@@ -212,14 +214,14 @@ impl TableType {
     /// Returns the initial size of the [Table].
     pub(crate) fn min(&self) -> u32 {
         let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(self.inner.0) };
-        let limit: WasmEdgeLimit = limit.into();
+        let limit = WasmEdgeLimit::from_context(limit);
         limit.min()
     }
 
     /// Returns the maximum size of the [Table].
     pub(crate) fn max(&self) -> Option<u32> {
         let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(self.inner.0) };
-        let limit: WasmEdgeLimit = limit.into();
+        let limit = WasmEdgeLimit::from_context(limit);
         limit.max()
     }
 }

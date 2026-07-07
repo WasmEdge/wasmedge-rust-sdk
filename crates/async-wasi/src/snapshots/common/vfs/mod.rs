@@ -395,6 +395,10 @@ pub trait WasiDir: WasiNode {
         let mut bufused = 0;
         let mut next = cursor as u64;
 
+        // `next` is not a plain loop counter — it's the dirent offset stored
+        // inside each emitted ReaddirEntity, so the clippy suggestion to use
+        // `enumerate()`+ `cursor as u64..` would change observable semantics.
+        #[allow(clippy::explicit_counter_loop)]
         for (name, inode, filetype) in self.get_readdir(next)? {
             next += 1;
             let entity = ReaddirEntity {

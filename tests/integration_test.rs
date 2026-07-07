@@ -2,14 +2,10 @@
 //!
 //! This module tests loading and running WebAssembly modules with the SDK.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use wasmedge_sdk::error::CoreError;
-use wasmedge_sdk::vm::SyncInst;
-use wasmedge_sdk::AsInstance;
+use std::{collections::HashMap, path::PathBuf};
 use wasmedge_sdk::{
-    params, wat2wasm, CallingFrame, ImportObjectBuilder, Instance, Module, Store, Vm, WasmVal,
-    WasmValue,
+    error::CoreError, params, vm::SyncInst, wat2wasm, AsInstance, CallingFrame,
+    ImportObjectBuilder, Instance, Module, Store, Vm, WasmVal, WasmValue,
 };
 
 /// Get path to the compiled test-wasm module

@@ -61,3 +61,31 @@ jobs:
       - name: Test Rust SDK with async feature
         run: |
           cargo test --workspace --features bundled,aot,async,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
+
+  # macOS arm64 mirrors build_ubuntu but excludes the `async` feature:
+  # async-wasi uses Linux-only socket APIs (SO_BINDTODEVICE-family —
+  # `bind_device`, `device`, `is_listener`) that don't compile on macOS.
+  # When async-wasi grows macOS support, re-add the "Test Rust SDK with
+  # async feature" step below.
+  build_macos:
+    name: macOS arm64
+    runs-on: macos-14
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build test WASM modules
+        working-directory: examples/wasmedge-sys
+        run: |
+          rustup target add wasm32-wasip1
+          rustc async_hello.rs --target=wasm32-wasip1 -o async_hello.wasm
+          rustc hello.rs --target=wasm32-wasip1 -o hello.wasm
+
+      - name: Test Rust SDK
+        run: |
+          cargo test --workspace --exclude async-wasi --features bundled,aot,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder

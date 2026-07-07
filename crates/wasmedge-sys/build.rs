@@ -9,7 +9,7 @@ use build_standalone::*;
 
 use crate::build_paths::AsPath;
 
-const WASMEDGE_RELEASE_VERSION: &str = "0.16.1";
+const WASMEDGE_RELEASE_VERSION: &str = "0.17.0";
 const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = phf_map! {
     // The key is: {os}/{arch}[/{libc}][/static]
     //  * The libc abi is only added on linux.
@@ -18,14 +18,15 @@ const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = ph
     // The value is a tuple containing the sha256sum of the archive, and the platform slug as it appears in the archive name:
     //  * The archive name is WasmEdge-{version}-{slug}.tar.gz
 
-    "macos/aarch64"                => ("a63f78cd4eb5889777a78772f8c464b535af68ef1b3e6b875afbf35e66767008", "darwin_arm64"),
-    "macos/x86_64"                 => ("df343e262fe46f95af5739c85617f6e9270760725ac04ff25e2c46b2fb11d41e", "darwin_x86_64"),
-    "linux/aarch64/gnu"            => ("2d51e6b41322eddf17ebd69f0351d14dce4cf9acedfb34340e8ab3b13cc6f2a4", "manylinux_2_28_aarch64"),
-    "linux/x86_64/gnu"             => ("43756d546b580fa8cd874190ab1abc868de80a00c80551ae4d1d359d5f9628bc", "manylinux_2_28_x86_64"),
-    "linux/aarch64/gnu/static"     => ("20d59a97a422d1e23705a4cb89e5c195cf1488fe3225b1ce1d5ba3a295ec0a25", "debian11_aarch64_static"),
-    "linux/x86_64/gnu/static"      => ("49c77f8502d6c67e294f0ce8e6ed03fa5f6c47a34528ea4b979a86516e4473c3", "debian11_x86_64_static"),
-    "linux/aarch64/musl/static"    => ("b15c9c8cd5cb6c8aa388d108504af3df98a20f501339c5c003a47b69c732c5e3", "alpine3.23_aarch64_static"),
-    "linux/x86_64/musl/static"     => ("5afb2f0c678db2ba53264be0e73733ad6e03137bd49f0716820741bc44eb1fe2", "alpine3.23_x86_64_static"),
+    "macos/aarch64"                => ("ae97ff792ac1bf7bcf703b20926b9bac168e5b6260930d13a156dc19e68a67c5", "darwin_arm64"),
+    "macos/aarch64/static"         => ("57c22c699c1bc7b10c6da78e3b14b74d578a392c8019250e58d00da61857b203", "darwin_arm64_static"),
+    "macos/x86_64"                 => ("5742f7d19bbdb983f4df57114b085f908bae06f705ea3e167f802a66bd9e0342", "darwin_x86_64"),
+    "linux/aarch64/gnu"            => ("6d3aa5a43fd0998b11812e99b46e90a282f3caaacc9cfef14b67f3438b63e804", "manylinux_2_28_aarch64"),
+    "linux/x86_64/gnu"             => ("5d8165559c553eacc9b87db1799c2204e056db8609bedbf61eb29f8a21a42993", "manylinux_2_28_x86_64"),
+    "linux/aarch64/gnu/static"     => ("93c28c7caf84860ad9acb36c823a820d0abc062af432749c5eab4395e5158beb", "debian11_aarch64_static"),
+    "linux/x86_64/gnu/static"      => ("7603ce19b745984c73057887219e5635cb08f857a1fc4625ba30347dbc6effe1", "debian11_x86_64_static"),
+    "linux/aarch64/musl/static"    => ("415b8660fb11cb25f7c8a5d67a88a1ad9802eb832ca3dd65d363fc47b01faa35", "alpine3.23_aarch64_static"),
+    "linux/x86_64/musl/static"     => ("4e285eb9e94f147e8d11b53209a3b7377265ab9dd784c8ac8be7682ea3531e44", "alpine3.23_x86_64_static"),
 };
 
 lazy_static! {
@@ -98,18 +99,57 @@ fn main() {
         // Tell cargo to tell rustc to link our `wasmedge` library statically.
         println!("cargo:rustc-link-lib=static=wasmedge");
 
-        // Check if libfmt.a exists in the lib_dir, otherwise link dynamically
+        // fmt: macOS static archive merges fmt into libwasmedge.a and does not
+        // ship libfmt.a separately. macOS developer hosts typically lack
+        // libfmt.dylib on the linker's default search path (brew installs to
+        // /opt/homebrew/lib which clang doesn't search by default), so the
+        // dynamic fallback breaks clean macOS builds. Skip the explicit fmt
+        // link on macOS — the symbols are already in libwasmedge.a.
         let fmt_static = std::path::Path::new(&lib_dir).join("libfmt.a");
         if fmt_static.exists() {
             debug!("found static libfmt at {fmt_static:?}");
             println!("cargo:rustc-link-lib=static=fmt");
-        } else {
+        } else if !cfg!(target_os = "macos") {
             debug!("static libfmt not found, linking dynamically");
             println!("cargo:rustc-link-lib=dylib=fmt");
+        } else {
+            debug!(
+                "static libfmt not found on macOS; skipping (assumed merged into libwasmedge.a)"
+            );
         }
 
-        for dep in ["rt", "dl", "pthread", "m", "zstd", "stdc++"] {
+        // Platform-conditional system deps for the static-link path.
+        // macOS: libSystem already provides rt/dl/pthread/m; libstdc++ is
+        //        libc++. When the archive was built with
+        //        WASMEDGE_LINK_LLVM_STATIC=ON (default for the darwin_arm64
+        //        static workflow), LLVM's compression code pulls in zlib
+        //        (libz), terminfo support pulls in ncurses, and archive
+        //        parsing pulls in libxar — all available as /usr/lib system
+        //        libraries on every macOS install.
+        // Linux: needs the full set.
+        let deps: &[&str] = if cfg!(target_os = "macos") {
+            &["c++", "z", "ncurses", "xar"]
+        } else {
+            &["rt", "dl", "pthread", "m", "stdc++"]
+        };
+        for dep in deps {
             link_lib(dep);
+        }
+
+        // zstd: mirror the libfmt.a fallback pattern. macOS static archive
+        // won't ship libzstd.a; fall back to skipping rather than dynamic-linking
+        // a library the host may not have.
+        let zstd_static = std::path::Path::new(&lib_dir).join("libzstd.a");
+        if zstd_static.exists() {
+            debug!("found static libzstd at {zstd_static:?}");
+            println!("cargo:rustc-link-lib=static=zstd");
+        } else if !cfg!(target_os = "macos") {
+            debug!("static libzstd not found, linking dynamically");
+            println!("cargo:rustc-link-lib=dylib=zstd");
+        } else {
+            debug!(
+                "static libzstd not found on macOS; skipping (assumed merged into libwasmedge.a)"
+            );
         }
     } else {
         println!("cargo:rustc-env=LD_LIBRARY_PATH={lib_dir}");

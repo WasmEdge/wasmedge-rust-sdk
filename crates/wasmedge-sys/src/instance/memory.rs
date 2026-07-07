@@ -73,8 +73,8 @@ impl Memory {
             check(ffi::WasmEdge_MemoryInstanceGetData(
                 self.inner.0,
                 data.as_mut_ptr(),
-                offset,
-                len,
+                offset.into(),
+                len.into(),
             ))?;
             data.set_len(len as usize);
         }
@@ -100,8 +100,8 @@ impl Memory {
             check(ffi::WasmEdge_MemoryInstanceSetData(
                 self.inner.0,
                 data.as_ref().as_ptr(),
-                offset,
-                data.as_ref().len() as u32,
+                offset.into(),
+                data.as_ref().len() as u64,
             ))
         }
     }
@@ -124,7 +124,9 @@ impl Memory {
     /// The lifetime of the returned pointer must not exceed that of the object itself.
     ///
     pub unsafe fn data_pointer(&self, offset: u32, len: u32) -> WasmEdgeResult<*const u8> {
-        let ptr = unsafe { ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.0, offset, len) };
+        let ptr = unsafe {
+            ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.0, offset.into(), len.into())
+        };
         match ptr.is_null() {
             true => Err(Box::new(WasmEdgeError::Mem(MemError::ConstPtr))),
             false => Ok(ptr),
@@ -148,7 +150,9 @@ impl Memory {
     /// The lifetime of the returned pointer must not exceed that of the object itself.
     ///
     pub unsafe fn data_pointer_mut(&mut self, offset: u32, len: u32) -> WasmEdgeResult<*mut u8> {
-        let ptr = unsafe { ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.0, offset, len) };
+        let ptr = unsafe {
+            ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.0, offset.into(), len.into())
+        };
         match ptr.is_null() {
             true => Err(Box::new(WasmEdgeError::Mem(MemError::MutPtr))),
             false => Ok(ptr),
@@ -157,7 +161,7 @@ impl Memory {
 
     /// Returns the size, in WebAssembly pages (64 KiB of each page), of this wasm memory.
     pub fn size(&self) -> u32 {
-        unsafe { ffi::WasmEdge_MemoryInstanceGetPageSize(self.inner.0) }
+        unsafe { ffi::WasmEdge_MemoryInstanceGetPageSize(self.inner.0) as u32 }
     }
 
     /// Grows this WebAssembly memory by `count` pages.
@@ -171,7 +175,12 @@ impl Memory {
     /// If fail to grow the page count, then an error is returned.
     ///
     pub fn grow(&mut self, count: u32) -> WasmEdgeResult<()> {
-        unsafe { check(ffi::WasmEdge_MemoryInstanceGrowPage(self.inner.0, count)) }
+        unsafe {
+            check(ffi::WasmEdge_MemoryInstanceGrowPage(
+                self.inner.0,
+                count.into(),
+            ))
+        }
     }
 
     /// # Safety
@@ -264,8 +273,11 @@ impl MemType {
         if shared && max.is_none() {
             return Err(Box::new(WasmEdgeError::Mem(MemError::CreateSharedType)));
         }
-        let ctx =
-            unsafe { ffi::WasmEdge_MemoryTypeCreate(WasmEdgeLimit::new(min, max, shared).into()) };
+        // WasmEdge_MemoryTypeCreate borrows the limit (declared `const` in
+        // the 0.17.0 C API), so the caller owns and must delete the context.
+        let limit_ctx = WasmEdgeLimit::new(min, max, shared).to_context();
+        let ctx = unsafe { ffi::WasmEdge_MemoryTypeCreate(limit_ctx) };
+        unsafe { ffi::WasmEdge_LimitDelete(limit_ctx) };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::MemTypeCreate)),
             false => Ok(Self {
@@ -277,21 +289,21 @@ impl MemType {
     /// Returns the initial size of a [Memory].
     pub(crate) fn min(&self) -> u32 {
         let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(self.inner.0) };
-        let limit: WasmEdgeLimit = limit.into();
+        let limit = WasmEdgeLimit::from_context(limit);
         limit.min()
     }
 
     /// Returns the maximum size of a [Memory] allowed to grow.
     pub(crate) fn max(&self) -> Option<u32> {
         let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(self.inner.0) };
-        let limit: WasmEdgeLimit = limit.into();
+        let limit = WasmEdgeLimit::from_context(limit);
         limit.max()
     }
 
     /// Returns whether the memory is shared or not.
     pub(crate) fn shared(&self) -> bool {
         let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(self.inner.0) };
-        let limit: WasmEdgeLimit = limit.into();
+        let limit = WasmEdgeLimit::from_context(limit);
         limit.shared()
     }
 }
