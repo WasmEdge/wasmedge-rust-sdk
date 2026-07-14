@@ -237,11 +237,6 @@ jobs:
         with:
           args: install cmake ninja vswhere
 
-      - name: Set up Windows 10 SDK
-        uses: GuillaumeFalourd/setup-windows10-sdk-action@v2.5
-        with:
-          sdk-version: 19041
-
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
