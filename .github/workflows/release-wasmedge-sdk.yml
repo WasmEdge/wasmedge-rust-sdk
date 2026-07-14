@@ -53,7 +53,16 @@ jobs:
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
 
+      # Workspace dependency versions may not exist on crates.io until the
+      # preceding release workflows complete.
+      - name: Validate package contents
+        if: inputs.dry_run
+        shell: bash
+        run: |
+          cargo package --list -p wasmedge-sdk
+
       - name: Dry run cargo publish
+        if: inputs.dry_run == false
         shell: bash
         run: |
           cargo publish --dry-run -p wasmedge-sdk
