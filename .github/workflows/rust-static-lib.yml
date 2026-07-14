@@ -69,7 +69,7 @@ jobs:
   # async feature" step below.
   build_macos:
     name: macOS arm64
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout WasmEdge Rust SDK
         uses: actions/checkout@v7

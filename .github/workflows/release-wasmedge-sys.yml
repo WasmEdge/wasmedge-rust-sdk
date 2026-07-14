@@ -18,8 +18,45 @@ on:
         type: boolean
 
 jobs:
+  validate_macos_arm64:
+    name: Validate macOS arm64
+    runs-on: macos-15
+    permissions:
+      contents: read
+    env:
+      WASMEDGE_VERSION: ${{ inputs.wasmedge_version }}
+
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib" >> "$GITHUB_ENV"
+          echo "$HOME/.wasmedge/bin" >> "$GITHUB_PATH"
+
+      # must use nightly, because of the feature `doc_cfg`
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Dry run cargo publish
+        run: cargo publish --dry-run -p wasmedge-sys
+
+      - name: Build API document
+        run: |
+          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sys --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
+
   release_wasmedge_sys:
     name: Release wasmedge-sys crate
+    needs: validate_macos_arm64
     runs-on: ubuntu-22.04
     permissions:
       contents: write

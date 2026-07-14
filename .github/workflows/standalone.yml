@@ -60,11 +60,11 @@ jobs:
           cargo test --workspace --exclude async-wasi --features standalone -- --nocapture --test-threads=1 --skip test_vmbuilder
 
   build_macos:
-    name: MacOS
+    name: macOS arm64
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-14]
+        os: [macos-15]
         rust: [stable]
 
     steps:
@@ -90,7 +90,7 @@ jobs:
 
       - name: Run in the standalone mode
         run: |
-          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
+          export LLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
           export CC=clang
           export CXX=clang++
           export DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib

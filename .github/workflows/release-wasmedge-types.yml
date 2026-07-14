@@ -14,8 +14,31 @@ on:
         type: boolean
 
 jobs:
+  validate_macos_arm64:
+    name: Validate macOS arm64
+    runs-on: macos-15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Dry run cargo publish
+        run: cargo publish --dry-run -p wasmedge-types
+
+      - name: Build API document
+        run: cargo doc -p wasmedge-types --no-deps --target-dir=./target
+
   release_wasmedge_types:
     name: Release wasmedge-types crate
+    needs: validate_macos_arm64
     runs-on: ubuntu-latest
     permissions:
       contents: write

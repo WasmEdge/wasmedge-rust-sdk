@@ -87,11 +87,11 @@ jobs:
           cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1
 
   build_macos:
-    name: MacOS
+    name: macOS arm64
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-14]
+        os: [macos-15]
         rust: [stable]
 
     steps:
@@ -112,7 +112,7 @@ jobs:
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
-          export LLVM_DIR="/usr/local/opt/llvm/lib/cmake"
+          export LLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
           export CC=clang
           export CXX=clang++
           rm -rf build

@@ -49,9 +49,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-
 
       - name: Install WasmEdge
         run: |
@@ -97,12 +97,12 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
   integration-test-macos:
-    name: Integration Tests (macOS)
+    name: Integration Tests (macOS arm64)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14]
+        os: [macos-15]
         rust: [stable]
 
     steps:
@@ -121,9 +121,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-
 
       - name: Install WasmEdge
         run: |
@@ -174,7 +174,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        os: [ubuntu-24.04, macos-15]
         rust: [stable]
 
     steps:
@@ -193,9 +193,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-standalone-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-standalone-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-standalone-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-standalone-${{ matrix.rust }}-
 
       - name: Build SDK with standalone feature
         run: cargo build --release --features standalone
@@ -240,9 +240,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-bundled-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-bundled-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-bundled-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-bundled-${{ matrix.rust }}-
 
       - name: Install wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown

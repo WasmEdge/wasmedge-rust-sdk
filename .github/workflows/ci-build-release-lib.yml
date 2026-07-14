@@ -82,11 +82,11 @@ jobs:
           cargo test --workspace --locked --features aot,async,wasmedge_process,ffi -- --nocapture --test-threads=1 --skip test_vmbuilder
 
   build_macos:
-    name: MacOS
+    name: macOS arm64
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-14]
+        os: [macos-15]
         rust: [stable]
 
     steps:
