@@ -4,6 +4,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+env:
+  WASMEDGE_VERSION: "0.17.1"
+
 on:
   push:
     branches:
@@ -36,7 +39,10 @@ jobs:
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
           ldconfig
 
       - name: Install Rust-stable
@@ -95,7 +101,10 @@ jobs:
           dnf install -y cmake ninja-build boost llvm llvm-devel lld-devel clang git file rpm-build dpkg-dev spdlog-devel
           dnf install -y which python python3-pip
           git config --global --add safe.directory $(pwd)
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
           ldconfig
 
       - name: Install Rust-stable
@@ -150,7 +159,10 @@ jobs:
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
         with:
