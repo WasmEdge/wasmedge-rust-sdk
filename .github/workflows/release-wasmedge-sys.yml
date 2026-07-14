@@ -59,7 +59,7 @@ jobs:
     needs: validate_macos_arm64
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
@@ -107,8 +107,30 @@ jobs:
         run: |
           RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sys --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
-      - name: Deploy API document
+      - name: Upload API document
         if: github.ref == 'refs/heads/main' && inputs.dry_run == false
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasmedge-sys-api-docs
+          path: target/doc
+          if-no-files-found: error
+
+  deploy_api_document:
+    name: Deploy API document
+    if: github.ref == 'refs/heads/main' && inputs.dry_run == false
+    needs: release_wasmedge_sys
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download API document
+        uses: actions/download-artifact@v8
+        with:
+          name: wasmedge-sys-api-docs
+          path: target/doc
+
+      - name: Deploy API document
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

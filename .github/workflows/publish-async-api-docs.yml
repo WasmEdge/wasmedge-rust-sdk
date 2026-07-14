@@ -22,7 +22,7 @@ jobs:
     name: Release wasmedge-sdk crate
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
@@ -57,8 +57,30 @@ jobs:
         run: |
           RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
-      - name: Deploy Async API document
+      - name: Upload Async API document
         if: github.ref == 'refs/heads/main' && inputs.dry_run == false
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasmedge-sdk-async-api-docs
+          path: target/doc
+          if-no-files-found: error
+
+  deploy_async_api_document:
+    name: Deploy Async API document
+    if: github.ref == 'refs/heads/main' && inputs.dry_run == false
+    needs: release_wasmedge_sdk
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Async API document
+        uses: actions/download-artifact@v8
+        with:
+          name: wasmedge-sdk-async-api-docs
+          path: target/doc
+
+      - name: Deploy Async API document
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
