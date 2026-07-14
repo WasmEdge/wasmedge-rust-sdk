@@ -11,19 +11,27 @@ on:
         description: "Version of WasmEdge"
         required: true
         type: string
+      dry_run:
+        description: "Build the documentation without deploying it"
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   release_wasmedge_sdk:
     name: Release wasmedge-sdk crate
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     container:
       image: wasmedge/wasmedge:ubuntu-build-clang
 
     steps:
       - name: Checkout WasmEdge Rust SDK
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up build environment
         run: |
@@ -44,8 +52,8 @@ jobs:
           RUSTDOCFLAGS="--cfg docsrs" cargo doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
       - name: Deploy Async API document
-        if: github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main' && inputs.dry_run == false
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages

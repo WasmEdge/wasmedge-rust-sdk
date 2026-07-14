@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout WasmEdge Rust SDK
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -85,7 +85,7 @@ jobs:
       image: fedora:latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -144,7 +144,7 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -182,24 +182,24 @@ jobs:
       WASMEDGE_PLUGIN_PATH: ${{ github.workspace }}\WasmEdge\build\wasmedge\plugins\wasmedge_process
       LD_LIBRARY_PATH: ${{ github.workspace }}\WasmEdge\build\lib\api
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Checkout WasmEdge Runtime
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           repository: WasmEdge/WasmEdge
           path: WasmEdge
           fetch-depth: 0
 
       - name: Install dependency
-        uses: crazy-max/ghaction-chocolatey@v2
+        uses: crazy-max/ghaction-chocolatey@v4
         with:
           args: install cmake ninja vswhere
 
       - name: Set up Windows 10 SDK
-        uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v2.5
         with:
           sdk-version: 19041
 
