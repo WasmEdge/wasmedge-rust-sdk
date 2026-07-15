@@ -161,7 +161,7 @@ fn main() {
     let header = paths.header().to_string_lossy().to_string();
 
     // Tell cargo to invalidate the built crate whenever the header changes.
-    println!("cargo:rerun-if-changed={}", &header);
+    println!("cargo:rerun-if-changed={}", header);
 
     let out_file = OUT_DIR.join("wasmedge.rs");
 

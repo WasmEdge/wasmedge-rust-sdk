@@ -1,5 +1,8 @@
 name: Integration Tests
 
+env:
+  WASMEDGE_VERSION: "0.17.1"
+
 on:
   push:
     branches:
@@ -32,27 +35,30 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -p $HOME/.wasmedge
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
           echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
           echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
           echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
@@ -91,37 +97,40 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.WASMEDGE_DIR }}/lib
 
   integration-test-macos:
-    name: Integration Tests (macOS)
+    name: Integration Tests (macOS arm64)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14]
+        os: [macos-15]
         rust: [stable]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-
 
       - name: Install WasmEdge
         run: |
-          curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -p $HOME/.wasmedge
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
           echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
           echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
           echo "DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
@@ -165,28 +174,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        os: [ubuntu-24.04, macos-15]
         rust: [stable]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-standalone-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-standalone-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-standalone-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-standalone-${{ matrix.rust }}-
 
       - name: Build SDK with standalone feature
         run: cargo build --release --features standalone
@@ -212,10 +221,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
@@ -225,15 +234,15 @@ jobs:
           sudo apt-get install -y libzstd-dev libfmt-dev
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-bundled-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-bundled-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-bundled-${{ matrix.rust }}-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-bundled-${{ matrix.rust }}-
 
       - name: Install wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown

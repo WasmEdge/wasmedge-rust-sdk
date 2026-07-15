@@ -33,7 +33,7 @@ fn expand_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStre
         3 => expand_host_func_with_three_args(item_fn),
         _ => panic!(
             "Invalid numbers of host function arguments: {}",
-            &item_fn.sig.inputs.len()
+            item_fn.sig.inputs.len()
         ),
     };
 
@@ -230,7 +230,7 @@ fn expand_async_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::Tok
         3 => expand_async_host_func_with_three_args(item_fn),
         _ => panic!(
             "Invalid numbers of host function arguments: {}",
-            &item_fn.sig.inputs.len()
+            item_fn.sig.inputs.len()
         ),
     };
 
