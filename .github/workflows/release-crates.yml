@@ -1,0 +1,169 @@
+name: Release crates
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_async_wasi:
+        description: "Release async-wasi"
+        required: true
+        default: false
+        type: boolean
+      release_wasmedge_macro:
+        description: "Release wasmedge-macro"
+        required: true
+        default: false
+        type: boolean
+      release_wasmedge_types:
+        description: "Release wasmedge-types"
+        required: true
+        default: false
+        type: boolean
+      release_wasmedge_sys:
+        description: "Release wasmedge-sys"
+        required: true
+        default: false
+        type: boolean
+      release_wasmedge_sdk:
+        description: "Release wasmedge-sdk"
+        required: true
+        default: false
+        type: boolean
+      wasmedge_version:
+        description: "WasmEdge version (required for wasmedge-sys or wasmedge-sdk)"
+        required: false
+        type: string
+      dry_run:
+        description: "Validate selected releases without publishing or deploying documentation"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  validate_inputs:
+    name: Validate release inputs
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      DRY_RUN: ${{ inputs.dry_run }}
+      RELEASE_ASYNC_WASI: ${{ inputs.release_async_wasi }}
+      RELEASE_WASMEDGE_MACRO: ${{ inputs.release_wasmedge_macro }}
+      RELEASE_WASMEDGE_TYPES: ${{ inputs.release_wasmedge_types }}
+      RELEASE_WASMEDGE_SYS: ${{ inputs.release_wasmedge_sys }}
+      RELEASE_WASMEDGE_SDK: ${{ inputs.release_wasmedge_sdk }}
+      WASMEDGE_VERSION: ${{ inputs.wasmedge_version }}
+      WORKFLOW_REF: ${{ github.ref }}
+
+    steps:
+      - name: Validate selection and version
+        shell: bash
+        run: |
+          if [[ "${RELEASE_ASYNC_WASI}" != "true" \
+            && "${RELEASE_WASMEDGE_MACRO}" != "true" \
+            && "${RELEASE_WASMEDGE_TYPES}" != "true" \
+            && "${RELEASE_WASMEDGE_SYS}" != "true" \
+            && "${RELEASE_WASMEDGE_SDK}" != "true" ]]; then
+            echo "::error::Select at least one crate to release."
+            exit 1
+          fi
+
+          if [[ ("${RELEASE_WASMEDGE_SYS}" == "true" || "${RELEASE_WASMEDGE_SDK}" == "true") \
+            && -z "${WASMEDGE_VERSION}" ]]; then
+            echo "::error::wasmedge_version is required when releasing wasmedge-sys or wasmedge-sdk."
+            exit 1
+          fi
+
+          if [[ "${DRY_RUN}" == "false" && "${WORKFLOW_REF}" != "refs/heads/main" ]]; then
+            echo "::error::Publishing is only allowed from the main branch."
+            exit 1
+          fi
+
+  release_async_wasi:
+    name: Release async-wasi
+    needs: validate_inputs
+    if: inputs.release_async_wasi
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-async-wasi.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+
+  release_wasmedge_macro:
+    name: Release wasmedge-macro
+    needs: validate_inputs
+    if: inputs.release_wasmedge_macro
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-wasmedge-macro.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+
+  release_wasmedge_types:
+    name: Release wasmedge-types
+    needs: validate_inputs
+    if: inputs.release_wasmedge_types
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-wasmedge-types.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+
+  release_wasmedge_sys:
+    name: Release wasmedge-sys
+    needs:
+      - validate_inputs
+      - release_async_wasi
+      - release_wasmedge_macro
+      - release_wasmedge_types
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        inputs.release_wasmedge_sys &&
+        needs.validate_inputs.result == 'success' &&
+        (needs.release_async_wasi.result == 'success' || needs.release_async_wasi.result == 'skipped') &&
+        (needs.release_wasmedge_macro.result == 'success' || needs.release_wasmedge_macro.result == 'skipped') &&
+        (needs.release_wasmedge_types.result == 'success' || needs.release_wasmedge_types.result == 'skipped')
+      }}
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-wasmedge-sys.yml
+    with:
+      wasmedge_version: ${{ inputs.wasmedge_version }}
+      dry_run: ${{ inputs.dry_run }}
+
+  release_wasmedge_sdk:
+    name: Release wasmedge-sdk
+    needs:
+      - validate_inputs
+      - release_async_wasi
+      - release_wasmedge_macro
+      - release_wasmedge_types
+      - release_wasmedge_sys
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        inputs.release_wasmedge_sdk &&
+        needs.validate_inputs.result == 'success' &&
+        (needs.release_async_wasi.result == 'success' || needs.release_async_wasi.result == 'skipped') &&
+        (needs.release_wasmedge_macro.result == 'success' || needs.release_wasmedge_macro.result == 'skipped') &&
+        (needs.release_wasmedge_types.result == 'success' || needs.release_wasmedge_types.result == 'skipped') &&
+        (needs.release_wasmedge_sys.result == 'success' || needs.release_wasmedge_sys.result == 'skipped')
+      }}
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-wasmedge-sdk.yml
+    with:
+      wasmedge_version: ${{ inputs.wasmedge_version }}
+      dry_run: ${{ inputs.dry_run }}
