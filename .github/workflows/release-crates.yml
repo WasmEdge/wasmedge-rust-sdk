@@ -88,7 +88,7 @@ jobs:
     needs: validate_inputs
     if: inputs.release_async_wasi
     permissions:
-      contents: write
+      contents: read
       id-token: write
     uses: ./.github/workflows/release-async-wasi.yml
     with:
@@ -99,7 +99,7 @@ jobs:
     needs: validate_inputs
     if: inputs.release_wasmedge_macro
     permissions:
-      contents: write
+      contents: read
       id-token: write
     uses: ./.github/workflows/release-wasmedge-macro.yml
     with:
@@ -110,7 +110,7 @@ jobs:
     needs: validate_inputs
     if: inputs.release_wasmedge_types
     permissions:
-      contents: write
+      contents: read
       id-token: write
     uses: ./.github/workflows/release-wasmedge-types.yml
     with:
@@ -134,7 +134,7 @@ jobs:
         (needs.release_wasmedge_types.result == 'success' || needs.release_wasmedge_types.result == 'skipped')
       }}
     permissions:
-      contents: write
+      contents: read
       id-token: write
     uses: ./.github/workflows/release-wasmedge-sys.yml
     with:
@@ -161,7 +161,7 @@ jobs:
         (needs.release_wasmedge_sys.result == 'success' || needs.release_wasmedge_sys.result == 'skipped')
       }}
     permissions:
-      contents: write
+      contents: read
       id-token: write
     uses: ./.github/workflows/release-wasmedge-sdk.yml
     with:
