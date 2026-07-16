@@ -59,8 +59,6 @@ impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
     ///
     /// # Arguments
     ///
-    /// * `executor` - The [executor](sys::Executor) that runs the host functions in this [store](crate::Store).
-    ///
     /// * `module` - The validated [module](crate::Module) to be registered.
     ///
     /// # Error
