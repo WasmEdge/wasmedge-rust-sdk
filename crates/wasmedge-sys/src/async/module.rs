@@ -198,7 +198,7 @@ impl AsyncWasiModule {
 // `async_wasi::snapshots::preview_1`). Irregular shims stay hand-written below.
 macro_rules! wasi_impl_sync_shims {
     ($(
-        fn $name:ident($data:ident, $mem:ident, [$($arg:ident),+ $(,)?], $n:literal) $body:block
+        fn $name:ident($data:ident, $mem:ident, [$($arg:ident),+ $(,)?]) $body:block
     )*) => {
         $(
             fn $name(
@@ -211,7 +211,7 @@ macro_rules! wasi_impl_sync_shims {
                     .memory_mut(0)
                     .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
 
-                if let Some([$($arg),+]) = args.get(0..$n) {
+                if let [$($arg),+, ..] = args.as_slice() {
                     $body
                 } else {
                     Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
@@ -222,7 +222,7 @@ macro_rules! wasi_impl_sync_shims {
 }
 
 wasi_impl_sync_shims! {
-    fn args_get(data, mem, [argv, argv_buf], 2) {
+    fn args_get(data, mem, [argv, argv_buf]) {
         let argv = argv.to_i32() as usize;
         let argv_buf = argv_buf.to_i32() as usize;
         Ok(to_wasm_return(p::args_get(
@@ -234,7 +234,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn args_sizes_get(data, mem, [argc, argv_buf_size], 2) {
+    fn args_sizes_get(data, mem, [argc, argv_buf_size]) {
         let argc = argc.to_i32() as usize;
         let argv_buf_size = argv_buf_size.to_i32() as usize;
         Ok(to_wasm_return(p::args_sizes_get(
@@ -246,7 +246,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn environ_get(data, mem, [p1, p2], 2) {
+    fn environ_get(data, mem, [p1, p2]) {
         let environ = p1.to_i32() as usize;
         let environ_buf = p2.to_i32() as usize;
         Ok(to_wasm_return(p::environ_get(
@@ -258,7 +258,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn environ_sizes_get(data, mem, [p1, p2], 2) {
+    fn environ_sizes_get(data, mem, [p1, p2]) {
         let environ_count = p1.to_i32() as usize;
         let environ_buf_size = p2.to_i32() as usize;
         Ok(to_wasm_return(p::environ_sizes_get(
@@ -270,7 +270,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn clock_res_get(data, mem, [p1, p2], 2) {
+    fn clock_res_get(data, mem, [p1, p2]) {
         let clock_id = p1.to_i32() as u32;
         let resolution_ptr = p2.to_i32() as usize;
         Ok(to_wasm_return(p::clock_res_get(
@@ -282,7 +282,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn clock_time_get(data, mem, [p1, p2, p3], 3) {
+    fn clock_time_get(data, mem, [p1, p2, p3]) {
         let clock_id = p1.to_i32() as u32;
         let precision = p2.to_i64() as u64;
         let time_ptr = p3.to_i32() as usize;
@@ -297,7 +297,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn random_get(data, mem, [p1, p2], 2) {
+    fn random_get(data, mem, [p1, p2]) {
         let buf = p1.to_i32() as usize;
         let buf_len = p2.to_i32() as u32;
 
@@ -310,7 +310,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_prestat_get(data, mem, [p1, p2], 2) {
+    fn fd_prestat_get(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let prestat_ptr = p2.to_i32() as usize;
 
@@ -323,7 +323,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_prestat_dir_name(data, mem, [p1, p2, p3], 3) {
+    fn fd_prestat_dir_name(data, mem, [p1, p2, p3]) {
         let fd = p1.to_i32();
         let path_buf_ptr = p2.to_i32() as usize;
         let path_max_len = p3.to_i32() as u32;
@@ -338,7 +338,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_renumber(data, mem, [p1, p2], 2) {
+    fn fd_renumber(data, mem, [p1, p2]) {
         let from = p1.to_i32();
         let to = p2.to_i32();
 
@@ -351,7 +351,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_advise(data, mem, [p1, p2, p3, p4], 4) {
+    fn fd_advise(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let offset = p2.to_i64() as u64;
         let len = p3.to_i64() as u64;
@@ -368,7 +368,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_allocate(data, mem, [p1, p2, p3], 3) {
+    fn fd_allocate(data, mem, [p1, p2, p3]) {
         let fd = p1.to_i32();
         let offset = p2.to_i64() as u64;
         let len = p3.to_i64() as u64;
@@ -383,7 +383,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_close(data, mem, [p1], 1) {
+    fn fd_close(data, mem, [p1]) {
         let fd = p1.to_i32();
 
         Ok(to_wasm_return(p::fd_close(
@@ -394,7 +394,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_seek(data, mem, [p1, p2, p3, p4], 4) {
+    fn fd_seek(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let offset = p2.to_i64();
         let whence = p3.to_i32() as u8;
@@ -411,7 +411,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_sync(data, mem, [p1], 1) {
+    fn fd_sync(data, mem, [p1]) {
         let fd = p1.to_i32();
 
         Ok(to_wasm_return(p::fd_sync(
@@ -422,7 +422,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_datasync(data, mem, [p1], 1) {
+    fn fd_datasync(data, mem, [p1]) {
         let fd = p1.to_i32();
 
         Ok(to_wasm_return(p::fd_datasync(
@@ -433,7 +433,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_tell(data, mem, [p1, p2], 2) {
+    fn fd_tell(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let offset = p2.to_i32() as usize;
 
@@ -446,7 +446,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_fdstat_get(data, mem, [p1, p2], 2) {
+    fn fd_fdstat_get(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let buf_ptr = p2.to_i32() as usize;
 
@@ -459,7 +459,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_fdstat_set_flags(data, mem, [p1, p2], 2) {
+    fn fd_fdstat_set_flags(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let flags = p2.to_i32() as u16;
 
@@ -472,7 +472,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_fdstat_set_rights(data, mem, [p1, p2, p3], 3) {
+    fn fd_fdstat_set_rights(data, mem, [p1, p2, p3]) {
         let fd = p1.to_i32();
         let fs_rights_base = p2.to_i64() as u64;
         let fs_rights_inheriting = p3.to_i64() as u64;
@@ -487,7 +487,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_filestat_get(data, mem, [p1, p2], 2) {
+    fn fd_filestat_get(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let buf = p2.to_i32() as usize;
 
@@ -500,7 +500,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_filestat_set_size(data, mem, [p1, p2], 2) {
+    fn fd_filestat_set_size(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let buf = p2.to_i32() as usize;
 
@@ -513,7 +513,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_filestat_set_times(data, mem, [p1, p2, p3, p4], 4) {
+    fn fd_filestat_set_times(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let st_atim = p2.to_i64() as u64;
         let st_mtim = p3.to_i64() as u64;
@@ -530,7 +530,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_read(data, mem, [p1, p2, p3, p4], 4) {
+    fn fd_read(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let iovs = p2.to_i32() as usize;
         let iovs_len = p3.to_i32() as u32;
@@ -547,7 +547,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_pread(data, mem, [p1, p2, p3, p4, p5], 5) {
+    fn fd_pread(data, mem, [p1, p2, p3, p4, p5]) {
         let fd = p1.to_i32();
         let iovs = p2.to_i32() as usize;
         let iovs_len = p3.to_i32() as u32;
@@ -566,7 +566,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_write(data, mem, [p1, p2, p3, p4], 4) {
+    fn fd_write(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let iovs = p2.to_i32() as usize;
         let iovs_len = p3.to_i32() as u32;
@@ -583,7 +583,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_pwrite(data, mem, [p1, p2, p3, p4, p5], 5) {
+    fn fd_pwrite(data, mem, [p1, p2, p3, p4, p5]) {
         let fd = p1.to_i32();
         let iovs = p2.to_i32() as usize;
         let iovs_len = p3.to_i32() as u32;
@@ -602,7 +602,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn fd_readdir(data, mem, [p1, p2, p3, p4, p5], 5) {
+    fn fd_readdir(data, mem, [p1, p2, p3, p4, p5]) {
         let fd = p1.to_i32();
         let buf = p2.to_i32() as usize;
         let buf_len = p3.to_i32() as u32;
@@ -621,7 +621,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn path_filestat_get(data, mem, [p1, p2, p3, p4, p5], 5) {
+    fn path_filestat_get(data, mem, [p1, p2, p3, p4, p5]) {
         let fd = p1.to_i32();
         let flags = p2.to_i32() as u32;
         let path_ptr = p3.to_i32() as usize;
@@ -640,7 +640,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn path_open(data, mem, [p1, p2, p3, p4, p5, p6, p7, p8, p9], 9) {
+    fn path_open(data, mem, [p1, p2, p3, p4, p5, p6, p7, p8, p9]) {
         let dirfd = p1.to_i32();
         let dirflags = p2.to_i32() as u32;
         let path = p3.to_i32() as usize;
@@ -667,7 +667,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn sock_open(data, mem, [p1, p2, p3], 3) {
+    fn sock_open(data, mem, [p1, p2, p3]) {
         let af = p1.to_i32() as u8;
         let ty = p2.to_i32() as u8;
         let ro_fd_ptr = p3.to_i32() as usize;
@@ -682,7 +682,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn sock_listen(data, mem, [p1, p2], 2) {
+    fn sock_listen(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let backlog = p2.to_i32() as u32;
 
@@ -695,7 +695,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn sock_shutdown(data, mem, [p1, p2], 2) {
+    fn sock_shutdown(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
         let how = p2.to_i32() as u8;
         Ok(to_wasm_return(p::async_socket::sock_shutdown(
@@ -707,7 +707,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn sock_getpeeraddr(data, mem, [p1, p2, p3, p4], 4) {
+    fn sock_getpeeraddr(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let wasi_addr_ptr = p2.to_i32() as usize;
         let addr_type = p3.to_i32() as usize;
@@ -723,7 +723,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn sock_getlocaladdr(data, mem, [p1, p2, p3, p4], 4) {
+    fn sock_getlocaladdr(data, mem, [p1, p2, p3, p4]) {
         let fd = p1.to_i32();
         let wasi_addr_ptr = p2.to_i32() as usize;
         let addr_type = p3.to_i32() as usize;
@@ -739,7 +739,7 @@ wasi_impl_sync_shims! {
 
     }
 
-    fn sock_getsockopt(data, mem, [p1, p2, p3, p4, p5], 5) {
+    fn sock_getsockopt(data, mem, [p1, p2, p3, p4, p5]) {
         let fd = p1.to_i32();
         let level = p2.to_i32() as u32;
         let name = p3.to_i32() as u32;
@@ -753,6 +753,31 @@ wasi_impl_sync_shims! {
             name,
             WasmPtr::from(flag),
             WasmPtr::from(flag_size_ptr),
+        )))
+
+    }
+
+    fn sock_getaddrinfo(data, mem, [p1, p2, p3, p4, p5, p6, p7, p8]) {
+        let node = p1.to_i32() as usize;
+        let node_len = p2.to_i32() as u32;
+        let server = p3.to_i32() as usize;
+        let server_len = p4.to_i32() as u32;
+        let hint = p5.to_i32() as usize;
+        let res = p6.to_i32() as usize;
+        let max_len = p7.to_i32() as u32;
+        let res_len = p8.to_i32() as usize;
+
+        Ok(to_wasm_return(p::async_socket::addrinfo::sock_getaddrinfo(
+            data,
+            &mut mem as &mut Memory,
+            WasmPtr::from(node),
+            node_len,
+            WasmPtr::from(server),
+            server_len,
+            WasmPtr::from(hint),
+            WasmPtr::from(res),
+            max_len,
+            WasmPtr::from(res_len),
         )))
 
     }
@@ -1218,43 +1243,6 @@ fn sock_setsockopt(
             name,
             WasmPtr::from(flag),
             flag_size,
-        )))
-    } else {
-        Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
-    }
-}
-
-fn sock_getaddrinfo(
-    data: &mut WasiCtx,
-    _inst: &mut Instance,
-    frame: &mut CallingFrame,
-    args: Vec<WasmValue>,
-) -> Result<Vec<WasmValue>, CoreError> {
-    let mut mem = frame
-        .memory_mut(0)
-        .ok_or(CoreError::Execution(CoreExecutionError::MemoryOutOfBounds))?;
-
-    if let Some([p1, p2, p3, p4, p5, p6, p7, p8]) = args.get(0..8) {
-        let node = p1.to_i32() as usize;
-        let node_len = p2.to_i32() as u32;
-        let server = p3.to_i32() as usize;
-        let server_len = p4.to_i32() as u32;
-        let hint = p5.to_i32() as usize;
-        let res = p6.to_i32() as usize;
-        let max_len = p7.to_i32() as u32;
-        let res_len = p8.to_i32() as usize;
-
-        Ok(to_wasm_return(p::async_socket::addrinfo::sock_getaddrinfo(
-            data,
-            &mut mem as &mut Memory,
-            WasmPtr::from(node),
-            node_len,
-            WasmPtr::from(server),
-            server_len,
-            WasmPtr::from(hint),
-            WasmPtr::from(res),
-            max_len,
-            WasmPtr::from(res_len),
         )))
     } else {
         Err(CoreError::Execution(CoreExecutionError::FuncSigMismatch))
