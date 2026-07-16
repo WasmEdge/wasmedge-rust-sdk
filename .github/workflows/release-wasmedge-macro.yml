@@ -69,7 +69,7 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: wasmedge/wasmedge:ubuntu-build-clang
+      image: wasmedge/wasmedge:ubuntu-build-clang@sha256:a5cacfd0cd2d9ff2ba28f6581ab7dff3e4053145556f7e99b05249e9b7323d5b
 
     steps:
       - name: Checkout WasmEdge Rust SDK
