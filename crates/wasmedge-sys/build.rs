@@ -1,5 +1,5 @@
-use lazy_static::lazy_static;
 use phf::phf_map;
+use std::sync::LazyLock;
 
 mod build_paths;
 use build_paths::{Env, LibWasmEdgePaths};
@@ -29,32 +29,31 @@ const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = ph
     "linux/x86_64/musl/static"     => ("b30a522c886996cbc5eaca1eac7a44c8d457b61507bca449e6b673a5e89df2c7", "alpine3.23_x86_64_static"),
 };
 
-lazy_static! {
+static SEARCH_LOCATIONS: LazyLock<[Option<LibWasmEdgePaths>; 11]> = LazyLock::new(|| {
+    [
+        // search in the env variables: WASMEDGE_INCLUDE_DIR, WASMEDGE_LIB_DIR
+        LibWasmEdgePaths::try_from("", Env("WASMEDGE_INCLUDE_DIR"), Env("WASMEDGE_LIB_DIR")),
+        // search in the env variable: WASMEDGE_DIR
+        LibWasmEdgePaths::try_from(Env("WASMEDGE_DIR"), "include", "lib64"),
+        LibWasmEdgePaths::try_from(Env("WASMEDGE_DIR"), "include", "lib"),
+        // search in the env variable: WASMEDGE_BUILD_DIR
+        LibWasmEdgePaths::try_from(Env("WASMEDGE_BUILD_DIR"), "include/api", "lib64/api"),
+        LibWasmEdgePaths::try_from(Env("WASMEDGE_BUILD_DIR"), "include/api", "lib/api"),
+        // search in the official docker container
+        LibWasmEdgePaths::try_from(Env("HOME"), ".wasmedge/include", ".wasmedge/lib64"),
+        LibWasmEdgePaths::try_from(Env("HOME"), ".wasmedge/include", ".wasmedge/lib"),
+        // search in /usr/local/
+        LibWasmEdgePaths::try_from("/usr/local", "include", "lib64"),
+        LibWasmEdgePaths::try_from("/usr/local", "include", "lib"),
+        // search in xdg
+        LibWasmEdgePaths::try_from(Env("HOME"), ".local/include", ".local/lib64"),
+        LibWasmEdgePaths::try_from(Env("HOME"), ".local/include", ".local/lib"),
+    ]
+});
 
-static ref SEARCH_LOCATIONS: [Option<LibWasmEdgePaths>; 11] = [
-    // search in the env variables: WASMEDGE_INCLUDE_DIR, WASMEDGE_LIB_DIR
-    LibWasmEdgePaths::try_from("", Env("WASMEDGE_INCLUDE_DIR"), Env("WASMEDGE_LIB_DIR")),
-    // search in the env variable: WASMEDGE_DIR
-    LibWasmEdgePaths::try_from(Env("WASMEDGE_DIR"), "include", "lib64"),
-    LibWasmEdgePaths::try_from(Env("WASMEDGE_DIR"), "include", "lib"),
-    // search in the env variable: WASMEDGE_BUILD_DIR
-    LibWasmEdgePaths::try_from(Env("WASMEDGE_BUILD_DIR"), "include/api", "lib64/api"),
-    LibWasmEdgePaths::try_from(Env("WASMEDGE_BUILD_DIR"), "include/api", "lib/api"),
-    // search in the official docker container
-    LibWasmEdgePaths::try_from(Env("HOME"), ".wasmedge/include", ".wasmedge/lib64"),
-    LibWasmEdgePaths::try_from(Env("HOME"), ".wasmedge/include", ".wasmedge/lib"),
-    // search in /usr/local/
-    LibWasmEdgePaths::try_from("/usr/local", "include", "lib64"),
-    LibWasmEdgePaths::try_from("/usr/local", "include", "lib"),
-    // search in xdg
-    LibWasmEdgePaths::try_from(Env("HOME"), ".local/include", ".local/lib64"),
-    LibWasmEdgePaths::try_from(Env("HOME"), ".local/include", ".local/lib"),
-];
-
-static ref OUT_DIR: std::path::PathBuf = Env("OUT_DIR").expect("failed to get OUT_DIR");
-static ref STANDALONE_DIR: std::path::PathBuf = OUT_DIR.join("standalone");
-
-}
+static OUT_DIR: LazyLock<std::path::PathBuf> =
+    LazyLock::new(|| Env("OUT_DIR").expect("failed to get OUT_DIR"));
+static STANDALONE_DIR: LazyLock<std::path::PathBuf> = LazyLock::new(|| OUT_DIR.join("standalone"));
 
 fn find_libwasmedge<'a, L: IntoIterator<Item = &'a Option<LibWasmEdgePaths>>>(
     locations: L,

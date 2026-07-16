@@ -17,16 +17,9 @@ version = "0.20.0"
 log.workspace = true
 fiber-for-wasmedge = { version = "14.0.4", optional = true }
 libc.workspace = true
-paste = "1.0.5"
 scoped-tls = "1"
-thiserror.workspace = true
-wasmedge-macro.workspace = true
 wasmedge-types.workspace = true
 wat.workspace = true
-lazy_static = "1.4.0"
-parking_lot.workspace = true
-rand = "0.8.4"
-cfg-if.workspace = true
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -35,7 +28,6 @@ setjmp = "0.1"
 
 [build-dependencies]
 bindgen = { workspace = true, features = ["runtime"] }
-cmake = "0.1"
 reqwest = { version = "0.11", default-features = false, features = [
     "blocking",
     "rustls-tls",
@@ -43,12 +35,10 @@ reqwest = { version = "0.11", default-features = false, features = [
 flate2 = "1"
 tar = "0.4.46"
 sha256 = "1"
-lazy_static = "1.4.0"
 phf = { version = "0.11", features = ["macros"] }
 
 
 [dev-dependencies]
-anyhow = "1"
 tokio = { workspace = true, features = ["full"] }
 
 

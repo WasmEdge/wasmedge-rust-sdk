@@ -108,6 +108,15 @@ impl VFS {
     }
 }
 
+// When the `async_tokio` feature is disabled, `VFD` has only the `Inode`
+// variant, which makes the `if let VFD::Inode { .. } = ...` patterns below
+// irrefutable. The `if let` shape is kept as-is (rather than forked per
+// feature) so this code doesn't fork by feature; only the resulting lint is
+// suppressed, and only for that feature state.
+#[cfg_attr(
+    not(all(unix, feature = "async_tokio")),
+    allow(irrefutable_let_patterns)
+)]
 impl VFS {
     pub fn path_open(
         &mut self,
@@ -230,6 +239,7 @@ impl VFS {
                 }
                 self.fds.remove(fd);
             }
+            #[cfg(all(unix, feature = "async_tokio"))]
             Some(VFD::AsyncSocket(_)) => {
                 self.fds.remove(fd);
             }

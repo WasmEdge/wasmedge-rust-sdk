@@ -12,11 +12,6 @@ rust-version.workspace = true
 version = "0.16.1"
 
 [dependencies]
-anyhow = "1.0"
-cfg-if.workspace = true
-num-derive = "0.3"
-num-traits = "0.2"
-thiserror.workspace = true
 wasmedge-macro.workspace = true
 wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.20.0", default-features = false }
 wasmedge-types.workspace = true
@@ -36,7 +31,6 @@ futures = "0.3"
 getrandom = "0.2"
 libc = "0.2.186"
 log = "0.4"
-parking_lot = "0.12.1"
 slab = "0.4.12"
 socket2 = "0.4.9"
 thiserror = "1.0.30"

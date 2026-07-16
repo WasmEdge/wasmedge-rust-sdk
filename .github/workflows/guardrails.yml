@@ -96,9 +96,8 @@ jobs:
         with:
           tool: cargo-hack
 
-      # TODO(P2-4): re-add async-wasi once --no-default-features compiles (pre-existing breakage, PR #147 first CI run).
-      - name: cargo hack check --each-feature (wasmedge-types, wasmedge-macro)
-        run: cargo hack check --each-feature --no-dev-deps -p wasmedge-types -p wasmedge-macro
+      - name: cargo hack check --each-feature (wasmedge-types, wasmedge-macro, async-wasi)
+        run: cargo hack check --each-feature --no-dev-deps -p wasmedge-types -p wasmedge-macro -p async-wasi
 
       # wasmedge-sys/wasmedge-sdk need to link against libwasmedge, so a full
       # each-feature matrix isn't practical here. Instead check the one fixed

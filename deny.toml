@@ -11,10 +11,6 @@
 unmaintained = "workspace"
 
 ignore = [
-    # paste is unmaintained (repo archived); paste is dropped from
-    # wasmedge-sys in Phase 2 (P2-3), at which point this entry is removed.
-    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (repo archived); removed in Phase 2 (P2-3)" },
-
     # rustls-webpki 0.101.7 (pulled in transitively via wasmedge-sys's
     # (build)-only dependency on reqwest 0.11's rustls-tls backend, used
     # solely by build.rs to download the WasmEdge release archive over
