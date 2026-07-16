@@ -1,10 +1,10 @@
 //! Defines WasmEdge Loader struct.
 
 use crate::{
+    Config, WasmEdgeResult,
     ast_module::{InnerModule, Module},
     ffi, utils,
     utils::check,
-    Config, WasmEdgeResult,
 };
 use std::{path::Path, sync::Arc};
 use wasmedge_types::error::WasmEdgeError;
@@ -15,7 +15,7 @@ pub struct Loader {
     pub(crate) inner: InnerLoader,
 }
 impl Loader {
-    /// Create a new [Loader](crate::Loader) to be associated with the given global configuration.
+    /// Create a new [Loader] to be associated with the given global configuration.
     ///
     /// # Arguments
     ///
@@ -30,11 +30,12 @@ impl Loader {
             None => unsafe { ffi::WasmEdge_LoaderCreate(std::ptr::null_mut()) },
         };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::LoaderCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::LoaderCreate))
+        } else {
+            Ok(Self {
                 inner: InnerLoader(ctx),
-            }),
+            })
         }
     }
 
@@ -88,12 +89,13 @@ impl Loader {
             ))?;
         }
 
-        match mod_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ModuleCreate)),
-            false => Ok(Module {
+        if mod_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ModuleCreate))
+        } else {
+            Ok(Module {
                 inner: InnerModule(mod_ctx),
             }
-            .into()),
+            .into())
         }
     }
 
@@ -120,36 +122,27 @@ impl Loader {
     /// assert!(loader.from_bytes(b"(module)").is_err());
     /// ```
     pub fn from_bytes(&self, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Arc<Module>> {
+        let bytes = bytes.as_ref();
         let mut mod_ctx: *mut ffi::WasmEdge_ASTModuleContext = std::ptr::null_mut();
 
+        // SAFETY: `WasmEdge_LoaderParseFromBuffer` borrows `bytes` for the call and takes no
+        // ownership; an empty slice is a valid non-null, aligned, len-0 pointer.
         unsafe {
-            let ptr = libc::malloc(bytes.as_ref().len());
-            let dst = ::core::slice::from_raw_parts_mut(
-                ptr.cast::<std::mem::MaybeUninit<u8>>(),
-                bytes.as_ref().len(),
-            );
-            let src = ::core::slice::from_raw_parts(
-                bytes.as_ref().as_ptr().cast::<std::mem::MaybeUninit<u8>>(),
-                bytes.as_ref().len(),
-            );
-            dst.copy_from_slice(src);
-
             check(ffi::WasmEdge_LoaderParseFromBuffer(
                 self.inner.0,
                 &mut mod_ctx,
-                ptr as *const u8,
-                bytes.as_ref().len() as u32,
+                bytes.as_ptr(),
+                bytes.len() as u32,
             ))?;
-
-            libc::free(ptr);
         }
 
-        match mod_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ModuleCreate)),
-            false => Ok(Module {
+        if mod_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ModuleCreate))
+        } else {
+            Ok(Module {
                 inner: InnerModule(mod_ctx),
             }
-            .into()),
+            .into())
         }
     }
 }
@@ -161,6 +154,7 @@ impl Drop for Loader {
 
 #[derive(Debug)]
 pub(crate) struct InnerLoader(pub(crate) *mut ffi::WasmEdge_LoaderContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerLoader {}
 unsafe impl Sync for InnerLoader {}
 
@@ -173,6 +167,19 @@ mod tests {
         thread,
     };
     use wasmedge_types::error::{CoreError, CoreLoadError, WasmEdgeError};
+
+    // Empty input must not hit a malloc(0)/UB edge; malformed input must return Err without leaking.
+    #[test]
+    #[allow(clippy::assertions_on_result_states)]
+    fn test_from_bytes_empty_and_error_paths_no_ub() {
+        let loader = Loader::create(None).unwrap();
+
+        let result = loader.from_bytes([]);
+        assert!(result.is_err());
+
+        let result = loader.from_bytes(b"(module)");
+        assert!(result.is_err());
+    }
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]
@@ -193,23 +200,15 @@ mod tests {
         // load from file
         {
             // load .wasm file
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
             assert!(!module.inner.0.is_null());
 
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
 

@@ -8,14 +8,16 @@ use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::r#async::fiber::TimeoutFiberFuture;
 
 use crate::{
+    AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
     instance::{function::AsFunc, module::InnerInstance},
+    statistics::InnerStat,
     store::Store,
     types::WasmEdgeString,
     utils::check,
-    AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
 };
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
-use std::os::raw::c_void;
+use core::ffi::c_void;
+use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
@@ -28,18 +30,23 @@ scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
-    if let Some(info) = info.as_mut() {
-        let si_value = info.si_value();
-        let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
-        let dist_pthread = *value;
-        let self_pthread = libc::pthread_self();
-        if self_pthread == dist_pthread {
-            if JMP_BUF.is_set() {
-                let env = JMP_BUF.with(|s| s.sigjmp_buf);
-                setjmp::siglongjmp(env, 1);
+    // SAFETY: POSIX signal handler for `timeout_signo()`; reads `si_value()` (the armed `pthread_t`) and calls
+    // `pthread_self`/`siglongjmp`/`pthread_sigqueue`. Caveat: `pthread_sigqueue` is a glibc extension, not
+    // POSIX-guaranteed async-signal-safe.
+    unsafe {
+        if let Some(info) = info.as_mut() {
+            let si_value = info.si_value();
+            let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
+            let dist_pthread = *value;
+            let self_pthread = libc::pthread_self();
+            if self_pthread == dist_pthread {
+                if JMP_BUF.is_set() {
+                    let env = JMP_BUF.with(|s| s.sigjmp_buf);
+                    setjmp::siglongjmp(env, 1);
+                }
+            } else {
+                libc::pthread_sigqueue(dist_pthread, sig, si_value);
             }
-        } else {
-            libc::pthread_sigqueue(dist_pthread, sig, si_value);
         }
     }
 }
@@ -47,19 +54,25 @@ unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
 unsafe extern "C" fn pre_host_func(_: *mut c_void) {
     use libc::SIG_BLOCK;
 
-    let mut set = std::mem::zeroed();
-    libc::sigemptyset(&mut set);
-    libc::sigaddset(&mut set, timeout_signo());
-    libc::pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut());
+    // SAFETY: pre-host-function hook; blocks the timeout signal on the current thread via standard libc on a local `set`.
+    unsafe {
+        let mut set = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, timeout_signo());
+        libc::pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut());
+    }
 }
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn post_host_func(_: *mut c_void) {
     use libc::SIG_UNBLOCK;
 
-    let mut set = std::mem::zeroed();
-    libc::sigemptyset(&mut set);
-    libc::sigaddset(&mut set, timeout_signo());
-    libc::pthread_sigmask(SIG_UNBLOCK, &set, std::ptr::null_mut());
+    // SAFETY: post-host-function hook; unblocks the timeout signal on the current thread via standard libc on a local `set`.
+    unsafe {
+        let mut set = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, timeout_signo());
+        libc::pthread_sigmask(SIG_UNBLOCK, &set, std::ptr::null_mut());
+    }
 }
 
 #[inline]
@@ -78,10 +91,14 @@ static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 pub(crate) unsafe fn init_signal_listen() {
     INIT_SIGNAL_LISTEN.call_once(|| {
-        let mut new_act: libc::sigaction = std::mem::zeroed();
-        new_act.sa_sigaction = sync_timeout as *const () as usize;
-        new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
-        libc::sigaction(timeout_signo(), &new_act, std::ptr::null_mut());
+        // SAFETY: runs once via `Once`; installs `sync_timeout` as `timeout_signo()`'s handler via standard libc on local data.
+        // closures do not inherit the enclosing unsafe fn's context
+        unsafe {
+            let mut new_act: libc::sigaction = std::mem::zeroed();
+            new_act.sa_sigaction = sync_timeout as *const () as usize;
+            new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
+            libc::sigaction(timeout_signo(), &new_act, std::ptr::null_mut());
+        }
     });
 }
 
@@ -89,6 +106,9 @@ pub(crate) unsafe fn init_signal_listen() {
 #[derive(Debug)]
 pub struct Executor {
     pub(crate) inner: InnerExecutor,
+    // `WasmEdge_ExecutorCreate` stores the raw stat pointer without taking ownership, so hold this `Arc` to keep it
+    // alive; `Drop::drop` runs `WasmEdge_ExecutorDelete` before any field is dropped, so `_stat` outlives the delete.
+    _stat: Option<Arc<InnerStat>>,
 }
 
 impl Drop for Executor {
@@ -113,8 +133,11 @@ impl Executor {
         let conf_ctx = config
             .map(|cfg| cfg.inner.0)
             .unwrap_or(std::ptr::null_mut());
+        // Keep the `Arc<InnerStat>` alive: `WasmEdge_ExecutorCreate` stored the raw pointer without owning it.
+        let stat = stat.map(|stat| stat.inner);
         let stat_ctx = stat
-            .map(|stat| stat.inner.0)
+            .as_ref()
+            .map(|inner| inner.0)
             .unwrap_or(std::ptr::null_mut());
 
         let ctx = unsafe { ffi::WasmEdge_ExecutorCreate(conf_ctx, stat_ctx) };
@@ -138,6 +161,7 @@ impl Executor {
 
             Ok(Executor {
                 inner: InnerExecutor(ctx),
+                _stat: stat,
             })
         }
     }
@@ -169,6 +193,7 @@ impl Executor {
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
+        // SAFETY: `WasmEdge_ExecutorInvoke` writes exactly `returns_len` values before `set_len` (only after a successful `?`).
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
@@ -262,6 +287,7 @@ impl Executor {
                 }
             })?;
 
+            // SAFETY: `WasmEdge_ExecutorInvoke` (sigsetjmp fast path) wrote exactly `returns_len` values before `set_len`.
             returns.set_len(returns_len);
             Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
         }
@@ -346,10 +372,13 @@ impl Executor {
         let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
 
         // get the length of the function's returns
-        let func_ty = func_ref.ty().unwrap();
+        let func_ty = func_ref
+            .ty()
+            .ok_or(WasmEdgeError::Func(wasmedge_types::error::FuncError::Type))?;
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
+        // SAFETY: `WasmEdge_ExecutorInvoke` writes exactly `returns_len` values before `set_len` (only after a successful `?`).
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
@@ -497,7 +526,8 @@ impl Executor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct InnerExecutor(pub(crate) *mut ffi::WasmEdge_ExecutorContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerExecutor {}
 unsafe impl Sync for InnerExecutor {}

@@ -1,12 +1,12 @@
 //! Defines WasmEdge AST Module, ImportType, and ExportType.
 
-use crate::{config::Config, ExternalInstanceType, WasmEdgeResult};
+use crate::{ExternalInstanceType, WasmEdgeResult, config::Config};
 use std::{borrow::Cow, marker::PhantomData, path::Path, sync::Arc};
 use wasmedge_sys as sys;
 
 /// Defines compiled in-memory representation of an input WASM binary.
 ///
-/// A [Module] is a compiled in-memory representation of an input WebAssembly binary. In the instantiation process, a [Module] is instatiated to a module [instance](crate::Instance), from which the exported [function](crate::Func), [table](crate::Table), [memory](crate::Memory), and [global](crate::Global) instances can be fetched.
+/// A [Module] is a compiled in-memory representation of an input WebAssembly binary. In the instantiation process, a [Module] is instantiated to a module [instance](crate::Instance), from which the exported [function](sys::Function), [table](sys::Table), [memory](sys::Memory), and [global](sys::Global) instances can be fetched.
 #[derive(Debug, Clone)]
 pub struct Module {
     pub(crate) inner: Arc<sys::Module>,
@@ -22,7 +22,7 @@ impl Module {
     ///
     /// # Error
     ///
-    /// If fail to load and valiate a module from a file, returns an error.
+    /// If fail to load and validate a module from a file, returns an error.
     pub fn from_file(config: Option<&Config>, file: impl AsRef<Path>) -> WasmEdgeResult<Self> {
         let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
@@ -47,7 +47,7 @@ impl Module {
     ///
     /// # Error
     ///
-    /// If fail to load and valiate the WebAssembly module from the given in-memory bytes, returns an error.
+    /// If fail to load and validate the WebAssembly module from the given in-memory bytes, returns an error.
     pub fn from_bytes(config: Option<&Config>, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Self> {
         let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
@@ -68,16 +68,16 @@ impl Module {
     }
 
     /// Returns the [import types](crate::ImportType) of all imported WasmEdge instances in the [module](crate::Module).
+    #[must_use]
     pub fn imports(&self) -> Vec<ImportType<'_>> {
-        let mut imports = Vec::new();
-        for inner_import in self.inner.imports() {
-            let import = ImportType {
+        self.inner
+            .imports()
+            .into_iter()
+            .map(|inner_import| ImportType {
                 inner: inner_import,
                 _marker: PhantomData,
-            };
-            imports.push(import);
-        }
-        imports
+            })
+            .collect()
     }
 
     /// Returns the count of the exported WasmEdge instances from the [module](crate::Module).
@@ -86,16 +86,16 @@ impl Module {
     }
 
     /// Returns the [export types](crate::ExportType) of all exported WasmEdge instances (including funcs, tables, globals and memories) from the [module](crate::Module).
+    #[must_use]
     pub fn exports(&self) -> Vec<ExportType<'_>> {
-        let mut exports = Vec::new();
-        for inner_export in self.inner.export() {
-            let export = ExportType {
+        self.inner
+            .export()
+            .into_iter()
+            .map(|inner_export| ExportType {
                 inner: inner_export,
                 _marker: PhantomData,
-            };
-            exports.push(export);
-        }
-        exports
+            })
+            .collect()
     }
 
     /// Gets the [export type](crate::ExportType) by the name of a specific exported WasmEdge instance, such as func, table, global or memory instance.
@@ -104,15 +104,10 @@ impl Module {
     ///
     /// * `name` - The name of the target exported WasmEdge instance, such as func, table, global or memory instance.
     pub fn get_export(&self, name: impl AsRef<str>) -> Option<ExternalInstanceType> {
-        let exports = self
-            .exports()
+        self.exports()
             .into_iter()
-            .filter(|x| x.name() == name.as_ref())
-            .collect::<Vec<_>>();
-        match exports.is_empty() {
-            true => None,
-            false => exports[0].ty().ok(),
-        }
+            .find(|x| x.name() == name.as_ref())
+            .and_then(|x| x.ty().ok())
     }
 }
 

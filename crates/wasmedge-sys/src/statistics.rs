@@ -1,6 +1,6 @@
 //! Defines WasmEdge Statistics struct.
 
-use crate::{ffi, WasmEdgeResult};
+use crate::{WasmEdgeResult, ffi};
 use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
@@ -17,11 +17,12 @@ impl Statistics {
     /// If fail to create a [Statistics], then an error is returned.
     pub fn create() -> WasmEdgeResult<Self> {
         let ctx = unsafe { ffi::WasmEdge_StatisticsCreate() };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::StatisticsCreate)),
-            false => Ok(Statistics {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::StatisticsCreate))
+        } else {
+            Ok(Statistics {
                 inner: Arc::new(InnerStat(ctx)),
-            }),
+            })
         }
     }
 
@@ -96,13 +97,57 @@ impl Statistics {
         self.inner.0 as *const _
     }
 }
-impl Drop for Statistics {
-    fn drop(&mut self) {
-        unsafe { ffi::WasmEdge_StatisticsDelete(self.inner.0) }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct InnerStat(pub(crate) *mut ffi::WasmEdge_StatisticsContext);
+impl Drop for InnerStat {
+    fn drop(&mut self) {
+        // Delete on the ref-counted inner so the last owner frees the context once; a `Drop for Statistics` would double-free on clone.
+        unsafe { ffi::WasmEdge_StatisticsDelete(self.0) }
+    }
+}
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerStat {}
 unsafe impl Sync for InnerStat {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Executor;
+
+    // Cloning shares one `Arc<InnerStat>`; clones must not free the context until the last owner drops (previously a double-free).
+    #[test]
+    fn test_statistics_clone_no_double_free() {
+        let stat = Statistics::create().unwrap();
+        assert_eq!(Arc::strong_count(&stat.inner), 1);
+
+        let c1 = stat.clone();
+        let c2 = stat.clone();
+        assert_eq!(Arc::strong_count(&stat.inner), 3);
+
+        drop(c1);
+        drop(c2);
+        assert_eq!(Arc::strong_count(&stat.inner), 1);
+
+        // UAF probe: the context must still be live here.
+        let _ = stat.instr_count();
+    }
+
+    // `Executor::create` stores the stat context without owning it, so the executor must keep an `Arc<InnerStat>` alive (else a dangling pointer / UAF).
+    #[test]
+    fn test_executor_keeps_statistics_alive() {
+        let stat = Statistics::create().unwrap();
+        let stat_probe = stat.clone();
+        assert_eq!(Arc::strong_count(&stat_probe.inner), 2);
+
+        let executor = Executor::create(None, Some(stat)).unwrap();
+
+        // Still 2: the executor retains its own `Arc` after taking `stat`.
+        assert_eq!(Arc::strong_count(&stat_probe.inner), 2);
+
+        // UAF probe: the executor must still be keeping the context alive.
+        let _ = stat_probe.instr_count();
+
+        drop(executor);
+        assert_eq!(Arc::strong_count(&stat_probe.inner), 1);
+    }
+}

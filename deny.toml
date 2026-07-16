@@ -1,0 +1,30 @@
+# cargo-deny configuration guardrail.
+#
+# Scope for now is intentionally limited to `advisories` + `licenses` (see
+# .github/workflows/guardrails.yml). `bans`/`sources` cleanup (duplicate crate
+# versions etc.) is tracked separately in the modernization plan and is not
+# gated here yet.
+
+[advisories]
+# Only fail when an unmaintained advisory applies to a crate that is a direct
+# dependency of a workspace member (not arbitrary transitive dependencies).
+unmaintained = "workspace"
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Unicode-3.0",
+    # Used by fiber-for-wasmedge and its wasmtime-* build helpers.
+    "Apache-2.0 WITH LLVM-exception",
+    # Used by webpki-roots (build-only, via reqwest 0.12's
+    # `rustls-tls-webpki-roots` feature -> hyper-rustls's bundled Mozilla CA
+    # roots). webpki-roots relicensed from MPL-2.0 (the 0.25.x series locked
+    # under reqwest 0.11) to CDLA-Permissive-2.0 by 1.x, so this allowance is
+    # still required even though the D-13 revision moved off reqwest 0.13's
+    # aws-lc/webpki-root-certs/rustls-platform-verifier chain entirely.
+    "CDLA-Permissive-2.0",
+]

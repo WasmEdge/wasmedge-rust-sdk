@@ -3,10 +3,10 @@
 //! A WasmEdge `Global` defines a global variable, which stores a single value of the given `GlobalType`.
 //! `GlobalType` specifies whether a global variable is immutable or mutable.
 
-use crate::{ffi, WasmEdgeResult, WasmValue};
+use crate::{WasmEdgeResult, WasmValue, ffi};
 use wasmedge_types::{
-    error::{GlobalError, WasmEdgeError},
     Mutability, ValType,
+    error::{GlobalError, WasmEdgeError},
 };
 
 /// Defines a WebAssembly global variable, which stores a single value of the given [type](crate::GlobalType) and a flag indicating whether it is mutable or not.
@@ -15,9 +15,9 @@ pub struct Global {
     pub(crate) inner: InnerGlobal,
 }
 impl Global {
-    /// Creates a new [Global] instance to be associated with the given [GlobalType] and [WasmValue](crate::WasmValue).
+    /// Creates a new [Global] instance to be associated with the given [GlobalType](wasmedge_types::GlobalType) and [WasmValue].
     ///
-    /// The type of the given [WasmValue](crate::WasmValue) must be matched with [GlobalType]; otherwise, it causes a failure. For example, `WasmValue::I32(520)` conflicts with a [GlobalType] with a value type defined as `ValType::F32`.
+    /// The type of the given [WasmValue] must be matched with [GlobalType](wasmedge_types::GlobalType); otherwise, it causes a failure. For example, `WasmValue::I32(520)` conflicts with a [GlobalType](wasmedge_types::GlobalType) with a value type defined as `ValType::F32`.
     ///
     /// # Errors
     ///
@@ -44,14 +44,13 @@ impl Global {
     ///
     pub fn ty(&self) -> WasmEdgeResult<wasmedge_types::GlobalType> {
         let ty_ctx = unsafe { ffi::WasmEdge_GlobalInstanceGetGlobalType(self.inner.0) };
-        match ty_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Global(GlobalError::Type))),
-            false => {
-                let ty = std::mem::ManuallyDrop::new(GlobalType {
-                    inner: InnerGlobalType(ty_ctx as *mut _),
-                });
-                Ok((&*ty).into())
-            }
+        if ty_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Global(GlobalError::Type)))
+        } else {
+            let ty = std::mem::ManuallyDrop::new(GlobalType {
+                inner: InnerGlobalType(ty_ctx as *mut _),
+            });
+            Ok((&*ty).into())
         }
     }
 
@@ -63,7 +62,7 @@ impl Global {
 
     /// Sets the value of the [Global] instance.
     ///
-    /// Notice that only the [Global] instance of [Mutability::Var](wasmedge_types::Mutability::Var) type can be set a new value. Setting a new value for a [Global] of [Mutability::Const](wasmedge_types::Mutability::Const) causes a failure.
+    /// Notice that only the [Global] instance of [Mutability::Var] type can be set a new value. Setting a new value for a [Global] of [Mutability::Const] causes a failure.
     ///
     /// # Argument
     ///
@@ -114,6 +113,7 @@ impl Drop for Global {
 
 #[derive(Debug)]
 pub(crate) struct InnerGlobal(pub(crate) *mut ffi::WasmEdge_GlobalInstanceContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerGlobal {}
 unsafe impl Sync for InnerGlobal {}
 
@@ -138,11 +138,12 @@ impl GlobalType {
     /// If fail to create a new [GlobalType], then an error is returned.
     pub(crate) fn create(val_ty: ValType, mutable: Mutability) -> WasmEdgeResult<Self> {
         let ctx = unsafe { ffi::WasmEdge_GlobalTypeCreate(val_ty.into(), mutable.into()) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::GlobalTypeCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::GlobalTypeCreate))
+        } else {
+            Ok(Self {
                 inner: InnerGlobalType(ctx),
-            }),
+            })
         }
     }
 
@@ -183,6 +184,7 @@ impl From<&GlobalType> for wasmedge_types::GlobalType {
 
 #[derive(Debug)]
 pub(crate) struct InnerGlobalType(pub(crate) *mut ffi::WasmEdge_GlobalTypeContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerGlobalType {}
 unsafe impl Sync for InnerGlobalType {}
 

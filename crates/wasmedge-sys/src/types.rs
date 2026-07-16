@@ -1,6 +1,6 @@
 //! Defines the WebAssembly primitive types.
 
-use crate::{ffi, instance::function::AsFunc, FuncRef, Function};
+use crate::{FuncRef, Function, ffi, instance::function::AsFunc};
 use core::ffi::c_void;
 use std::ffi::CString;
 use wasmedge_types::ValType;
@@ -178,6 +178,7 @@ impl From<ffi::WasmEdge_String> for &std::ffi::CStr {
 
 #[derive(Debug)]
 pub(crate) struct InnerWasmEdgeString(pub(crate) ffi::WasmEdge_String);
+// SAFETY: owns a `WasmEdge_String` heap buffer, never mutated after creation; no thread affinity.
 unsafe impl Send for InnerWasmEdgeString {}
 unsafe impl Sync for InnerWasmEdgeString {}
 
@@ -288,9 +289,9 @@ impl WasmValue {
         unsafe { ffi::WasmEdge_ValueIsNullRef(self.ctx) }
     }
 
-    /// Creates a [WasmValue] from a [FuncRef](crate::FuncRef).
+    /// Creates a [WasmValue] from a [FuncRef].
     ///
-    /// Notice that the [WasmValue]s generated from [FuncRef](crate::FuncRef)s are only meaningful when the `bulk_memory_operations` or `reference_types` option is enabled in the [Config](crate::Config).
+    /// Notice that the [WasmValue]s generated from [FuncRef]s are only meaningful when the `bulk_memory_operations` or `reference_types` option is enabled in the [Config](crate::Config).
     ///
     /// # Argument
     ///
@@ -307,16 +308,15 @@ impl WasmValue {
     /// If the [WasmValue] is a `NullRef`, then `None` is returned.
     pub fn func_ref(&self) -> Option<FuncRef<&Self>> {
         unsafe {
-            match ffi::WasmEdge_ValueIsNullRef(self.ctx) {
-                true => None,
-                false => {
-                    let ctx = ffi::WasmEdge_ValueGetFuncRef(self.ctx);
-                    let f = Function::from_raw(ctx as _);
-                    Some(FuncRef::create_from_ref(
-                        std::mem::ManuallyDrop::new(f),
-                        self,
-                    ))
-                }
+            if ffi::WasmEdge_ValueIsNullRef(self.ctx) {
+                None
+            } else {
+                let ctx = ffi::WasmEdge_ValueGetFuncRef(self.ctx);
+                let f = Function::from_raw(ctx as _);
+                Some(FuncRef::create_from_ref(
+                    std::mem::ManuallyDrop::new(f),
+                    self,
+                ))
             }
         }
     }
@@ -354,13 +354,12 @@ impl WasmValue {
     /// If the [WasmValue] is a `NullRef`, then `None` is returned.
     pub fn extern_ref<T>(&self) -> Option<&T> {
         unsafe {
-            match ffi::WasmEdge_ValueIsNullRef(self.ctx) {
-                true => None,
-                false => {
-                    let ptr = ffi::WasmEdge_ValueGetExternRef(self.ctx);
-                    let x = ptr as *mut T;
-                    Some(&*x)
-                }
+            if ffi::WasmEdge_ValueIsNullRef(self.ctx) {
+                None
+            } else {
+                let ptr = ffi::WasmEdge_ValueGetExternRef(self.ctx);
+                let x = ptr as *mut T;
+                Some(&*x)
             }
         }
     }

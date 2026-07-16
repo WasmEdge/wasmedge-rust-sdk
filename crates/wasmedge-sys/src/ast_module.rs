@@ -1,12 +1,12 @@
 //! Defines WasmEdge AST Module, Export, and Import structs.
 
 use super::ffi;
-use crate::{types::WasmEdgeLimit, WasmEdgeResult};
+use crate::{WasmEdgeResult, types::WasmEdgeLimit};
 use std::{borrow::Cow, ffi::CStr};
 use wasmedge_types::{
-    error::{ExportError, ImportError, WasmEdgeError},
     ExternalInstanceType, FuncType, GlobalType, MemoryType, Mutability, RefType, TableType,
     ValType,
+    error::{ExportError, ImportError, WasmEdgeError},
 };
 
 /// Defines compiled in-memory representation of an input WASM binary.
@@ -34,6 +34,7 @@ impl Module {
     pub fn imports(&self) -> Vec<ImportType<'_>> {
         let size = self.count_of_imports();
         let mut returns = Vec::with_capacity(size as usize);
+        // SAFETY: `WasmEdge_ASTModuleListImports` fills exactly `size` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_ASTModuleListImports(self.inner.0, returns.as_mut_ptr(), size);
             returns.set_len(size as usize);
@@ -57,6 +58,7 @@ impl Module {
     pub fn export(&self) -> Vec<ExportType<'_>> {
         let size = self.count_of_exports();
         let mut returns = Vec::with_capacity(size as usize);
+        // SAFETY: `WasmEdge_ASTModuleListExports` fills exactly `size` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_ASTModuleListExports(self.inner.0, returns.as_mut_ptr(), size);
             returns.set_len(size as usize);
@@ -78,8 +80,9 @@ impl Module {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct InnerModule(pub(crate) *mut ffi::WasmEdge_ASTModuleContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerModule {}
 unsafe impl Sync for InnerModule {}
 
@@ -109,111 +112,107 @@ impl ImportType<'_> {
                         self.inner.0 as *const _,
                     )
                 };
-                match ctx_func_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Import(ImportError::FuncType(
+                if ctx_func_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Import(ImportError::FuncType(
                         "Fail to get the function type".into(),
-                    )))),
-                    false => {
-                        // get types of the arguments
-                        let args_len = unsafe {
-                            ffi::WasmEdge_FunctionTypeGetParametersLength(ctx_func_ty) as usize
-                        };
-                        let mut args = Vec::with_capacity(args_len);
-                        unsafe {
-                            ffi::WasmEdge_FunctionTypeGetParameters(
-                                ctx_func_ty,
-                                args.as_mut_ptr(),
-                                args_len as u32,
-                            );
-                            args.set_len(args_len);
-                        }
-                        let args: Vec<ValType> = args.into_iter().map(Into::into).collect();
-
-                        // get types of the returns
-                        let returns_len = unsafe {
-                            ffi::WasmEdge_FunctionTypeGetReturnsLength(ctx_func_ty) as usize
-                        };
-                        let mut returns = Vec::with_capacity(returns_len);
-                        unsafe {
-                            ffi::WasmEdge_FunctionTypeGetReturns(
-                                ctx_func_ty,
-                                returns.as_mut_ptr(),
-                                returns_len as u32,
-                            );
-                            returns.set_len(returns_len);
-                        }
-                        let returns: Vec<ValType> = returns.into_iter().map(Into::into).collect();
-
-                        Ok(ExternalInstanceType::Func(FuncType::new(args, returns)))
+                    ))))
+                } else {
+                    // SAFETY: `GetParameters`/`GetReturns` fill exactly `len` elements before `set_len`.
+                    // get types of the arguments
+                    let args_len = unsafe {
+                        ffi::WasmEdge_FunctionTypeGetParametersLength(ctx_func_ty) as usize
+                    };
+                    let mut args = Vec::with_capacity(args_len);
+                    unsafe {
+                        ffi::WasmEdge_FunctionTypeGetParameters(
+                            ctx_func_ty,
+                            args.as_mut_ptr(),
+                            args_len as u32,
+                        );
+                        args.set_len(args_len);
                     }
+                    let args: Vec<ValType> = args.into_iter().map(Into::into).collect();
+
+                    // get types of the returns
+                    let returns_len =
+                        unsafe { ffi::WasmEdge_FunctionTypeGetReturnsLength(ctx_func_ty) as usize };
+                    let mut returns = Vec::with_capacity(returns_len);
+                    unsafe {
+                        ffi::WasmEdge_FunctionTypeGetReturns(
+                            ctx_func_ty,
+                            returns.as_mut_ptr(),
+                            returns_len as u32,
+                        );
+                        returns.set_len(returns_len);
+                    }
+                    let returns: Vec<ValType> = returns.into_iter().map(Into::into).collect();
+
+                    Ok(ExternalInstanceType::Func(FuncType::new(args, returns)))
                 }
             }
             ExternalInstanceType::Global(_) => {
                 let ctx_global_ty = unsafe {
                     ffi::WasmEdge_ImportTypeGetGlobalType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_global_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Import(ImportError::MemType(
+                if ctx_global_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Import(ImportError::MemType(
                         "Fail to get the global type".into(),
-                    )))),
-                    false => {
-                        // get the value type
-                        let val = unsafe { ffi::WasmEdge_GlobalTypeGetValType(ctx_global_ty) };
-                        let val_ty: ValType = val.into();
+                    ))))
+                } else {
+                    // get the value type
+                    let val = unsafe { ffi::WasmEdge_GlobalTypeGetValType(ctx_global_ty) };
+                    let val_ty: ValType = val.into();
 
-                        // get mutability
-                        let val = unsafe { ffi::WasmEdge_GlobalTypeGetMutability(ctx_global_ty) };
-                        let mutability: Mutability = val.into();
+                    // get mutability
+                    let val = unsafe { ffi::WasmEdge_GlobalTypeGetMutability(ctx_global_ty) };
+                    let mutability: Mutability = val.into();
 
-                        Ok(ExternalInstanceType::Global(GlobalType::new(
-                            val_ty, mutability,
-                        )))
-                    }
+                    Ok(ExternalInstanceType::Global(GlobalType::new(
+                        val_ty, mutability,
+                    )))
                 }
             }
             ExternalInstanceType::Memory(_) => {
                 let ctx_mem_ty = unsafe {
                     ffi::WasmEdge_ImportTypeGetMemoryType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_mem_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Import(ImportError::MemType(
+                if ctx_mem_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Import(ImportError::MemType(
                         "Fail to get the memory type".into(),
-                    )))),
-                    false => {
-                        let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(ctx_mem_ty) };
-                        let limit = WasmEdgeLimit::from_context(limit);
+                    ))))
+                } else {
+                    let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(ctx_mem_ty) };
+                    let limit = WasmEdgeLimit::from_context(limit);
 
-                        Ok(ExternalInstanceType::Memory(MemoryType::new(
-                            limit.min(),
-                            limit.max(),
-                            limit.shared(),
-                        )?))
-                    }
+                    Ok(ExternalInstanceType::Memory(MemoryType::new(
+                        limit.min(),
+                        limit.max(),
+                        limit.shared(),
+                    )?))
                 }
             }
             ExternalInstanceType::Table(_) => {
                 let ctx_tab_ty = unsafe {
                     ffi::WasmEdge_ImportTypeGetTableType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_tab_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Import(ImportError::TableType(
+                if ctx_tab_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Import(ImportError::TableType(
                         "Fail to get the table type".into(),
-                    )))),
-                    false => {
-                        // get the element type
-                        let elem_ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(ctx_tab_ty) };
-                        let elem_ty = RefType::from(ValType::from(elem_ty));
+                    ))))
+                } else {
+                    // get the element type
+                    let elem_ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(ctx_tab_ty) };
+                    let elem_ty = RefType::from(ValType::from(elem_ty));
 
-                        // get the limit
-                        let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
-                        let limit = WasmEdgeLimit::from_context(limit);
+                    // get the limit
+                    let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
+                    let limit = WasmEdgeLimit::from_context(limit);
 
-                        Ok(ExternalInstanceType::Table(TableType::new(
-                            elem_ty,
-                            limit.min(),
-                            limit.max(),
-                        )))
-                    }
+                    Ok(ExternalInstanceType::Table(TableType::new(
+                        elem_ty,
+                        limit.min(),
+                        limit.max(),
+                    )))
                 }
             }
         }
@@ -247,6 +246,7 @@ impl ImportType<'_> {
 
 #[derive(Debug)]
 pub(crate) struct InnerImportType(pub(crate) *const ffi::WasmEdge_ImportTypeContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerImportType {}
 unsafe impl Sync for InnerImportType {}
 
@@ -267,111 +267,107 @@ impl ExportType<'_> {
                 let ctx_func_ty = unsafe {
                     ffi::WasmEdge_ExportTypeGetFunctionType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_func_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Export(ExportError::FuncType(
+                if ctx_func_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Export(ExportError::FuncType(
                         "Fail to get the function type".into(),
-                    )))),
-                    false => {
-                        // get types of the arguments
-                        let args_len = unsafe {
-                            ffi::WasmEdge_FunctionTypeGetParametersLength(ctx_func_ty) as usize
-                        };
-                        let mut args = Vec::with_capacity(args_len);
-                        unsafe {
-                            ffi::WasmEdge_FunctionTypeGetParameters(
-                                ctx_func_ty,
-                                args.as_mut_ptr(),
-                                args_len as u32,
-                            );
-                            args.set_len(args_len);
-                        }
-                        let args: Vec<ValType> = args.into_iter().map(Into::into).collect();
-
-                        // get types of the returns
-                        let returns_len = unsafe {
-                            ffi::WasmEdge_FunctionTypeGetReturnsLength(ctx_func_ty) as usize
-                        };
-                        let mut returns = Vec::with_capacity(returns_len);
-                        unsafe {
-                            ffi::WasmEdge_FunctionTypeGetReturns(
-                                ctx_func_ty,
-                                returns.as_mut_ptr(),
-                                returns_len as u32,
-                            );
-                            returns.set_len(returns_len);
-                        }
-                        let returns: Vec<ValType> = returns.into_iter().map(Into::into).collect();
-
-                        Ok(ExternalInstanceType::Func(FuncType::new(args, returns)))
+                    ))))
+                } else {
+                    // SAFETY: `GetParameters`/`GetReturns` fill exactly `len` elements before `set_len`.
+                    // get types of the arguments
+                    let args_len = unsafe {
+                        ffi::WasmEdge_FunctionTypeGetParametersLength(ctx_func_ty) as usize
+                    };
+                    let mut args = Vec::with_capacity(args_len);
+                    unsafe {
+                        ffi::WasmEdge_FunctionTypeGetParameters(
+                            ctx_func_ty,
+                            args.as_mut_ptr(),
+                            args_len as u32,
+                        );
+                        args.set_len(args_len);
                     }
+                    let args: Vec<ValType> = args.into_iter().map(Into::into).collect();
+
+                    // get types of the returns
+                    let returns_len =
+                        unsafe { ffi::WasmEdge_FunctionTypeGetReturnsLength(ctx_func_ty) as usize };
+                    let mut returns = Vec::with_capacity(returns_len);
+                    unsafe {
+                        ffi::WasmEdge_FunctionTypeGetReturns(
+                            ctx_func_ty,
+                            returns.as_mut_ptr(),
+                            returns_len as u32,
+                        );
+                        returns.set_len(returns_len);
+                    }
+                    let returns: Vec<ValType> = returns.into_iter().map(Into::into).collect();
+
+                    Ok(ExternalInstanceType::Func(FuncType::new(args, returns)))
                 }
             }
             ExternalInstanceType::Table(_) => {
                 let ctx_tab_ty = unsafe {
                     ffi::WasmEdge_ExportTypeGetTableType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_tab_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Export(ExportError::TableType(
+                if ctx_tab_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Export(ExportError::TableType(
                         "Fail to get the function type".into(),
-                    )))),
-                    false => {
-                        // get the element type
-                        let elem_ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(ctx_tab_ty) };
-                        let elem_ty = RefType::from(ValType::from(elem_ty));
+                    ))))
+                } else {
+                    // get the element type
+                    let elem_ty = unsafe { ffi::WasmEdge_TableTypeGetRefType(ctx_tab_ty) };
+                    let elem_ty = RefType::from(ValType::from(elem_ty));
 
-                        // get the limit
-                        let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
-                        let limit = WasmEdgeLimit::from_context(limit);
+                    // get the limit
+                    let limit = unsafe { ffi::WasmEdge_TableTypeGetLimit(ctx_tab_ty) };
+                    let limit = WasmEdgeLimit::from_context(limit);
 
-                        Ok(ExternalInstanceType::Table(TableType::new(
-                            elem_ty,
-                            limit.min(),
-                            limit.max(),
-                        )))
-                    }
+                    Ok(ExternalInstanceType::Table(TableType::new(
+                        elem_ty,
+                        limit.min(),
+                        limit.max(),
+                    )))
                 }
             }
             ExternalInstanceType::Memory(_) => {
                 let ctx_mem_ty = unsafe {
                     ffi::WasmEdge_ExportTypeGetMemoryType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_mem_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Export(ExportError::MemType(
+                if ctx_mem_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Export(ExportError::MemType(
                         "Fail to get the function type".into(),
-                    )))),
-                    false => {
-                        let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(ctx_mem_ty) };
-                        let limit = WasmEdgeLimit::from_context(limit);
+                    ))))
+                } else {
+                    let limit = unsafe { ffi::WasmEdge_MemoryTypeGetLimit(ctx_mem_ty) };
+                    let limit = WasmEdgeLimit::from_context(limit);
 
-                        Ok(ExternalInstanceType::Memory(MemoryType::new(
-                            limit.min(),
-                            limit.max(),
-                            limit.shared(),
-                        )?))
-                    }
+                    Ok(ExternalInstanceType::Memory(MemoryType::new(
+                        limit.min(),
+                        limit.max(),
+                        limit.shared(),
+                    )?))
                 }
             }
             ExternalInstanceType::Global(_) => {
                 let ctx_global_ty = unsafe {
                     ffi::WasmEdge_ExportTypeGetGlobalType(self.module.inner.0, self.inner.0)
                 };
-                match ctx_global_ty.is_null() {
-                    true => Err(Box::new(WasmEdgeError::Export(ExportError::GlobalType(
+                if ctx_global_ty.is_null() {
+                    Err(Box::new(WasmEdgeError::Export(ExportError::GlobalType(
                         "Fail to get the function type".into(),
-                    )))),
-                    false => {
-                        // get the value type
-                        let val = unsafe { ffi::WasmEdge_GlobalTypeGetValType(ctx_global_ty) };
-                        let val_ty: ValType = val.into();
+                    ))))
+                } else {
+                    // get the value type
+                    let val = unsafe { ffi::WasmEdge_GlobalTypeGetValType(ctx_global_ty) };
+                    let val_ty: ValType = val.into();
 
-                        // get mutability
-                        let val = unsafe { ffi::WasmEdge_GlobalTypeGetMutability(ctx_global_ty) };
-                        let mutability: Mutability = val.into();
+                    // get mutability
+                    let val = unsafe { ffi::WasmEdge_GlobalTypeGetMutability(ctx_global_ty) };
+                    let mutability: Mutability = val.into();
 
-                        Ok(ExternalInstanceType::Global(GlobalType::new(
-                            val_ty, mutability,
-                        )))
-                    }
+                    Ok(ExternalInstanceType::Global(GlobalType::new(
+                        val_ty, mutability,
+                    )))
                 }
             }
         }
@@ -389,6 +385,7 @@ impl ExportType<'_> {
 
 #[derive(Debug)]
 pub(crate) struct InnerExportType(pub(crate) *const ffi::WasmEdge_ExportTypeContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerExportType {}
 unsafe impl Sync for InnerExportType {}
 
@@ -404,12 +401,8 @@ mod tests {
     #[ignore = "need to update `import.wat`"]
     #[test]
     fn test_module_import() {
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/import.wat");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -561,12 +554,8 @@ mod tests {
     #[ignore = "need to update `import.wat`"]
     #[test]
     fn test_module_export() {
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/import.wat");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -716,12 +705,8 @@ mod tests {
     #[ignore = "need to update `import.wat`"]
     #[test]
     fn test_module_send() {
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/import.wat");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());
@@ -875,12 +860,8 @@ mod tests {
     #[ignore = "need to update `import.wat`"]
     #[test]
     fn test_module_sync() {
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/import.wat");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/import.wat");
 
         let result = Config::create();
         assert!(result.is_ok());

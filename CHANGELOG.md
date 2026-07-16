@@ -2,6 +2,192 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+## [0.17.0] - 2026-07-16
+
+Targets `wasmedge-sdk` 0.17.0 / `wasmedge-sys` 0.21.0 / `wasmedge-types` 0.7.0 /
+`wasmedge-macro` 0.7.0 / `async-wasi` 0.3.0, all still pinned against WasmEdge C API
+0.17.1. [See the upgrade guide.](docs/Upgrade_to_0.17.0.md)
+
+**A note on the gap since 0.13.5-newapi:** this repository's manifests were bumped
+to `0.14.1` and then `0.16.1` (with matching bumps in `wasmedge-sys` up to `0.20.0`)
+without a corresponding CHANGELOG update, and — as discovered while preparing this
+release — **those versions were never actually published to crates.io**. The real
+latest published versions going into this release are `wasmedge-sdk` 0.14.0 and
+`wasmedge-sys` 0.19.4. Whatever changed between 0.13.5-newapi and 0.14.0, and
+between 0.14.0 and this modernization branch's starting point, has not been
+reconstructed here — it predates this effort and there is no reliable record of it.
+The compatibility matrices in [README.md](README.md#compatibility-matrix) and
+[lib.rs](src/lib.rs) annotate the unpublished `0.16.1`/`0.14.1` rows rather than
+deleting them, for historical accuracy.
+
+### Added
+
+- `wasmedge-sdk`: `vm::SyncInst` (and `vm::AsyncInst` under the `async` feature) are
+  now re-exported at the crate root as `wasmedge_sdk::SyncInst`/`AsyncInst`. Callers
+  needed this trait to name their `HashMap<String, &mut dyn SyncInst>` instance maps
+  but previously had to reach into the `#[doc(hidden)]` `vm` module to name it; the
+  old path still works.
+- `wasmedge-types`: non-panicking discriminant conversions — `try_from_u32`/
+  `try_from_i32` on `Mutability`, `CompilerOptimizationLevel`, and
+  `CompilerOutputFormat`, returning the new `error::TryFromIntError` where the
+  existing `From<u32>`/`From<i32>` impls panic on unknown values.
+
+### Changed
+
+- **MSRV is now 1.85** (previously stated as 1.71 in docs but not enforced anywhere)
+  and **all five crates moved to Rust edition 2024** (`wasmedge-sdk`, `wasmedge-sys`,
+  `wasmedge-types`, `wasmedge-macro`, `async-wasi`).
+- Dependency upgrades: `thiserror` 1 -> 2, `socket2` 0.4 -> 0.6, `getrandom` 0.2 -> 0.4,
+  `bindgen` 0.69 -> 0.72 (needed for edition-2024-shaped bindings), `reqwest`
+  (`wasmedge-sys` build-dependency only) 0.11 -> 0.12 with `rustls-tls-webpki-roots`
+  preserved (no change in trusted roots or proxy/`WASMEDGE_STANDALONE_ARCHIVE`
+  behavior). `path-absolutize` was replaced with a small local
+  `std::path`-based normalization helper, removing that dependency entirely.
+- If you set `WASMEDGE_RUST_BINDGEN_PATH` to use an external `bindgen` executable,
+  it must now be **bindgen-cli 0.71 or newer**: the build script passes
+  `--rust-edition 2024`, a flag older releases don't recognize.
+- `Cargo.lock` is now committed to the repository (previously gitignored), and
+  `cargo semver-checks`, `cargo-deny`, a `cargo doc -D warnings` docs gate, and a
+  `cargo hack --each-feature` job were added to CI (`guardrails.yml`).
+- Documentation and crate metadata truth pass: refreshed README/lib.rs badges,
+  compatibility matrices, and MSRV notice; fixed the License link (was pointing at
+  `tensorflow/rust`); pointed every crate's `documentation` manifest field and the
+  README/lib.rs API Reference link at docs.rs instead of a 19-months-stale gh-pages
+  mirror (the second-state async-enabled mirror is unchanged); added
+  `[package.metadata.docs.rs]` and `keywords` to `wasmedge-types`, `wasmedge-macro`,
+  and `async-wasi`.
+- **Breaking (nominal):** `wasmedge_sys::Memory::mut_slice` now takes `&mut self`
+  instead of `&self` (and the `#[allow(clippy::mut_from_ref)]` covering the old
+  signature is gone). Handing out an aliasable `&mut [T]` from a shared `&self`
+  was unsound; the receiver now matches the sibling `get_ref_mut`. No caller in
+  this workspace passed a shared borrow, and no external caller was found. Rides
+  the `wasmedge-sys` 0.21.0 major bump. The `Memory` accessors (`get_ref`,
+  `slice`, `get_ref_mut`, `mut_slice`) also now return `None` for offsets or
+  byte sizes that don't fit in `u32` instead of silently truncating them before
+  the bounds check (a >= 4 GiB request could previously pass a 0-byte bounds
+  check yet hand back a slice of the full requested length), and the mutable
+  accessors derive their pointer from the C API's mutable getter instead of the
+  const one.
+- `wasmedge-sys`: the raw bindgen FFI surface under `wasmedge_sys::ffi` tracks the
+  WasmEdge C API, which advanced from 0.14.1 (the era of the last published
+  `wasmedge-sys` 0.19.4) to 0.17.1 in this release train. Notably
+  `WasmEdge_ErrCode_InvalidStoreAlignment` was renamed to
+  `WasmEdge_ErrCode_InvalidAlignment`, `WasmEdge_TypeCode_String` was removed when
+  the type-code set was reworked, and the `WasmEdge_Limit` struct became an opaque
+  `WasmEdge_LimitContext` with accessor functions. Users of the safe wrappers are
+  unaffected; code touching `wasmedge_sys::ffi` symbols directly should check
+  against the WasmEdge 0.17.1 C API headers.
+
+### Deprecated
+
+- `wasmedge-macro`: all six procedural macros — the public `host_function` and
+  `async_host_function`, plus the `#[doc(hidden)]` `sys_host_function`,
+  `sys_async_host_function`, `sys_wasi_host_function`, and
+  `sys_async_wasi_host_function` — are now `#[deprecated(since = "0.7.0")]`. They
+  expand to the pre-0.14 host-function ABI (a `Caller`-based three-argument free
+  function) that no longer compiles against `wasmedge-sdk` >= 0.14 /
+  `wasmedge-sys` >= 0.19, so they have had zero working callers since 0.14.0.
+  Write the host function directly and register it with
+  `ImportObjectBuilder::with_func` (or, at the `wasmedge-sys` layer,
+  `Function::create_sync_func` + `ImportModule::add_func` for sync host
+  functions, `AsyncFunction::create_async_func` + `AsyncImportObject::add_async_func`
+  for async ones).
+
+### Fixed
+
+All of the following are internal correctness fixes with no public API shape
+change (see [the upgrade guide](docs/Upgrade_to_0.17.0.md) for the one exception,
+called out below):
+
+- `async-wasi`:
+  - `fd_prestat_dir_name` could read past the end of its buffer using a
+    guest-controlled length, panicking instead of erroring.
+  - `path_unlink_file` checked the `PATH_REMOVE_DIRECTORY` rights bit instead of
+    `PATH_UNLINK_FILE`.
+  - `path_open` returned `EEXIST` instead of `NOENT` for a missing path when
+    `O_CREAT` was not set.
+  - Socket timeouts (`tv_usec`) were interpreted as nanoseconds instead of
+    microseconds, silently shrinking the sub-second part of a timeout ~1000x
+    (e.g. 1.5s became 1.0005s; a panic was only reachable via a negative
+    `tv_sec`). Timeouts are now built from microseconds, and a negative
+    `tv_sec`/`tv_usec` is rejected with `EINVAL` instead of being
+    sign-extended into an effectively infinite timeout.
+  - `sock_getaddrinfo` wrote into `sa_data` without checking its length, a
+    guest-triggerable panic.
+  - Socket registration used `mem::zeroed::<Socket>()` to fake ownership during a
+    swap; replaced with a proper `Option`-based state machine.
+  - `SocketWritable::poll` didn't register a waker on `Pending`, relying entirely
+    on an outer 10s timeout and silently dropping its `Result`; it now uses
+    `tokio::sync::Notify` for real wakeups.
+  - As a side effect of the `socket2` 0.4 -> 0.6 upgrade above, `async-wasi` (and
+    therefore the whole workspace) now **compiles natively on macOS** — it
+    previously failed with an `E0599` from `socket2` 0.4.10's narrower API.
+- `wasmedge-sys` (async WASI shims, guest-visible): the `fd_filestat_set_size`
+  shim delegated to `fd_filestat_get`, writing a filestat struct into guest
+  memory at the address given by the requested size's low 32 bits and never
+  resizing the file; it now forwards to the real implementation. Its import
+  signature is also now the canonical `(i32, i64)` — the previous `(i32, i32)`
+  registration made guests importing the standard signature (e.g. anything using
+  wasi-libc's `ftruncate`) fail at instantiation with an incompatible-import
+  error.
+- `wasmedge-sys` (memory safety, all internal):
+  - `Statistics` double-freed when cloned (`Drop` was implemented on the wrong
+    type) and `Executor::create` could leave a dangling statistics pointer.
+  - `InnerFunc`/`InnerModule` (`Copy`) and `InnerInstance`/`InnerExecutor`
+    (`Clone`) let any internal clone silently double-free the underlying FFI
+    handle; the derives are gone.
+  - `Loader::from_bytes` and `Compiler::compile_from_bytes` leaked their
+    intermediate buffer on the error path and mishandled a `malloc(0)` edge case.
+  - `ImportModule::create` didn't check for a null context pointer.
+  - `ImportModule::from_raw` double-freed a borrowed module name.
+  - `Executor::call_func_ref` panicked via `.unwrap()` on a type mismatch; it now
+    returns `FuncError::Type`.
+  - `box_future` relied on every closure it boxes being zero-sized (via
+    `mem::zeroed::<F>()`) without checking it; it's now guarded by a
+    `const { assert!(size_of::<F>() == 0) }`.
+  - **Observable behavior change:** `Validator::create` returned the wrong error
+    variant (`CompilerCreate`) on failure; it now correctly returns
+    `ValidatorCreate`. This changes the `Err` value callers see (not the function
+    signature), so `cargo semver-checks` does not flag it — see the upgrade guide.
+- `wasmedge-types`: `GlobalError::UnmatchedValType`'s `Display` impl was an empty
+  `#[error("")]`; it now has a real message.
+- ~20 broken rustdoc intra-doc links across `wasmedge-sdk` and `wasmedge-sys`
+  (mostly `crate::Func`/`Table`/`Memory`/`Global`/`Executor`, none of which exist
+  in the sdk's public surface) now resolve to the real `wasmedge-sys` types.
+
+### Removed
+
+- **Breaking (nominal):** `wasmedge-sdk` no longer re-exports the `host_function`
+  and `async_host_function` attribute macros (`wasmedge_sdk::host_function` /
+  `wasmedge_sdk::async_host_function`). They re-exported the now-deprecated
+  `wasmedge-macro` macros above, which expand to code that does not compile
+  against the current API, so no working caller could reference them. Removed
+  while riding the 0.17.0 major-version bump so it is not a surprise on a
+  patch/minor release. Import from `wasmedge_macro` directly if you still need
+  the (deprecated) names.
+- **Breaking (nominal):** the `wasmedge_sys::io` module is gone — the `WasmFnIO`
+  trait and the `I1`..`I32` marker types (~170 LOC). They had zero references
+  anywhere in this workspace and no discoverable public users; a crates.io scan
+  found only `wasmedge-bindgen-host`, pinned to `^0.7.0` of `wasmedge-sys` and so
+  unaffected by anything past that range. Rides the `wasmedge-sys` 0.21.0 major
+  bump.
+- Dead code: `src/dock.rs` and `src/executor.rs` (883 LOC, unreachable, referenced
+  types that no longer exist), `crates/async-wasi/src/snapshots/common/vfs/sync.rs`
+  (1148 LOC, an orphaned module never declared by its parent), 14 bit-rotted
+  `examples/wasmedge-sys/*` files using deleted APIs, and a `#[cfg(not(feature =
+  "async"))]` test module in `src/compiler.rs` that — precisely because `async` is
+  a default feature — never actually compiled under CI/default builds and silently
+  broke `--no-default-features` builds (it referenced the already-removed
+  `VmBuilder`).
+- Unused dependencies: `anyhow`, `cfg-if`, `num-derive`, `num-traits`, `thiserror` from
+  `wasmedge-sdk`; `paste` (RUSTSEC-2024-0436, unmaintained), `rand`, `lazy_static`,
+  `parking_lot`, `thiserror`, `cfg-if`, `wasmedge-macro`, the `cmake` build-dependency,
+  and the `anyhow` dev-dependency from `wasmedge-sys`; `serde`, `serde_json`, and
+  `parking_lot` from `async-wasi`; the `extra-traits` feature of `syn` from
+  `wasmedge-macro`.
+
 ## [0.13.5-newapi] - 2024-04-30
 
 [The sdk has changed a lot, please read this document.](docs/Upgrade_to_0.14.0.md)

@@ -1,6 +1,6 @@
 //! Defines WasmEdge ahead-of-time compiler.
 
-use crate::{ffi, utils, utils::check, Config, WasmEdgeResult};
+use crate::{Config, WasmEdgeResult, ffi, utils, utils::check};
 use std::path::Path;
 use wasmedge_types::error::WasmEdgeError;
 
@@ -28,11 +28,12 @@ impl Compiler {
             None => unsafe { ffi::WasmEdge_CompilerCreate(std::ptr::null_mut()) },
         };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::CompilerCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::CompilerCreate))
+        } else {
+            Ok(Self {
                 inner: InnerCompiler(ctx),
-            }),
+            })
         }
     }
 
@@ -102,33 +103,19 @@ impl Compiler {
         wasm_bytes: impl AsRef<[u8]>,
         aot_file: impl AsRef<Path>,
     ) -> WasmEdgeResult<()> {
+        let wasm_bytes = wasm_bytes.as_ref();
         let out_path = utils::path_to_cstring(aot_file.as_ref())?;
-        unsafe {
-            let ptr = libc::malloc(wasm_bytes.as_ref().len());
-            let dst = ::core::slice::from_raw_parts_mut(
-                ptr.cast::<std::mem::MaybeUninit<u8>>(),
-                wasm_bytes.as_ref().len(),
-            );
-            let src = ::core::slice::from_raw_parts(
-                wasm_bytes
-                    .as_ref()
-                    .as_ptr()
-                    .cast::<std::mem::MaybeUninit<u8>>(),
-                wasm_bytes.as_ref().len(),
-            );
-            dst.copy_from_slice(src);
 
+        // SAFETY: `WasmEdge_CompilerCompileFromBuffer` borrows `wasm_bytes` for the call and takes
+        // no ownership; an empty slice is a valid non-null, aligned, len-0 pointer.
+        unsafe {
             check(ffi::WasmEdge_CompilerCompileFromBuffer(
                 self.inner.0,
-                ptr as *const u8,
-                wasm_bytes.as_ref().len() as u64,
+                wasm_bytes.as_ptr(),
+                wasm_bytes.len() as u64,
                 out_path.as_ptr(),
-            ))?;
-
-            libc::free(ptr);
+            ))
         }
-
-        Ok(())
     }
 
     /// Provides a raw pointer to the inner Compiler context.
@@ -141,6 +128,7 @@ impl Compiler {
 
 #[derive(Debug)]
 pub(crate) struct InnerCompiler(pub(crate) *mut ffi::WasmEdge_CompilerContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerCompiler {}
 unsafe impl Sync for InnerCompiler {}
 
@@ -157,9 +145,21 @@ mod tests {
         thread,
     };
     use wasmedge_types::{
+        CompilerOptimizationLevel, CompilerOutputFormat,
         error::{CoreError, CoreLoadError},
-        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
+        wat2wasm,
     };
+
+    // Empty input must return Err without hitting a malloc(0)/UB edge or leaking.
+    #[test]
+    #[allow(clippy::assertions_on_result_states)]
+    fn test_compile_from_bytes_empty_is_err_no_ub() {
+        let compiler = Compiler::create(None).unwrap();
+        let out_path = std::path::PathBuf::from("empty_input_compile_should_error.tmp");
+        let result = compiler.compile_from_bytes([], &out_path);
+        assert!(result.is_err());
+        let _ = std::fs::remove_file(&out_path);
+    }
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]
@@ -179,12 +179,8 @@ mod tests {
             let compiler = result.unwrap();
 
             // compile a file for universal WASM output format
-            let in_path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let in_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot.so");
             #[cfg(target_os = "macos")]
@@ -218,12 +214,8 @@ mod tests {
             let result = Compiler::create(Some(&config));
             assert!(result.is_ok());
             let compiler = result.unwrap();
-            let in_path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let in_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_from_file.so");
             #[cfg(target_os = "macos")]
@@ -438,12 +430,8 @@ mod tests {
         let compiler = result.unwrap();
 
         // compile a file for universal WASM output format
-        let in_path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/fibonacci.wat");
+        let in_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/fibonacci.wat");
         #[cfg(target_os = "macos")]
         let out_path = std::path::PathBuf::from("fibonacci_aot.dylib");
         #[cfg(target_os = "linux")]

@@ -1,6 +1,6 @@
 //! Defines plugin related structs.
 
-use crate::{instance::Instance, WasmEdgeResult};
+use crate::{WasmEdgeResult, instance::Instance};
 use wasmedge_sys::{self as sys};
 
 #[cfg(feature = "wasi_nn")]
@@ -79,8 +79,7 @@ impl std::str::FromStr for NNPreload {
         let nn_preload: Vec<&str> = preload.split(':').collect();
         if nn_preload.len() != 4 {
             return Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to NNPreload value. Invalid preload string: {}. The correct format is: 'alias:backend:target:path'",
-                preload
+                "Failed to convert to NNPreload value. Invalid preload string: {preload}. The correct format is: 'alias:backend:target:path'"
             )));
         }
         let (alias, backend, target, path) = (
@@ -123,7 +122,7 @@ fn test_generate_nnpreload_from_str() {
     let err = result.unwrap_err();
     assert_eq!(
         WasmEdgeError::Operation(
-            "Failed to convert to NNBackend value. Unknown NNBackend type: CPU".to_string()
+            "Failed to convert to GraphEncoding value. Unknown GraphEncoding type: CPU".to_string()
         ),
         err
     );
@@ -199,8 +198,7 @@ impl std::str::FromStr for GraphEncoding {
             "autodetect" => Ok(GraphEncoding::Autodetect),
             "ggml" => Ok(GraphEncoding::GGML),
             _ => Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to NNBackend value. Unknown NNBackend type: {}",
-                s
+                "Failed to convert to GraphEncoding value. Unknown GraphEncoding type: {s}"
             ))),
         }
     }
@@ -241,8 +239,7 @@ impl std::str::FromStr for ExecutionTarget {
             "TPU" => Ok(ExecutionTarget::TPU),
             "AUTO" => Ok(ExecutionTarget::AUTO),
             _ => Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to ExecutionTarget value. Unknown ExecutionTarget type: {}",
-                s
+                "Failed to convert to ExecutionTarget value. Unknown ExecutionTarget type: {s}"
             ))),
         }
     }
@@ -317,11 +314,7 @@ impl PluginManager {
     #[cfg(feature = "wasi_nn")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
     pub fn nn_preload(preloads: Vec<NNPreload>) {
-        let mut nn_preloads = Vec::new();
-        for preload in preloads {
-            nn_preloads.push(preload.to_string());
-        }
-
+        let nn_preloads: Vec<String> = preloads.into_iter().map(|p| p.to_string()).collect();
         let nn_preloads_str: Vec<&str> = nn_preloads.iter().map(|s| s.as_str()).collect();
 
         sys::plugin::PluginManager::nn_preload(nn_preloads_str);
@@ -383,16 +376,17 @@ impl PluginManager {
     }
 
     pub fn auto_detect_plugins() -> WasmEdgeResult<Vec<Instance>> {
-        let mut plugin_mods = vec![];
-        for plugin_name in PluginManager::names().iter() {
-            if let Ok(plugin) = PluginManager::find(plugin_name) {
-                for mod_name in plugin.mod_names().iter() {
-                    if let Ok(mod_instance) = plugin.mod_instance(mod_name) {
-                        plugin_mods.push(mod_instance)
-                    }
-                }
-            }
-        }
+        let plugin_mods = PluginManager::names()
+            .into_iter()
+            .filter_map(|plugin_name| PluginManager::find(plugin_name).ok())
+            .flat_map(|plugin| {
+                plugin
+                    .mod_names()
+                    .into_iter()
+                    .filter_map(|mod_name| plugin.mod_instance(mod_name).ok())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
         Ok(plugin_mods)
     }
 }

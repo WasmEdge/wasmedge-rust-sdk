@@ -57,7 +57,12 @@
 #![deny(rust_2018_idioms, unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-#[allow(warnings)]
+// The bindgen output trips these naming-convention lints; listed explicitly (not a blanket
+// `allow(warnings)`) so a new correctness/future-compat lint still surfaces.
+// `rustdoc::broken_intra_doc_links` is inherent: bindgen carries the C headers' Doxygen
+// `[out]`/`[in]` markers into doc comments, which rustdoc misparses as links.
+#[allow(non_upper_case_globals, non_snake_case, non_camel_case_types)]
+#[allow(rustdoc::broken_intra_doc_links)]
 /// Foreign function interfaces generated from WasmEdge C-API.
 pub mod ffi {
     include!(concat!(env!("OUT_DIR"), "/wasmedge.rs"));
@@ -76,8 +81,6 @@ pub mod config;
 pub mod executor;
 pub mod frame;
 pub mod instance;
-#[doc(hidden)]
-pub mod io;
 #[doc(hidden)]
 pub mod loader;
 pub mod plugin;
@@ -106,12 +109,12 @@ pub use frame::CallingFrame;
 pub use instance::module::WasiModule;
 #[doc(inline)]
 pub use instance::{
+    FuncType, GlobalType, MemoryType, TableType,
     function::{FuncRef, Function, SyncFn},
     global::Global,
     memory::Memory,
     module::{AsInstance, ImportModule, Instance},
     table::Table,
-    FuncType, GlobalType, MemoryType, TableType,
 };
 #[doc(inline)]
 pub use loader::Loader;

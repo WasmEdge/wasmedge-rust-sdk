@@ -1,0 +1,130 @@
+name: Guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  semver-checks:
+    name: semver-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # wasmedge-macro is a proc-macro crate: cargo-semver-checks cannot scan it (verified by inspection; see CONTRIBUTING.md). exclude-only selection picks nothing in a root-package workspace (first-run failure), so packages are listed explicitly.
+      - name: semver-checks (wasmedge-types, async-wasi)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: wasmedge-types,async-wasi
+
+      - name: semver-checks (wasmedge-sys, wasmedge-sdk; standalone feature)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: wasmedge-sys,wasmedge-sdk
+          features: standalone
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo-deny (advisories + licenses)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses
+
+  docs:
+    name: docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # All known-broken intra-doc links are fixed, so the docs job now denies
+      # every rustdoc warning (including broken_intra_doc_links) instead of
+      # tolerating pre-existing drift.
+      - name: cargo doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps --features standalone,aot,ffi
+
+  feature-hack:
+    name: feature-hack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: cargo hack check --each-feature (wasmedge-types, wasmedge-macro, async-wasi)
+        run: cargo hack check --each-feature --no-dev-deps -p wasmedge-types -p wasmedge-macro -p async-wasi
+
+      # wasmedge-sys/wasmedge-sdk need to link against libwasmedge, so a full
+      # each-feature matrix isn't practical here. Instead check the one fixed
+      # combination that matters most: --no-default-features still builds.
+      - name: cargo check --no-default-features --features standalone,wasi_crypto (wasmedge-sys, wasmedge-sdk)
+        run: cargo check -p wasmedge-sys -p wasmedge-sdk --no-default-features --features standalone,wasi_crypto
+
+  msrv:
+    name: msrv
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust 1.85 (MSRV)
+        uses: dtolnay/rust-toolchain@1.85
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # workspace.package.rust-version = 1.85 and resolver = "3" already keep
+      # every dependency MSRV-compatible; this job is the proof, not the
+      # enforcement mechanism. standalone,aot,ffi matches the `docs` job's
+      # feature set so no system WasmEdge install is needed here either.
+      - name: cargo check --workspace (MSRV)
+        run: cargo check --workspace --features standalone,aot,ffi

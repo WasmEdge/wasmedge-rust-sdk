@@ -1,4 +1,5 @@
 use super::{
+    WasiCtx,
     common::{
         clock,
         error::Errno,
@@ -6,10 +7,9 @@ use super::{
         types::*,
     },
     env::{
-        vfs::{self, FdFlags, WASIRights},
         AsyncVM,
+        vfs::{self, FdFlags, WASIRights},
     },
-    WasiCtx,
 };
 
 #[cfg(all(unix, feature = "async_tokio"))]
@@ -155,7 +155,7 @@ pub fn random_get<M: Memory>(
     log::trace!("random_get");
 
     let u8_buffer = mem.mut_slice(buf, buf_len as usize)?;
-    getrandom::getrandom(u8_buffer).map_err(|_| Errno(__wasi_errno_t::__WASI_ERRNO_IO))
+    getrandom::fill(u8_buffer).map_err(|_| Errno(__wasi_errno_t::__WASI_ERRNO_IO))
 }
 
 pub fn fd_prestat_get<M: Memory>(
@@ -192,8 +192,9 @@ pub fn fd_prestat_dir_name<M: Memory>(
     if path_len > path_max_len as usize {
         return Err(Errno::__WASI_ERRNO_NAMETOOLONG);
     }
-    let path_buf = mem.mut_slice(path_buf_ptr, path_max_len as usize)?;
-    path_buf.clone_from_slice(&path_bytes[0..path_max_len as usize]);
+    let copy_len = path_len.min(path_max_len as usize);
+    let path_buf = mem.mut_slice(path_buf_ptr, copy_len)?;
+    path_buf.clone_from_slice(&path_bytes[0..copy_len]);
     Ok(())
 }
 
@@ -658,4 +659,39 @@ pub fn proc_raise<M: Memory>(
 
 pub fn sched_yield<VM: AsyncVM>(_ctx: &mut WasiCtx, vm: &mut VM) -> Result<(), Errno> {
     vm.yield_now()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshots::common::memory::TestMemory;
+    use crate::snapshots::common::vfs::{
+        WasiFileSys,
+        impls::{MemoryDir, MemoryFile},
+        virtual_sys::WasiVirtualSys,
+    };
+
+    fn ctx_with_preopen(guest_path: &str) -> WasiCtx {
+        let mut ctx = WasiCtx::new();
+        let fs: Box<dyn WasiFileSys<Index = usize> + Send + Sync> =
+            Box::new(WasiVirtualSys::<MemoryDir, MemoryFile>::default());
+        ctx.mount_file_sys(guest_path, fs);
+        ctx
+    }
+
+    // Clamp the copy to the name length; a `path_max_len` larger than the name would read out of bounds.
+    #[test]
+    fn fd_prestat_dir_name_no_oob_when_buffer_larger_than_name() {
+        let guest_path = "/preopen"; // 8 bytes
+        let mut ctx = ctx_with_preopen(guest_path);
+        let mut mem = TestMemory::new(64);
+
+        // fd 3 == first preopen; `path_max_len` (32) is larger than the name (8).
+        let r = fd_prestat_dir_name(&mut ctx, &mut mem, 3, WasmPtr::from(0usize), 32);
+
+        assert!(r.is_ok(), "expected Ok, got {r:?}");
+        assert_eq!(&mem.data[0..guest_path.len()], guest_path.as_bytes());
+        // Bytes beyond the name must be left untouched.
+        assert!(mem.data[guest_path.len()..].iter().all(|&b| b == 0));
+    }
 }

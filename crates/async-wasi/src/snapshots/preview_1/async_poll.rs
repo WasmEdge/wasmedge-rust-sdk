@@ -1,13 +1,13 @@
 use crate::snapshots::{
+    Errno, WasiCtx,
     common::{
         memory::{Memory, WasmPtr},
         net::{self, ConnectState, SubscriptionClock},
         types::*,
     },
-    Errno, WasiCtx,
 };
-use futures::{stream::FuturesUnordered, StreamExt};
-use net::{async_tokio::AsyncWasiSocket, PrePoll, SubscriptionFd, SubscriptionFdType};
+use futures::{StreamExt, stream::FuturesUnordered};
+use net::{PrePoll, SubscriptionFd, SubscriptionFdType, async_tokio::AsyncWasiSocket};
 use std::time::Duration;
 
 fn handle_event_err(type_: SubscriptionFdType, errno: Errno) -> __wasi_event_t {
@@ -299,7 +299,7 @@ async fn poll_oneoff_impl<M: Memory>(
     let subs = mem.get_slice(in_ptr, nsubscriptions)?;
     let prepoll = PrePoll::from_wasi_subscription(subs)?;
 
-    log::trace!("poll_oneoff subs prepoll={:#?}", prepoll);
+    log::trace!("poll_oneoff subs prepoll={prepoll:#?}");
 
     match prepoll {
         PrePoll::OnlyFd(fd_vec) => {

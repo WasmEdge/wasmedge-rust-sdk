@@ -1,0 +1,144 @@
+name: Deploy API documentation
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  # The "stable" docset: whole-workspace docs built with the same feature
+  # set, toolchain, and rustdoc flags as guardrails.yml's `docs` lint job,
+  # so a deploy never publishes docs that the lint gate would reject.
+  # `standalone` makes wasmedge-sys download a prebuilt libwasmedge archive
+  # in build.rs, so no WasmEdge install step is needed here.
+  build-stable-docs:
+    name: Build stable docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps --features standalone,aot,ffi
+
+      - name: Upload stable docs
+        uses: actions/upload-artifact@v7
+        with:
+          name: stable-api-docs
+          path: target/doc
+          if-no-files-found: error
+
+  # The "async" docset: wasmedge-sdk with the `async` feature, built on
+  # nightly with --cfg docsrs (unlocks the unstable doc_cfg feature used
+  # for feature-gate badges). Mirrors the doc step that
+  # publish-async-api-docs.yml used to run. `async` needs a real installed
+  # WasmEdge (it isn't built with the `standalone` feature), hence the
+  # same container/install steps as the release workflows.
+  build-async-docs:
+    name: Build async docs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    container:
+      image: wasmedge/wasmedge:ubuntu-build-clang
+    env:
+      WASMEDGE_VERSION: "0.17.1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        run: |
+          apt update
+          apt install -y software-properties-common libboost-all-dev ninja-build
+          apt install -y llvm-15-dev liblld-15-dev
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p /usr/local
+          ldconfig
+          /usr/local/bin/wasmedge --version
+
+      # docsrs cfg enables the unstable doc_cfg feature in wasmedge-sys/wasmedge-sdk.
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo doc (async, nightly, docsrs)
+        run: |
+          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,async,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
+
+      - name: Upload async docs
+        uses: actions/upload-artifact@v7
+        with:
+          name: async-api-docs
+          path: target/doc
+          if-no-files-found: error
+
+  # Both docsets deploy to the same gh-pages branch, split by
+  # destination_dir (stable/ and async/). Neither step sets force_orphan,
+  # so peaceiris only replaces files under its own destination_dir and
+  # leaves the sibling directory (and the rest of the branch) intact --
+  # the previous per-workflow force_orphan: true deploys were each
+  # recreating the branch from scratch and wiping out whatever the other
+  # workflow had just published.
+  deploy:
+    name: Deploy docs
+    if: github.ref == 'refs/heads/main'
+    needs: [build-stable-docs, build-async-docs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download stable docs
+        uses: actions/download-artifact@v8
+        with:
+          name: stable-api-docs
+          path: stable-doc
+
+      - name: Download async docs
+        uses: actions/download-artifact@v8
+        with:
+          name: async-api-docs
+          path: async-doc
+
+      - name: Deploy stable docs
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: stable-doc
+          destination_dir: stable
+
+      - name: Deploy async docs
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: async-doc
+          destination_dir: async

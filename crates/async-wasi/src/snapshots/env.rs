@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use self::vfs::{virtual_sys::StdioSys, WasiDir, WasiFile, WasiFileSys, WasiNode};
+use self::vfs::{WasiDir, WasiFile, WasiFileSys, WasiNode, virtual_sys::StdioSys};
 
 pub use super::common::{error::Errno, types as wasi_types, vfs};
 
@@ -108,6 +108,12 @@ impl VFS {
     }
 }
 
+// When `async_tokio` is disabled, `VFD` has only `Inode`, making the `if let VFD::Inode`
+// patterns below irrefutable; kept unforked, with the lint suppressed only for that feature state.
+#[cfg_attr(
+    not(all(unix, feature = "async_tokio")),
+    allow(irrefutable_let_patterns)
+)]
 impl VFS {
     pub fn path_open(
         &mut self,
@@ -230,6 +236,7 @@ impl VFS {
                 }
                 self.fds.remove(fd);
             }
+            #[cfg(all(unix, feature = "async_tokio"))]
             Some(VFD::AsyncSocket(_)) => {
                 self.fds.remove(fd);
             }

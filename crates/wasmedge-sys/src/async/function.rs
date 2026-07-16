@@ -1,8 +1,9 @@
 use crate::{
-    ffi, instance::module::InnerInstance, r#async::fiber::AsyncCx, CallingFrame, FuncType,
-    Function, Instance, WasmEdgeResult, WasmValue,
+    CallingFrame, FuncType, Function, Instance, WasmEdgeResult, WasmValue, r#async::fiber::AsyncCx,
+    ffi, instance::module::InnerInstance,
 };
-use std::{future::Future, os::raw::c_void};
+use core::ffi::c_void;
+use std::future::Future;
 use wasmedge_types::error::CoreError;
 
 use super::module::AsyncInstance;
@@ -21,7 +22,7 @@ pub type AsyncFn<'data, 'inst, 'frame, 'fut, Data>
 
 unsafe extern "C" fn wrap_async_fn<Data>(
     key_ptr: *mut c_void,
-    data: *mut std::os::raw::c_void,
+    data: *mut c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
     params: *const ffi::WasmEdge_Value,
     param_len: u32,
@@ -30,11 +31,13 @@ unsafe extern "C" fn wrap_async_fn<Data>(
 ) -> ffi::WasmEdge_Result {
     let mut frame = CallingFrame::create(call_frame_ctx);
     // let executor_ctx = ffi::WasmEdge_CallingFrameGetExecutor(call_frame_ctx);
-    let inst_ctx = ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx);
+    // SAFETY: the runtime keeps `call_frame_ctx` valid for the call's duration.
+    let inst_ctx = unsafe { ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx) };
     let mut inst = std::mem::ManuallyDrop::new(AsyncInstance(Instance {
         inner: InnerInstance(inst_ctx as _),
     }));
-    let data = &mut *(data as *mut Data);
+    // SAFETY: the runtime hands back the registered `data` pointer, uniquely borrowed for the call.
+    let data = unsafe { &mut *(data as *mut Data) };
 
     // arguments
     let input = if params.is_null() || param_len == 0 {
@@ -54,7 +57,8 @@ unsafe extern "C" fn wrap_async_fn<Data>(
     };
 
     // get and call host function
-    let real_fn: AsyncFn<'_, '_, '_, '_, Data> = std::mem::transmute(key_ptr);
+    // SAFETY: `key_ptr` round-trips the `AsyncFn` cast made at registration.
+    let real_fn: AsyncFn<'_, '_, '_, '_, Data> = unsafe { std::mem::transmute(key_ptr) };
 
     let async_cx = AsyncCx::new();
     let mut future = std::pin::Pin::from(real_fn(data, &mut inst, &mut frame, input));
@@ -70,7 +74,12 @@ unsafe extern "C" fn wrap_async_fn<Data>(
     // parse result
     match result {
         Ok(returns) => {
-            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}", return_len, returns.len());
+            assert!(
+                returns.len() == return_len,
+                "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}",
+                return_len,
+                returns.len()
+            );
             for (idx, wasm_value) in returns.into_iter().enumerate() {
                 raw_returns[idx] = wasm_value.as_raw();
             }
@@ -139,13 +148,13 @@ impl AsMut<Function> for AsyncFunction {
 mod tests {
     use super::*;
     use crate::{
-        instance::function::AsFunc,
-        r#async::{fiber::AsyncState, module::AsyncImportObject},
-        types::WasmValue,
         AsInstance, Executor,
+        r#async::{fiber::AsyncState, module::AsyncImportObject},
+        instance::function::AsFunc,
+        types::WasmValue,
     };
 
-    use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
+    use wasmedge_types::{FuncType, ValType, error::CoreExecutionError};
 
     #[tokio::test]
     async fn test_func_basic() {

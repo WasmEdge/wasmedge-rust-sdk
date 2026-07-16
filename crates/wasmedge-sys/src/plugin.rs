@@ -2,7 +2,7 @@
 
 use super::ffi;
 use crate::{
-    instance::module::InnerInstance, types::WasmEdgeString, utils, Instance, WasmEdgeResult,
+    Instance, WasmEdgeResult, instance::module::InnerInstance, types::WasmEdgeString, utils,
 };
 
 use std::ffi::CString;
@@ -15,7 +15,7 @@ impl PluginManager {
     /// Load plugins from the default path. The default plugin path could be one of the following:
     ///
     /// * The environment variable "WASMEDGE_PLUGIN_PATH".
-    ///   
+    ///
     /// * The `../plugin/` directory related to the WasmEdge installation path.
     ///
     /// * The `wasmedge/` directory under the library path if the WasmEdge is installed under the "/usr".
@@ -35,7 +35,7 @@ impl PluginManager {
     ///
     /// # Error
     ///
-    /// * If the path contains invalid characters, then an [WasmEdgeError::FoundNulByte](wasmedge_types::error::WasmEdgeError::FoundNulByte) error is returned.
+    /// * If the path contains invalid characters, then an [WasmEdgeError::FoundNulByte] error is returned.
     pub fn load_plugins(path: impl AsRef<std::path::Path>) -> WasmEdgeResult<()> {
         let c_path = utils::path_to_cstring(path.as_ref())?;
         unsafe { ffi::WasmEdge_PluginLoadFromPath(c_path.as_ptr()) }
@@ -50,8 +50,7 @@ impl PluginManager {
             .iter()
             .map(|&x| std::ffi::CString::new(x).unwrap())
             .collect();
-        let c_strs: Vec<*const ::std::os::raw::c_char> =
-            c_args.iter().map(|x| x.as_ptr()).collect();
+        let c_strs: Vec<*const core::ffi::c_char> = c_args.iter().map(|x| x.as_ptr()).collect();
         let len = c_strs.len() as u32;
         unsafe { ffi::WasmEdge_PluginInitWASINN(c_strs.as_ptr(), len) }
     }
@@ -66,6 +65,7 @@ impl PluginManager {
         let count = Self::count();
         let mut names = Vec::with_capacity(count as usize);
 
+        // SAFETY: `WasmEdge_PluginListPlugins` fills exactly `count` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_PluginListPlugins(names.as_mut_ptr(), count);
             names.set_len(count as usize);
@@ -82,19 +82,20 @@ impl PluginManager {
     ///
     /// # Error
     ///
-    /// If not found the plugin, then return [PluginError::NotFound](wasmedge_types::error::PluginError::NotFound) error.
+    /// If not found the plugin, then return [PluginError::NotFound] error.
     pub fn find(name: impl AsRef<str>) -> WasmEdgeResult<Plugin> {
         let plugin_name: WasmEdgeString = name.as_ref().into();
 
         let ctx = unsafe { ffi::WasmEdge_PluginFind(plugin_name.as_raw()) };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::NotFound(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Plugin(PluginError::NotFound(
                 name.as_ref().into(),
-            )))),
-            false => Ok(Plugin {
+            ))))
+        } else {
+            Ok(Plugin {
                 inner: InnerPlugin(ctx as *mut _),
-            }),
+            })
         }
     }
 
@@ -171,6 +172,7 @@ impl Plugin {
         let count = self.mod_count();
         let mut names = Vec::with_capacity(count as usize);
 
+        // SAFETY: `WasmEdge_PluginListModule` fills exactly `count` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_PluginListModule(self.inner.0, names.as_mut_ptr(), count);
             names.set_len(count as usize);
@@ -187,19 +189,20 @@ impl Plugin {
     ///
     /// # Error
     ///
-    /// If failed to return the plugin module instance, then return [PluginError::Create](wasmedge_types::error::PluginError::Create) error.
+    /// If failed to return the plugin module instance, then return [PluginError::Create] error.
     pub fn mod_instance(&self, name: impl AsRef<str>) -> WasmEdgeResult<Instance> {
         let mod_name: WasmEdgeString = name.as_ref().into();
 
         let ctx = unsafe { ffi::WasmEdge_PluginCreateModule(self.inner.0, mod_name.as_raw()) };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::Create(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Plugin(PluginError::Create(
                 name.as_ref().into(),
-            )))),
-            false => Ok(Instance {
+            ))))
+        } else {
+            Ok(Instance {
                 inner: InnerInstance(ctx),
-            }),
+            })
         }
     }
 
@@ -213,6 +216,7 @@ impl Plugin {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct InnerPlugin(pub(crate) *mut ffi::WasmEdge_PluginContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerPlugin {}
 unsafe impl Sync for InnerPlugin {}
 
@@ -310,6 +314,7 @@ impl ProgramOption {
         Ok(po)
     }
 }
+// SAFETY: `inner`'s raw `Name`/`Description` pointers borrow into the owned `name`/`desc` `CString`s, which stay valid across moves; no interior mutability.
 unsafe impl Send for ProgramOption {}
 unsafe impl Sync for ProgramOption {}
 
@@ -520,9 +525,11 @@ mod tests {
 
         PluginManager::load_plugins_from_default_paths();
         assert!(PluginManager::count() >= 1);
-        assert!(PluginManager::names()
-            .iter()
-            .any(|x| x == "wasmedge_process"));
+        assert!(
+            PluginManager::names()
+                .iter()
+                .any(|x| x == "wasmedge_process")
+        );
 
         // get `wasmedge_process` plugin
         let result = PluginManager::find("wasmedge_process");

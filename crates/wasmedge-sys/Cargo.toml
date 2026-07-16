@@ -2,30 +2,25 @@
 build = "build.rs"
 categories = ["api-bindings", "wasm"]
 description = "WasmEdge Runtime is a high-performance, extensible, and hardware optimized WebAssembly Virtual Machine for automotive, cloud, AI, and blockchain applications."
-documentation = "https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/"
-edition = "2021"
+documentation = "https://docs.rs/wasmedge-sys"
+edition.workspace = true
 exclude = ["tests/", "examples/"]
-license = "Apache-2.0"
+keywords = ["wasmedge", "wasm", "webassembly", "ffi"]
+license.workspace = true
 links = "wasmedge"
 name = "wasmedge-sys"
 readme = "README.md"
-repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
-version = "0.20.0"
+repository.workspace = true
+rust-version.workspace = true
+version = "0.21.0"
 
 [dependencies]
-log = "0.4"
+log.workspace = true
 fiber-for-wasmedge = { version = "14.0.4", optional = true }
-libc = "0.2.94"
-paste = "1.0.5"
+libc.workspace = true
 scoped-tls = "1"
-thiserror = "1.0.30"
-wasmedge-macro.workspace = true
 wasmedge-types.workspace = true
 wat.workspace = true
-lazy_static = "1.4.0"
-parking_lot.workspace = true
-rand = "0.8.4"
-cfg-if.workspace = true
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -33,27 +28,26 @@ async-wasi = { workspace = true, optional = true }
 setjmp = "0.1"
 
 [build-dependencies]
-bindgen = { version = "0.69", default-features = false, features = ["runtime"] }
-cmake = "0.1"
-reqwest = { version = "0.11", default-features = false, features = [
+bindgen = { workspace = true, features = ["runtime"] }
+reqwest = { version = "0.12", default-features = false, features = [
     "blocking",
-    "rustls-tls",
+    "rustls-tls-webpki-roots",
 ] }
 flate2 = "1"
-tar = "0.4"
+tar = "0.4.46"
 sha256 = "1"
-lazy_static = "1.4.0"
-phf = { version = "0.11", features = ["macros"] }
 
 
 [dev-dependencies]
-anyhow = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 
 [package.metadata.docs.rs]
 features = ["aot", "wasi_crypto", "wasi_nn", "wasmedge_process", "ffi"]
 rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
 
 [features]
 aot = []

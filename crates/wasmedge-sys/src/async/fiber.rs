@@ -75,6 +75,8 @@ impl Future for FiberFuture<'_> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
+            // SAFETY: erase the `Context` lifetime to `'static`; the pointer lives only for this
+            // `poll` (restored by the `Reset` guard) and is dereferenced only by `block_on` on this thread.
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
@@ -85,6 +87,9 @@ impl Future for FiberFuture<'_> {
         }
     }
 }
+// SAFETY: raw pointers borrow into the owning `AsyncState`, dereferenced only during an active
+// `poll` on this thread. `Send` is load-bearing (drives across worker threads); `Sync` is not
+// (only driven by `&mut`), kept for API stability.
 unsafe impl Send for FiberFuture<'_> {}
 unsafe impl Sync for FiberFuture<'_> {}
 
@@ -178,6 +183,8 @@ impl Future for TimeoutFiberFuture<'_> {
             crate::executor::init_signal_listen();
 
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
+            // SAFETY: erase the `Context` lifetime to `'static`; the pointer lives only for this
+            // `poll` (restored by the `Reset` guard) and is dereferenced only by `block_on` on this thread.
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
             let async_cx = AsyncCx {
@@ -232,6 +239,8 @@ impl Future for TimeoutFiberFuture<'_> {
         }
     }
 }
+// SAFETY: as `FiberFuture` — `Send` is load-bearing (drives across worker threads); `Sync` is not
+// (only driven by `&mut`), kept for API stability.
 #[cfg(not(target_env = "musl"))]
 unsafe impl Send for TimeoutFiberFuture<'_> {}
 #[cfg(not(target_env = "musl"))]
@@ -296,6 +305,8 @@ impl AsyncState {
         })
     }
 }
+// SAFETY: the `UnsafeCell` raw pointers are read/written only during an active `poll` on the
+// driving thread; the single-driver invariant is upheld by the executor, not the compiler.
 unsafe impl Send for AsyncState {}
 unsafe impl Sync for AsyncState {}
 
@@ -329,26 +340,31 @@ impl AsyncCx {
         &self,
         mut future: Pin<&mut (dyn Future<Output = U> + Send)>,
     ) -> Result<U, ()> {
-        let suspend = *self.current_suspend;
-        let _reset = Reset(self.current_suspend, suspend);
-        *self.current_suspend = ptr::null();
-        assert!(!suspend.is_null());
+        // SAFETY: `current_suspend`/`current_poll_cx` are raw pointers into a live `AsyncState`; per the
+        // fiber protocol `block_on` runs only while it is alive on this thread. The `assert!`s guard the
+        // inner pointers read back out.
+        unsafe {
+            let suspend = *self.current_suspend;
+            let _reset = Reset(self.current_suspend, suspend);
+            *self.current_suspend = ptr::null();
+            assert!(!suspend.is_null());
 
-        loop {
-            let future_result = {
-                let poll_cx = *self.current_poll_cx;
-                let _reset = Reset(self.current_poll_cx, poll_cx);
-                *self.current_poll_cx = ptr::null_mut();
-                assert!(!poll_cx.is_null());
-                future.as_mut().poll(&mut *poll_cx)
-            };
+            loop {
+                let future_result = {
+                    let poll_cx = *self.current_poll_cx;
+                    let _reset = Reset(self.current_poll_cx, poll_cx);
+                    *self.current_poll_cx = ptr::null_mut();
+                    assert!(!poll_cx.is_null());
+                    future.as_mut().poll(&mut *poll_cx)
+                };
 
-            match future_result {
-                Poll::Ready(t) => break Ok(t),
-                Poll::Pending => {}
+                match future_result {
+                    Poll::Ready(t) => break Ok(t),
+                    Poll::Pending => {}
+                }
+                let res = (*suspend).suspend(());
+                res?;
             }
-            let res = (*suspend).suspend(());
-            res?;
         }
     }
 }

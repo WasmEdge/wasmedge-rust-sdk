@@ -1,6 +1,6 @@
 use std::{
     io::{Read, Seek, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     time::Duration,
 };
 
@@ -8,7 +8,7 @@ use futures::future::ok;
 use libc::hostent;
 use slab::Slab;
 
-use crate::snapshots::env::{wasi_types, Errno};
+use crate::snapshots::env::{Errno, wasi_types};
 
 use super::{
     Advice, FdFlags, FdStat, FileType, Filestat, OFlags, SystemTimeSpec, WASIRights, WasiDir,
@@ -292,7 +292,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
                     return Ok(ino);
                 }
 
-                Err(Errno::__WASI_ERRNO_EXIST)
+                Err(Errno::__WASI_ERRNO_NOENT)
             }
         }
     }
@@ -570,6 +570,55 @@ fn systimespec(
     }
 }
 
+/// Lexically resolves `.` and `..` components without touching the
+/// filesystem: no symlink resolution, no existence check, just component
+/// bookkeeping. This replaces the `path-absolutize` crate's
+/// `absolutize_virtually`, which did the same lexical walk.
+///
+/// `..` past the root is a no-op rather than an error or a literal leading
+/// `..`: `PathBuf::pop` returns `false` and leaves the path unchanged once
+/// nothing is left to pop, so the component stack can't go negative. That
+/// matches POSIX's `/../x == /x` and is what makes the `starts_with` check in
+/// `get_absolutize_path` below a correct sandbox boundary — popping enough
+/// `..` to leave `real_path` lands the result on one of `real_path`'s
+/// ancestors (or root), which then fails `starts_with(real_path)` and is
+/// rejected, exactly as `absolutize_virtually` rejected it.
+///
+/// `std::path::absolute` (stable since 1.79) was considered as a
+/// dependency-free replacement instead of this helper, but it only prepends
+/// the CWD to make a relative path absolute and resolves `.` — it leaves
+/// `..` completely untouched (e.g. `/a/b/../c` comes back as `/a/b/../c`,
+/// verified against this toolchain's stdlib). Since `..`-popping is exactly
+/// the sandbox-relevant behaviour here, `std::path::absolute` alone cannot
+/// replace `absolutize_virtually`.
+fn normalize(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                result.pop();
+            }
+            Component::CurDir => {}
+            other => result.push(other.as_os_str()),
+        }
+    }
+    result
+}
+
+/// The single sandbox-boundary check for guest paths: joins `sub_path` onto `real_path`,
+/// resolves `..`/`.` lexically, and rejects anything that escapes `real_path`.
+///
+/// `real_path` is always absolute (canonicalized in `DiskFileSys::new` or already-checked in
+/// `path_open`), so `join` is too; an absolute `sub_path` replaces it, which the `starts_with`
+/// check below rejects unless it already lives under `real_path`.
+fn sandboxed_join(real_path: &Path, sub_path: impl AsRef<Path>) -> Result<PathBuf, Errno> {
+    let new_path = normalize(&real_path.join(sub_path.as_ref()));
+    if !new_path.starts_with(real_path) {
+        return Err(Errno::__WASI_ERRNO_NOENT);
+    }
+    Ok(new_path)
+}
+
 #[derive(Debug)]
 pub struct DiskDir {
     // absolutize
@@ -580,12 +629,7 @@ pub struct DiskDir {
 
 impl DiskDir {
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        use path_absolutize::*;
-        let new_path = self.real_path.join(sub_path);
-        let absolutize = new_path
-            .absolutize_virtually(&self.real_path)
-            .or(Err(Errno::__WASI_ERRNO_NOENT))?;
-        Ok(absolutize.to_path_buf())
+        sandboxed_join(&self.real_path, sub_path)
     }
 }
 
@@ -1052,13 +1096,10 @@ impl DiskFileSys {
         })
     }
 
+    /// See `sandboxed_join` for the sandboxing semantics (lexical `..`/`.`
+    /// resolution, rejecting anything that normalizes outside of `real_path`).
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        use path_absolutize::*;
-        let new_path = self.real_path.join(sub_path);
-        let absolutize = new_path
-            .absolutize_virtually(&self.real_path)
-            .or(Err(Errno::__WASI_ERRNO_NOENT))?;
-        Ok(absolutize.to_path_buf())
+        sandboxed_join(&self.real_path, sub_path)
     }
 }
 
@@ -1207,7 +1248,7 @@ impl WasiFileSys for DiskFileSys {
     }
 
     fn path_unlink_file(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno> {
-        self.dir_rights.can(WASIRights::PATH_REMOVE_DIRECTORY)?;
+        self.dir_rights.can(WASIRights::PATH_UNLINK_FILE)?;
         let parent_dir = match self.inodes.get(dir_ino).ok_or(Errno::__WASI_ERRNO_BADF)? {
             DiskInode::Dir(dir) => dir,
             _ => return Err(Errno::__WASI_ERRNO_NOTDIR),
@@ -1675,5 +1716,109 @@ where
 
     fn get_dir(&self, ino: usize) -> Result<&dyn WasiDir, Errno> {
         Err(Errno::__WASI_ERRNO_NOTDIR)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Create a fresh, empty temp directory unique to `tag`.
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("async_wasi_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    // Unlink must check `PATH_UNLINK_FILE`, not `PATH_REMOVE_DIRECTORY` (else a preopen with unlink-only rights wrongly fails NOTCAPABLE).
+    #[test]
+    fn disk_path_unlink_file_uses_unlink_right() {
+        let dir = temp_dir("p5b2");
+        let victim = dir.join("victim.txt");
+        std::fs::write(&victim, b"bytes").unwrap();
+
+        let mut fs = DiskFileSys::new(dir.clone()).unwrap();
+        // Grant PATH_UNLINK_FILE only (deliberately without PATH_REMOVE_DIRECTORY).
+        fs.dir_rights = WASIRights::PATH_UNLINK_FILE;
+
+        let r = fs.path_unlink_file(0, "victim.txt");
+        assert!(r.is_ok(), "expected Ok, got {r:?}");
+        assert!(!victim.exists(), "victim.txt should have been removed");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Opening a missing path without O_CREAT must return NOENT ("no such file"), not EEXIST.
+    #[test]
+    fn virtual_path_open_missing_without_create_returns_noent() {
+        use crate::snapshots::common::vfs::impls::{MemoryDir, MemoryFile};
+
+        let mut fs = WasiVirtualSys::<MemoryDir, MemoryFile>::default();
+        let r = fs.path_open(
+            0,
+            "does_not_exist",
+            OFlags::empty(),
+            WASIRights::FD_READ,
+            WASIRights::empty(),
+            FdFlags::empty(),
+        );
+        assert_eq!(
+            r.err(),
+            Some(Errno::__WASI_ERRNO_NOENT),
+            "expected NOENT for a missing file opened without CREATE"
+        );
+    }
+
+    // The local `normalize` helper resolves `.`/`..` lexically (plus a `starts_with` sandbox check); `std::path::absolute` alone does not pop `..`.
+
+    fn sandbox_dir() -> DiskDir {
+        DiskDir {
+            real_path: PathBuf::from("/sandbox/root"),
+            dir_rights: WASIRights::dir_all(),
+            file_rights: WASIRights::fd_all(),
+        }
+    }
+
+    #[test]
+    fn normalize_resolves_dots_lexically() {
+        assert_eq!(
+            normalize(Path::new("/sandbox/root/a/./b/../c")),
+            PathBuf::from("/sandbox/root/a/c")
+        );
+    }
+
+    #[test]
+    fn normalize_clamps_dot_dot_at_root_instead_of_underflowing() {
+        // Four `..` from a two-component path pop past the root; the extra two must be absorbed at `/` (POSIX `/../x == /x`), not panic or leak a leading `..`.
+        assert_eq!(
+            normalize(Path::new("/a/b/../../../../c")),
+            PathBuf::from("/c")
+        );
+        assert_eq!(normalize(Path::new("/..")), PathBuf::from("/"));
+    }
+
+    #[test]
+    fn get_absolutize_path_resolves_dot_dot_within_the_sandbox() {
+        let dir = sandbox_dir();
+        let resolved = dir.get_absolutize_path(&"a/../b").unwrap();
+        assert_eq!(resolved, PathBuf::from("/sandbox/root/b"));
+    }
+
+    #[test]
+    fn get_absolutize_path_rejects_dot_dot_escape_from_the_sandbox() {
+        let dir = sandbox_dir();
+        // Enough `..` to escape `real_path` must be rejected (NOENT), not clamped back inside nor resolved against the host root.
+        let err = dir
+            .get_absolutize_path(&"../../../../etc/passwd")
+            .unwrap_err();
+        assert_eq!(err, Errno::__WASI_ERRNO_NOENT);
+    }
+
+    #[test]
+    fn get_absolutize_path_rejects_absolute_escape() {
+        let dir = sandbox_dir();
+        let err = dir.get_absolutize_path(&"/etc/passwd").unwrap_err();
+        assert_eq!(err, Errno::__WASI_ERRNO_NOENT);
     }
 }

@@ -1,9 +1,8 @@
 //! Defines WasmEdge CallingFrame.
 
 use crate::{
-    ffi,
-    instance::{memory::InnerMemory, InnerRef},
-    Memory,
+    Memory, ffi,
+    instance::{InnerRef, memory::InnerMemory},
 };
 
 /// Represents a calling frame on top of stack.
@@ -81,5 +80,6 @@ impl CallingFrame {
 
 #[derive(Debug)]
 pub(crate) struct InnerCallingFrame(pub(crate) *const ffi::WasmEdge_CallingFrameContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerCallingFrame {}
 unsafe impl Sync for InnerCallingFrame {}

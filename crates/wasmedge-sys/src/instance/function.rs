@@ -1,17 +1,17 @@
 //! Defines WasmEdge Function and FuncType structs.
 
 use crate::{
-    ffi::{self},
     CallingFrame, Instance, WasmEdgeResult, WasmValue,
+    ffi::{self},
 };
 use core::ffi::c_void;
 
 use wasmedge_types::{
-    error::{CoreError, FuncError, WasmEdgeError},
     ValType,
+    error::{CoreError, FuncError, WasmEdgeError},
 };
 
-use super::{module::InnerInstance, InnerRef};
+use super::{InnerRef, module::InnerInstance};
 
 pub type SyncFn<Data> = for<'a, 'b, 'c> fn(
     &'a mut Data,
@@ -33,7 +33,7 @@ pub type CustomFnWrapper = unsafe extern "C" fn(
 // Wrapper function for thread-safe scenarios.
 unsafe extern "C" fn wrap_fn<Data>(
     key_ptr: *mut c_void,
-    data: *mut std::os::raw::c_void,
+    data: *mut c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
     params: *const ffi::WasmEdge_Value,
     param_len: u32,
@@ -42,11 +42,13 @@ unsafe extern "C" fn wrap_fn<Data>(
 ) -> ffi::WasmEdge_Result {
     let mut frame = CallingFrame::create(call_frame_ctx);
     // let executor_ctx = ffi::WasmEdge_CallingFrameGetExecutor(call_frame_ctx);
-    let inst_ctx = ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx);
+    // SAFETY: the runtime keeps `call_frame_ctx` valid for the call's duration.
+    let inst_ctx = unsafe { ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx) };
     let mut inst = std::mem::ManuallyDrop::new(Instance {
         inner: InnerInstance(inst_ctx as _),
     });
-    let data = &mut *(data as *mut Data);
+    // SAFETY: the runtime hands back the registered `data` pointer, uniquely borrowed for the call.
+    let data = unsafe { &mut *(data as *mut Data) };
 
     let input = if params.is_null() || param_len == 0 {
         vec![]
@@ -64,11 +66,17 @@ unsafe extern "C" fn wrap_fn<Data>(
         unsafe { std::slice::from_raw_parts_mut(returns, return_len) }
     };
 
-    let real_fn: SyncFn<Data> = std::mem::transmute(key_ptr);
+    // SAFETY: `key_ptr` round-trips the `SyncFn<Data>` cast made at registration.
+    let real_fn: SyncFn<Data> = unsafe { std::mem::transmute(key_ptr) };
 
     match real_fn(data, &mut inst, &mut frame, input) {
         Ok(returns) => {
-            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}", return_len, returns.len());
+            assert!(
+                returns.len() == return_len,
+                "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}",
+                return_len,
+                returns.len()
+            );
             for (idx, wasm_value) in returns.into_iter().enumerate() {
                 raw_returns[idx] = wasm_value.as_raw();
             }
@@ -141,7 +149,8 @@ impl Function {
         data: *mut T,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        Self::create_with_custom_wrapper(ty, wrap_fn::<T>, real_fn as _, data as _, cost)
+        // SAFETY: caller guarantees `real_fn`/`data` outlive the returned `Function`.
+        unsafe { Self::create_with_custom_wrapper(ty, wrap_fn::<T>, real_fn as _, data as _, cost) }
     }
 
     /// Creates a [host function](crate::Function) with the given function type and the custom function wrapper.
@@ -174,13 +183,16 @@ impl Function {
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let ty: FuncTypeOwn = ty.into();
-        let ctx = ffi::WasmEdge_FunctionInstanceCreateBinding(
-            ty.inner.0,
-            Some(fn_wrapper),
-            real_fn,
-            data,
-            cost,
-        );
+        // SAFETY: `ty.inner.0` is a valid function-type handle; caller guarantees `real_fn`/`data` lifetimes.
+        let ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(fn_wrapper),
+                real_fn,
+                data,
+                cost,
+            )
+        };
 
         if ctx.is_null() {
             Err(Box::new(WasmEdgeError::Func(FuncError::Create)))
@@ -245,12 +257,14 @@ impl AsFunc for Function {
 }
 impl<F: AsRef<Function>> AsFunc for F {
     unsafe fn get_func_raw(&self) -> *mut ffi::WasmEdge_FunctionInstanceContext {
-        self.as_ref().get_func_raw()
+        // SAFETY: delegates to inner `Function::get_func_raw`; returned pointer must not outlive `self`.
+        unsafe { self.as_ref().get_func_raw() }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct InnerFunc(pub(crate) *mut ffi::WasmEdge_FunctionInstanceContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerFunc {}
 unsafe impl Sync for InnerFunc {}
 
@@ -291,11 +305,12 @@ impl FuncTypeOwn {
                 ret_tys.len() as u32,
             )
         };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::FuncTypeCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::FuncTypeCreate))
+        } else {
+            Ok(Self {
                 inner: InnerFuncType(ctx),
-            }),
+            })
         }
     }
 }
@@ -315,6 +330,7 @@ impl FuncTypeOwn {
     pub(crate) fn params_type_iter(&self) -> impl Iterator<Item = ValType> {
         let len = self.params_len();
         let mut types = Vec::with_capacity(len as usize);
+        // SAFETY: `WasmEdge_FunctionTypeGetParameters` fills exactly `len` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_FunctionTypeGetParameters(self.inner.0, types.as_mut_ptr(), len);
             types.set_len(len as usize);
@@ -332,6 +348,7 @@ impl FuncTypeOwn {
     pub(crate) fn returns_type_iter(&self) -> impl Iterator<Item = ValType> {
         let len = self.returns_len();
         let mut types = Vec::with_capacity(len as usize);
+        // SAFETY: `WasmEdge_FunctionTypeGetReturns` fills exactly `len` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_FunctionTypeGetReturns(self.inner.0, types.as_mut_ptr(), len);
             types.set_len(len as usize);
@@ -364,15 +381,16 @@ impl From<&FuncTypeOwn> for wasmedge_types::FuncType {
 
 #[derive(Debug)]
 pub(crate) struct InnerFuncType(pub(crate) *const ffi::WasmEdge_FunctionTypeContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerFuncType {}
 unsafe impl Sync for InnerFuncType {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{types::WasmValue, AsInstance, Executor, ImportModule};
+    use crate::{AsInstance, Executor, ImportModule, types::WasmValue};
 
-    use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
+    use wasmedge_types::{FuncType, ValType, error::CoreExecutionError};
 
     #[test]
     fn test_func_type() {

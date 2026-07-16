@@ -5,10 +5,10 @@
 //! the limit range specifies min size (initial size) of that memory, while the end
 //! restricts the size to which the memory can grow later.
 
-use crate::{ffi, types::WasmEdgeLimit, utils::check, WasmEdgeResult};
+use crate::{WasmEdgeResult, ffi, types::WasmEdgeLimit, utils::check};
 use wasmedge_types::error::{MemError, WasmEdgeError};
 
-/// Defines a WebAssembly memory instance, which is a linear memory described by its [type](crate::MemType). Each memory instance consists of a vector of bytes and an optional maximum size, and its size is a multiple of the WebAssembly page size (*64KiB* of each page).
+/// Defines a WebAssembly memory instance, which is a linear memory described by its [type](wasmedge_types::MemoryType). Each memory instance consists of a vector of bytes and an optional maximum size, and its size is a multiple of the WebAssembly page size (*64KiB* of each page).
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) inner: InnerMemory,
@@ -28,11 +28,12 @@ impl Memory {
         let ty: MemType = ty.into();
         let ctx = unsafe { ffi::WasmEdge_MemoryInstanceCreate(ty.inner.0 as *const _) };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::Create))),
-            false => Ok(Memory {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::Create)))
+        } else {
+            Ok(Memory {
                 inner: InnerMemory(ctx),
-            }),
+            })
         }
     }
 
@@ -44,14 +45,13 @@ impl Memory {
     ///
     pub fn ty(&self) -> WasmEdgeResult<wasmedge_types::MemoryType> {
         let ty_ctx = unsafe { ffi::WasmEdge_MemoryInstanceGetMemoryType(self.inner.0) };
-        match ty_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::Type))),
-            false => {
-                let ty = std::mem::ManuallyDrop::new(MemType {
-                    inner: InnerMemType(ty_ctx as *mut _),
-                });
-                Ok((&*ty).into())
-            }
+        if ty_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::Type)))
+        } else {
+            let ty = std::mem::ManuallyDrop::new(MemType {
+                inner: InnerMemType(ty_ctx as *mut _),
+            });
+            Ok((&*ty).into())
         }
     }
 
@@ -69,6 +69,7 @@ impl Memory {
     ///
     pub fn get_data(&self, offset: u32, len: u32) -> WasmEdgeResult<Vec<u8>> {
         let mut data = Vec::with_capacity(len as usize);
+        // SAFETY: `WasmEdge_MemoryInstanceGetData` fills exactly `len` bytes before `set_len`.
         unsafe {
             check(ffi::WasmEdge_MemoryInstanceGetData(
                 self.inner.0,
@@ -127,9 +128,10 @@ impl Memory {
         let ptr = unsafe {
             ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.0, offset.into(), len.into())
         };
-        match ptr.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::ConstPtr))),
-            false => Ok(ptr),
+        if ptr.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::ConstPtr)))
+        } else {
+            Ok(ptr)
         }
     }
 
@@ -153,9 +155,10 @@ impl Memory {
         let ptr = unsafe {
             ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.0, offset.into(), len.into())
         };
-        match ptr.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::MutPtr))),
-            false => Ok(ptr),
+        if ptr.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::MutPtr)))
+        } else {
+            Ok(ptr)
         }
     }
 
@@ -200,33 +203,36 @@ impl Drop for Memory {
 impl Memory {
     pub fn get_ref<T: Sized>(&self, offset: usize) -> Option<&T> {
         unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self.data_pointer(offset as u32, r as u32).ok()?;
+            let r = u32::try_from(std::mem::size_of::<T>()).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer(offset, r).ok()?;
             ptr.cast::<T>().as_ref()
         }
     }
 
     pub fn slice<T: Sized>(&self, offset: usize, len: usize) -> Option<&[T]> {
         unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self.data_pointer(offset as u32, r as u32).ok()? as *const T;
+            let r = u32::try_from(std::mem::size_of::<T>().checked_mul(len)?).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer(offset, r).ok()? as *const T;
             Some(std::slice::from_raw_parts(ptr, len))
         }
     }
 
     pub fn get_ref_mut<T: Sized>(&mut self, offset: usize) -> Option<&mut T> {
         unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self.data_pointer_mut(offset as u32, r as u32).ok()?;
+            let r = u32::try_from(std::mem::size_of::<T>()).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer_mut(offset, r).ok()?;
             ptr.cast::<T>().as_mut()
         }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub fn mut_slice<T: Sized>(&self, offset: usize, len: usize) -> Option<&mut [T]> {
+    pub fn mut_slice<T: Sized>(&mut self, offset: usize, len: usize) -> Option<&mut [T]> {
         unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self.data_pointer(offset as u32, r as u32).ok()? as *mut T;
+            let r = u32::try_from(std::mem::size_of::<T>().checked_mul(len)?).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer_mut(offset, r).ok()? as *mut T;
             Some(std::slice::from_raw_parts_mut(ptr, len))
         }
     }
@@ -240,6 +246,7 @@ impl Memory {
 
 #[derive(Debug)]
 pub(crate) struct InnerMemory(pub(crate) *mut ffi::WasmEdge_MemoryInstanceContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerMemory {}
 unsafe impl Sync for InnerMemory {}
 
@@ -278,11 +285,12 @@ impl MemType {
         let limit_ctx = WasmEdgeLimit::new(min, max, shared).to_context();
         let ctx = unsafe { ffi::WasmEdge_MemoryTypeCreate(limit_ctx) };
         unsafe { ffi::WasmEdge_LimitDelete(limit_ctx) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::MemTypeCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::MemTypeCreate))
+        } else {
+            Ok(Self {
                 inner: InnerMemType(ctx),
-            }),
+            })
         }
     }
 
@@ -334,6 +342,7 @@ impl From<&MemType> for wasmedge_types::MemoryType {
 
 #[derive(Debug)]
 pub(crate) struct InnerMemType(pub(crate) *mut ffi::WasmEdge_MemoryTypeContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerMemType {}
 unsafe impl Sync for InnerMemType {}
 

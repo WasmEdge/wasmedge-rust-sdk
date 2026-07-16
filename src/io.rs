@@ -1,4 +1,4 @@
-use crate::{types::ExternRef, ValType, WasmValue};
+use crate::{ValType, WasmValue, types::ExternRef};
 
 /// Describes the mapping of Rust type to Wasm type.
 ///
@@ -135,8 +135,12 @@ impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11);
 impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12);
 impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13);
 impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14);
-impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15);
-impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16);
+impl_wasm_val_type_list!(
+    A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15
+);
+impl_wasm_val_type_list!(
+    A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16
+);
 impl_wasm_val_type_list!(
     A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17
 );
@@ -293,18 +297,36 @@ impl WasmVal for ExternRef {
 
 /// Generates arguments of [WasmValue](crate::WasmValue) types.
 ///
-/// Notice that to use the macro, it is required to use `WasmVal` trait.
+/// Each argument is converted via the [WasmVal](crate::WasmVal) trait, imported anonymously
+/// inside the expansion so callers do not need to bring `WasmVal` into scope themselves.
+/// Method-call syntax (not a fully qualified path) keeps auto-ref/deref working, so
+/// `params!(&10i32)` keeps compiling as it did in 0.16.
 #[macro_export]
 macro_rules! params {
-    ( $( $x:expr ),* ) => {
-        #[allow(unused_mut)]
-        {
-            let mut temp_vec = vec![];
-            $(
-                temp_vec.push($x.to_wasm_value());
+    ( $( $x:expr ),* ) => {{
+        #[allow(unused_imports)]
+        use $crate::WasmVal as _;
+        vec![$($x.to_wasm_value()),*]
+    }};
+}
 
-            )*
-            temp_vec
-        }
-    };
+#[cfg(test)]
+mod test_params_macro {
+    use crate::WasmValue;
+
+    #[test]
+    fn accepts_values_references_and_empty() {
+        let vals = crate::params!(1i32, 2i64);
+        assert_eq!(vals[0].to_i32(), 1);
+        assert_eq!(vals[1].to_i64(), 2);
+
+        // Regression guard: references kept working on 0.16 via method-call
+        // auto-deref; a fully qualified rewrite of the macro broke them.
+        let by_ref = &10i32;
+        let vals = crate::params!(by_ref);
+        assert_eq!(vals[0].to_i32(), 10);
+
+        let empty: Vec<WasmValue> = crate::params!();
+        assert!(empty.is_empty());
+    }
 }

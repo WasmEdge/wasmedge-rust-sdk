@@ -1,9 +1,9 @@
 use crate::snapshots::{
+    WasiCtx,
     common::{
         error::Errno,
         types::{__wasi_clockid_t, __wasi_errno_t, __wasi_timestamp_t},
     },
-    WasiCtx,
 };
 
 pub fn wasi_clock_res_get(clock_id: __wasi_clockid_t::Type) -> Result<u64, Errno> {

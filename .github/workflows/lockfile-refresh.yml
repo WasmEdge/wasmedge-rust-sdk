@@ -1,0 +1,54 @@
+name: Monthly lockfile refresh
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+on:
+  schedule:
+    # 03:00 UTC on the 1st of every month.
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile-refresh:
+    name: cargo update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo update
+        run: cargo update
+
+      # peter-evans/create-pull-request diffs the working tree itself: if
+      # `cargo update` made no changes, it skips the commit/branch/PR steps
+      # entirely rather than opening an empty PR.
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): monthly cargo update lockfile refresh"
+          signoff: true
+          branch: chore/lockfile-refresh
+          delete-branch: true
+          title: "chore(deps): monthly lockfile refresh"
+          body: |
+            Automated monthly `cargo update`, keeping Cargo.lock current
+            within the existing semver constraints in Cargo.toml.
+
+            Opened automatically by `.github/workflows/lockfile-refresh.yml`.
+          labels: dependencies

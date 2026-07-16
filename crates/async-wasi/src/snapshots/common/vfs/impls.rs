@@ -7,8 +7,8 @@ use std::{
 use crate::snapshots::env::Errno;
 
 use super::{
-    virtual_sys::{WasiVirtualDir, WasiVirtualFile},
     WasiDir, WasiFile, WasiNode,
+    virtual_sys::{WasiVirtualDir, WasiVirtualFile},
 };
 
 #[derive(Debug)]
@@ -298,7 +298,7 @@ impl WasiFile for MemoryFile {
     }
 
     fn fd_tell(&mut self) -> Result<crate::snapshots::env::wasi_types::__wasi_filesize_t, Errno> {
-        Ok(self.context.position() as _)
+        Ok(self.context.position())
     }
 }
 

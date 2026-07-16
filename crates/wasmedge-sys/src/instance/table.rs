@@ -6,15 +6,15 @@
 //! the end resticts the upper bound (inclusive).
 
 use crate::{
+    WasmEdgeResult,
     ffi::{self},
     types::{WasmEdgeLimit, WasmValue},
     utils::check,
-    WasmEdgeResult,
 };
 
 use wasmedge_types::{
-    error::{TableError, WasmEdgeError},
     RefType, ValType,
+    error::{TableError, WasmEdgeError},
 };
 
 /// A WasmEdge [Table] defines a WebAssembly table instance described by its [type](crate::TableType). A table is an array-like structure and stores function references.
@@ -47,7 +47,7 @@ impl Table {
         }
     }
 
-    /// Returns the [TableType] of the [Table].
+    /// Returns the [TableType](wasmedge_types::TableType) of the [Table].
     ///
     /// # Error
     ///
@@ -68,7 +68,7 @@ impl Table {
     ///
     /// # Arguments
     ///
-    /// - `idx` specifies the position in the [Table], at which the [WasmValue](crate::WasmValue) is returned.
+    /// - `idx` specifies the position in the [Table], at which the [WasmValue] is returned.
     ///
     /// # Error
     ///
@@ -152,6 +152,7 @@ impl Drop for Table {
 
 #[derive(Debug)]
 pub(crate) struct InnerTable(pub(crate) *mut ffi::WasmEdge_TableInstanceContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerTable {}
 unsafe impl Sync for InnerTable {}
 
@@ -240,17 +241,18 @@ impl From<&TableType> for wasmedge_types::TableType {
 
 #[derive(Debug)]
 pub(crate) struct InnerTableType(pub(crate) *mut ffi::WasmEdge_TableTypeContext);
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerTableType {}
 unsafe impl Sync for InnerTableType {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{instance::function::AsFunc, CallingFrame, Function, Instance};
+    use crate::{CallingFrame, Function, Instance, instance::function::AsFunc};
     use std::thread;
     use wasmedge_types::{
-        error::{CoreError, CoreExecutionError},
         RefType, ValType,
+        error::{CoreError, CoreExecutionError},
     };
 
     #[test]

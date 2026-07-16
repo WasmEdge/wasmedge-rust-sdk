@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Validate the release without publishing or deploying documentation"
+        description: "Validate the release without publishing"
         required: true
         default: true
         type: boolean
@@ -44,38 +44,3 @@ jobs:
         shell: bash
         run: |
           cargo publish -p async-wasi
-
-      - name: Build API document
-        run: |
-          cargo doc -p async-wasi --no-deps --target-dir=./target
-
-      - name: Upload API document
-        if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-        uses: actions/upload-artifact@v7
-        with:
-          name: async-wasi-api-docs
-          path: target/doc
-          if-no-files-found: error
-
-  deploy_api_document:
-    name: Deploy API document
-    if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-    needs: release_async_wasi
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download API document
-        uses: actions/download-artifact@v8
-        with:
-          name: async-wasi-api-docs
-          path: target/doc
-
-      - name: Deploy API document
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: target/doc
-          force_orphan: true

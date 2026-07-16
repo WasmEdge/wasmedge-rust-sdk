@@ -3,72 +3,124 @@ use crate::snapshots::{
     common::{types as wasi_types, vfs},
     env::Errno,
 };
-use socket2::{SockAddr, Socket};
+use socket2::{MaybeUninitSlice, SockAddr, Socket};
 use std::{
     ops::DerefMut,
     os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
     sync::atomic::{AtomicBool, AtomicI8, AtomicU8},
 };
 use tokio::io::{
-    unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
     AsyncReadExt, AsyncWriteExt, Interest,
+    unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
 };
+
+/// Reinterprets an initialized `IoSliceMut` buffer view as a `MaybeUninitSlice`
+/// for socket2's vectored recv APIs (`recv_vectored_with_flags`,
+/// `recv_from_vectored_with_flags`). `IoSliceMut` and `MaybeUninitSlice` are
+/// both `repr(transparent)` wrappers around a single platform `iovec` (this
+/// module only builds on unix, so `WSABUF` doesn't apply), so reinterpreting
+/// the slice type is layout-safe; this is the same cast socket2 performs
+/// internally in its own `impl Read for Socket::read_vectored`. The recv
+/// calls promise never to write uninitialised bytes into the buffer, which is
+/// what makes it sound to hand back a `&mut [IoSliceMut]` view afterwards.
+fn as_maybe_uninit_slices<'r, 'a>(
+    bufs: &'r mut [io::IoSliceMut<'a>],
+) -> &'r mut [MaybeUninitSlice<'a>] {
+    unsafe { &mut *(bufs as *mut [io::IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>]) }
+}
+
+/// `SO_BINDTODEVICE`-style "bind this socket to a named network interface",
+/// and the matching getter. socket2 only implements these on the Linux
+/// family (they map straight onto the Linux-only `SO_BINDTODEVICE` sockopt);
+/// macOS/BSD expose interface binding via `IP_BOUND_IF`/`bind_device_by_index`
+/// instead, which takes an interface *index*, not a name, so it isn't a
+/// drop-in replacement here. Other Unix targets get an honest `ENOTSUP`
+/// rather than failing to compile.
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+fn socket_bind_device(s: &Socket, interface: Option<&[u8]>) -> io::Result<()> {
+    s.bind_device(interface)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "fuchsia")))]
+fn socket_bind_device(_s: &Socket, _interface: Option<&[u8]>) -> io::Result<()> {
+    Err(io::Error::from_raw_os_error(libc::ENOTSUP))
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+fn socket_device(s: &Socket) -> io::Result<Option<Vec<u8>>> {
+    s.device()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "fuchsia")))]
+fn socket_device(_s: &Socket) -> io::Result<Option<Vec<u8>>> {
+    Err(io::Error::from_raw_os_error(libc::ENOTSUP))
+}
+
+/// `SO_ACCEPTCONN` ("has `listen(2)` been called on this socket") is gated by
+/// socket2 to Linux/Android/FreeBSD/Fuchsia/AIX/Cygwin; macOS is not in that
+/// list. Same honest-`ENOTSUP` fallback as above.
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+fn socket_is_listener(s: &Socket) -> io::Result<bool> {
+    s.is_listener()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "fuchsia")))]
+fn socket_is_listener(_s: &Socket) -> io::Result<bool> {
+    Err(io::Error::from_raw_os_error(libc::ENOTSUP))
+}
 
 #[derive(Debug)]
 pub(crate) enum AsyncWasiSocketInner {
-    PreOpen(Socket),
+    PreOpen(Option<Socket>),
     AsyncFd(AsyncFd<Socket>),
 }
 
 impl AsyncWasiSocketInner {
     fn register(&mut self) -> io::Result<()> {
-        unsafe {
-            let inner = match self {
-                AsyncWasiSocketInner::PreOpen(s) => {
-                    let mut inner_socket = std::mem::zeroed();
-                    std::mem::swap(s, &mut inner_socket);
-                    inner_socket
-                }
-                AsyncWasiSocketInner::AsyncFd(_) => return Ok(()),
-            };
-            let mut new_self = Self::AsyncFd(AsyncFd::new(inner)?);
-            std::mem::swap(self, &mut new_self);
-            std::mem::forget(new_self);
-            Ok(())
-        }
+        let socket = match self {
+            AsyncWasiSocketInner::PreOpen(slot) => match slot.take() {
+                Some(socket) => socket,
+                None => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
+            },
+            AsyncWasiSocketInner::AsyncFd(_) => return Ok(()),
+        };
+        *self = AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?);
+        Ok(())
     }
 
     fn bind(&mut self, addr: &SockAddr) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => {
+            AsyncWasiSocketInner::PreOpen(Some(s)) => {
                 s.set_reuse_address(true)?;
                 s.bind(addr)
             }
-            AsyncWasiSocketInner::AsyncFd(_) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
+            _ => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn bind_device(&mut self, interface: Option<&[u8]>) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => s.bind_device(interface),
-            AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().bind_device(interface),
+            AsyncWasiSocketInner::PreOpen(Some(s)) => socket_bind_device(s, interface),
+            AsyncWasiSocketInner::AsyncFd(s) => socket_bind_device(s.get_ref(), interface),
+            AsyncWasiSocketInner::PreOpen(None) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn device(&self) -> io::Result<Option<Vec<u8>>> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => s.device(),
-            AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().device(),
+            AsyncWasiSocketInner::PreOpen(Some(s)) => socket_device(s),
+            AsyncWasiSocketInner::AsyncFd(s) => socket_device(s.get_ref()),
+            AsyncWasiSocketInner::PreOpen(None) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn listen(&mut self, backlog: i32) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => {
+            AsyncWasiSocketInner::PreOpen(Some(s)) => {
                 s.listen(backlog)?;
             }
-            AsyncWasiSocketInner::AsyncFd(_) => {
-                return Err(io::Error::from_raw_os_error(libc::EINVAL))
+            _ => {
+                return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         }
         self.register()
@@ -76,7 +128,7 @@ impl AsyncWasiSocketInner {
 
     async fn accept(&mut self) -> io::Result<(Socket, SockAddr)> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
+            AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
             AsyncWasiSocketInner::AsyncFd(s) => {
                 match tokio::time::timeout(
                     std::time::Duration::from_millis(100),
@@ -93,9 +145,9 @@ impl AsyncWasiSocketInner {
 
     fn connect(&mut self, addr: &SockAddr) -> io::Result<()> {
         let r = match self {
-            AsyncWasiSocketInner::PreOpen(s) => s.connect(addr),
-            AsyncWasiSocketInner::AsyncFd(_) => {
-                return Err(io::Error::from_raw_os_error(libc::EINVAL))
+            AsyncWasiSocketInner::PreOpen(Some(s)) => s.connect(addr),
+            _ => {
+                return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         };
 
@@ -150,38 +202,40 @@ impl AsyncWasiSocketInner {
 }
 
 #[derive(Debug)]
-pub(crate) struct SocketWritable(pub(crate) AtomicI8);
+pub(crate) struct SocketWritable {
+    count: AtomicI8,
+    notify: tokio::sync::Notify,
+}
 impl SocketWritable {
     pub(crate) async fn writable(&self) {
-        let b = self.0.fetch_sub(1, std::sync::atomic::Ordering::Acquire);
-        tokio::time::timeout(Duration::from_secs(10), SocketWritableFuture(b)).await;
+        // Consume one write-budget unit; proceed while the pre-decrement value stays >= 0.
+        let b = self
+            .count
+            .fetch_sub(1, std::sync::atomic::Ordering::Acquire);
+        if b >= 0 {
+            return;
+        }
+        // Budget exhausted: wait for `set_writable()` (10s cap) — `Notify` delivers a real wakeup, and the timeout result is inspected.
+        if tokio::time::timeout(Duration::from_secs(10), self.notify.notified())
+            .await
+            .is_err()
+        {
+            log::trace!("SocketWritable::writable timed out waiting for writability");
+        }
     }
 
     pub(crate) fn set_writable(&self) {
-        self.0.store(5, std::sync::atomic::Ordering::Release)
+        self.count.store(5, std::sync::atomic::Ordering::Release);
+        // notify_one() stores a permit when no waiter is parked, so a signal that
+        // races ahead of writable().await is not lost.
+        self.notify.notify_one();
     }
 }
 impl Default for SocketWritable {
     fn default() -> Self {
-        Self(AtomicI8::new(5))
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SocketWritableFuture(i8);
-
-impl Future for SocketWritableFuture {
-    type Output = ();
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        log::trace!("SocketWritableFuture self.0={}", self.0);
-        if self.0 >= 0 {
-            std::task::Poll::Ready(())
-        } else {
-            std::task::Poll::Pending
+        Self {
+            count: AtomicI8::new(5),
+            notify: tokio::sync::Notify::new(),
         }
     }
 }
@@ -299,10 +353,10 @@ impl AsyncWasiSocket {
         };
         inner.set_nonblocking(true)?;
         if !state.bind_device.is_empty() {
-            inner.bind_device(Some(&state.bind_device))?;
+            socket_bind_device(&inner, Some(&state.bind_device))?;
         }
         Ok(AsyncWasiSocket {
-            inner: AsyncWasiSocketInner::PreOpen(inner),
+            inner: AsyncWasiSocketInner::PreOpen(Some(inner)),
             state: Box::new(state),
             writable: Default::default(),
         })
@@ -435,19 +489,13 @@ impl AsyncWasiSocket {
         bufs: &mut [io::IoSliceMut<'a>],
         flags: libc::c_int,
     ) -> io::Result<(usize, bool)> {
-        use socket2::MaybeUninitSlice;
-
         let (n, f) = match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
                 let f = self
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_vectored_with_flags(bufs, flags)
+                        s.recv_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(std::time::Duration::from_millis(50), f)
@@ -458,11 +506,7 @@ impl AsyncWasiSocket {
                 self.inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_vectored_with_flags(bufs, flags)
+                        s.recv_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     })
                     .await?
             }
@@ -471,11 +515,7 @@ impl AsyncWasiSocket {
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_vectored_with_flags(bufs, flags)
+                        s.recv_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(timeout, f)
@@ -492,19 +532,13 @@ impl AsyncWasiSocket {
         bufs: &mut [io::IoSliceMut<'a>],
         flags: libc::c_int,
     ) -> io::Result<(usize, bool, Option<net::SocketAddr>)> {
-        use socket2::MaybeUninitSlice;
-
         let (n, f, addr) = match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
                 let f = self
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_from_vectored_with_flags(bufs, flags)
+                        s.recv_from_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(std::time::Duration::from_millis(50), f)
@@ -516,11 +550,7 @@ impl AsyncWasiSocket {
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_from_vectored_with_flags(bufs, flags)
+                        s.recv_from_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 f.await?
@@ -530,11 +560,7 @@ impl AsyncWasiSocket {
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_from_vectored_with_flags(bufs, flags)
+                        s.recv_from_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(timeout, f)
@@ -596,7 +622,7 @@ impl AsyncWasiSocket {
         addr: net::SocketAddr,
         flags: libc::c_int,
     ) -> io::Result<usize> {
-        use socket2::{MaybeUninitSlice, SockAddr};
+        use socket2::SockAddr;
         let address = SockAddr::from(addr);
 
         let n = match (self.state.nonblocking, self.state.so_send_timeout) {
@@ -679,7 +705,7 @@ impl AsyncWasiSocket {
     }
 
     pub fn get_so_accept_conn(&self) -> io::Result<bool> {
-        self.inner.get_ref()?.is_listener()
+        socket_is_listener(self.inner.get_ref()?)
     }
 
     pub fn sync_conn_state(&mut self) {
@@ -737,5 +763,86 @@ impl AsyncWasiSocket {
 
     pub fn get_so_error(&mut self) -> io::Result<Option<io::Error>> {
         self.inner.get_ref()?.take_error()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshots::common::net::{AddressFamily, SocketType, WasiSocketState};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    fn tcp_socket() -> AsyncWasiSocket {
+        let state = WasiSocketState {
+            sock_type: (AddressFamily::Inet4, SocketType::Stream),
+            ..Default::default()
+        };
+        AsyncWasiSocket::open(state).unwrap()
+    }
+
+    // Drive the `Option`-based register() state machine end to end: `listen` and `connect` both move PreOpen -> AsyncFd, and the loopback must carry data.
+    #[tokio::test]
+    async fn register_tcp_loopback_roundtrip() {
+        let loopback = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+
+        let mut server = tcp_socket();
+        server.bind(loopback).unwrap();
+        server.listen(128).unwrap(); // register() on the server side
+        // `bind()` cached port 0, so read the real OS-assigned port from the registered socket.
+        let addr = server
+            .inner
+            .get_ref()
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .as_socket()
+            .unwrap();
+        assert!(addr.port() > 0);
+
+        let mut client = tcp_socket();
+        let (accepted, connected) = tokio::join!(server.accept(), client.connect(addr));
+        let accepted = accepted.unwrap();
+        connected.unwrap(); // register() on the client side
+
+        client
+            .send(&[std::io::IoSlice::new(b"ping")], 0)
+            .await
+            .unwrap();
+
+        let mut buf = [0u8; 8];
+        let (n, _) = accepted
+            .recv(&mut [std::io::IoSliceMut::new(&mut buf)], 0)
+            .await
+            .unwrap();
+        assert_eq!(&buf[..n], b"ping");
+    }
+
+    // Virtual time makes this deterministic: if `set_writable()` failed to wake the waiter, only the 10s timeout would release it, so the 1s bound below would elapse first.
+    #[tokio::test(start_paused = true)]
+    async fn set_writable_wakes_blocked_writable() {
+        use std::sync::Arc;
+
+        let sw = Arc::new(SocketWritable::default());
+        // Drain the initial write budget of 5.
+        for _ in 0..6 {
+            sw.writable().await;
+        }
+
+        // The next call has no budget left and must block until set_writable().
+        let waiter = {
+            let sw = sw.clone();
+            tokio::spawn(async move { sw.writable().await })
+        };
+        tokio::task::yield_now().await;
+        assert!(
+            !waiter.is_finished(),
+            "writable() should block once the budget is exhausted"
+        );
+
+        sw.set_writable();
+        tokio::time::timeout(Duration::from_secs(1), waiter)
+            .await
+            .expect("set_writable() did not wake writable() within 1s")
+            .unwrap();
     }
 }

@@ -1,14 +1,14 @@
 //! Defines WasmEdge Instance and other relevant types.
 use crate::{
+    FuncRef, Function, Global, Memory, Table, WasmEdgeResult,
     ffi::{self},
     instance::{global::InnerGlobal, memory::InnerMemory, table::InnerTable},
     types::WasmEdgeString,
-    FuncRef, Function, Global, Memory, Table, WasmEdgeResult,
 };
 
 use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
-use super::{function::AsFunc, InnerRef};
+use super::{InnerRef, function::AsFunc};
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]
@@ -33,12 +33,14 @@ where
     Inst: AsMut<Instance> + AsRef<Instance>,
 {
     unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
-        self.as_ref().as_ptr()
+        // SAFETY: delegates to inner `Instance::as_ptr`; returned pointer must not outlive `self`.
+        unsafe { self.as_ref().as_ptr() }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct InnerInstance(pub(crate) *mut ffi::WasmEdge_ModuleInstanceContext);
+// SAFETY: opaque owned handle; wasmedge_instance.h documents its accessors (incl. mutators) thread-safe.
 unsafe impl Send for InnerInstance {}
 unsafe impl Sync for InnerInstance {}
 
@@ -74,16 +76,15 @@ pub trait AsInstance {
         let table_name: WasmEdgeString = name.as_ref().into();
         let ctx =
             unsafe { ffi::WasmEdge_ModuleInstanceFindTable(self.as_ptr(), table_name.as_raw()) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Instance(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::NotFoundTable(name.as_ref().to_string()),
-            ))),
-            false => {
-                let table = std::mem::ManuallyDrop::new(Table {
-                    inner: InnerTable(ctx),
-                });
-                Ok(unsafe { InnerRef::create_from_ref(table, self) })
-            }
+            )))
+        } else {
+            let table = std::mem::ManuallyDrop::new(Table {
+                inner: InnerTable(ctx),
+            });
+            Ok(unsafe { InnerRef::create_from_ref(table, self) })
         }
     }
 
@@ -165,16 +166,15 @@ pub trait AsInstance {
         let global_name: WasmEdgeString = name.as_ref().into();
         let ctx =
             unsafe { ffi::WasmEdge_ModuleInstanceFindGlobal(self.as_ptr(), global_name.as_raw()) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Instance(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::NotFoundGlobal(name.as_ref().to_string()),
-            ))),
-            false => {
-                let value = std::mem::ManuallyDrop::new(Global {
-                    inner: InnerGlobal(ctx),
-                });
-                Ok(unsafe { InnerRef::create_from_ref(value, self) })
-            }
+            )))
+        } else {
+            let value = std::mem::ManuallyDrop::new(Global {
+                inner: InnerGlobal(ctx),
+            });
+            Ok(unsafe { InnerRef::create_from_ref(value, self) })
         }
     }
 
@@ -188,16 +188,15 @@ pub trait AsInstance {
         let global_name: WasmEdgeString = name.as_ref().into();
         let ctx =
             unsafe { ffi::WasmEdge_ModuleInstanceFindGlobal(self.as_ptr(), global_name.as_raw()) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Instance(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Instance(
                 InstanceError::NotFoundGlobal(name.as_ref().to_string()),
-            ))),
-            false => {
-                let value = std::mem::ManuallyDrop::new(Global {
-                    inner: InnerGlobal(ctx),
-                });
-                Ok(unsafe { InnerRef::create_from_mut(value, self) })
-            }
+            )))
+        } else {
+            let value = std::mem::ManuallyDrop::new(Global {
+                inner: InnerGlobal(ctx),
+            });
+            Ok(unsafe { InnerRef::create_from_mut(value, self) })
         }
     }
 
@@ -209,25 +208,25 @@ pub trait AsInstance {
     /// Returns the names of the exported [function instances](crate::Function) in this module instance.
     fn func_names(&self) -> Option<Vec<String>> {
         let len_func_names = self.func_len();
-        match len_func_names > 0 {
-            true => {
-                let mut func_names = Vec::with_capacity(len_func_names as usize);
-                unsafe {
-                    ffi::WasmEdge_ModuleInstanceListFunction(
-                        self.as_ptr(),
-                        func_names.as_mut_ptr(),
-                        len_func_names,
-                    );
-                    func_names.set_len(len_func_names as usize);
-                }
-
-                let names = func_names
-                    .into_iter()
-                    .map(|x| x.into())
-                    .collect::<Vec<String>>();
-                Some(names)
+        if len_func_names > 0 {
+            let mut func_names = Vec::with_capacity(len_func_names as usize);
+            // SAFETY: `WasmEdge_ModuleInstanceListFunction` fills exactly `len_func_names` elements before `set_len`.
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceListFunction(
+                    self.as_ptr(),
+                    func_names.as_mut_ptr(),
+                    len_func_names,
+                );
+                func_names.set_len(len_func_names as usize);
             }
-            false => None,
+
+            let names = func_names
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<String>>();
+            Some(names)
+        } else {
+            None
         }
     }
 
@@ -291,25 +290,25 @@ pub trait AsInstance {
     /// Returns the names of the exported [table instances](crate::Table) in this module instance.
     fn table_names(&self) -> Option<Vec<String>> {
         let len_table_names = self.table_len();
-        match len_table_names > 0 {
-            true => {
-                let mut table_names = Vec::with_capacity(len_table_names as usize);
-                unsafe {
-                    ffi::WasmEdge_ModuleInstanceListTable(
-                        self.as_ptr(),
-                        table_names.as_mut_ptr(),
-                        len_table_names,
-                    );
-                    table_names.set_len(len_table_names as usize);
-                }
-
-                let names = table_names
-                    .into_iter()
-                    .map(|x| x.into())
-                    .collect::<Vec<String>>();
-                Some(names)
+        if len_table_names > 0 {
+            let mut table_names = Vec::with_capacity(len_table_names as usize);
+            // SAFETY: `WasmEdge_ModuleInstanceListTable` fills exactly `len_table_names` elements before `set_len`.
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceListTable(
+                    self.as_ptr(),
+                    table_names.as_mut_ptr(),
+                    len_table_names,
+                );
+                table_names.set_len(len_table_names as usize);
             }
-            false => None,
+
+            let names = table_names
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<String>>();
+            Some(names)
+        } else {
+            None
         }
     }
 
@@ -321,25 +320,25 @@ pub trait AsInstance {
     /// Returns the names of all exported [memory instances](crate::Memory) in this module instance.
     fn mem_names(&self) -> Option<Vec<String>> {
         let len_mem_names = self.mem_len();
-        match len_mem_names > 0 {
-            true => {
-                let mut mem_names = Vec::with_capacity(len_mem_names as usize);
-                unsafe {
-                    ffi::WasmEdge_ModuleInstanceListMemory(
-                        self.as_ptr(),
-                        mem_names.as_mut_ptr(),
-                        len_mem_names,
-                    );
-                    mem_names.set_len(len_mem_names as usize);
-                }
-
-                let names = mem_names
-                    .into_iter()
-                    .map(|x| x.into())
-                    .collect::<Vec<String>>();
-                Some(names)
+        if len_mem_names > 0 {
+            let mut mem_names = Vec::with_capacity(len_mem_names as usize);
+            // SAFETY: `WasmEdge_ModuleInstanceListMemory` fills exactly `len_mem_names` elements before `set_len`.
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceListMemory(
+                    self.as_ptr(),
+                    mem_names.as_mut_ptr(),
+                    len_mem_names,
+                );
+                mem_names.set_len(len_mem_names as usize);
             }
-            false => None,
+
+            let names = mem_names
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<String>>();
+            Some(names)
+        } else {
+            None
         }
     }
 
@@ -351,25 +350,25 @@ pub trait AsInstance {
     /// Returns the names of the exported [global instances](crate::Global) in this module instance.
     fn global_names(&self) -> Option<Vec<String>> {
         let len_global_names = self.global_len();
-        match len_global_names > 0 {
-            true => {
-                let mut global_names = Vec::with_capacity(len_global_names as usize);
-                unsafe {
-                    ffi::WasmEdge_ModuleInstanceListGlobal(
-                        self.as_ptr(),
-                        global_names.as_mut_ptr(),
-                        len_global_names,
-                    );
-                    global_names.set_len(len_global_names as usize);
-                }
-
-                let names = global_names
-                    .into_iter()
-                    .map(|x| x.into())
-                    .collect::<Vec<String>>();
-                Some(names)
+        if len_global_names > 0 {
+            let mut global_names = Vec::with_capacity(len_global_names as usize);
+            // SAFETY: `WasmEdge_ModuleInstanceListGlobal` fills exactly `len_global_names` elements before `set_len`.
+            unsafe {
+                ffi::WasmEdge_ModuleInstanceListGlobal(
+                    self.as_ptr(),
+                    global_names.as_mut_ptr(),
+                    len_global_names,
+                );
+                global_names.set_len(len_global_names as usize);
             }
-            false => None,
+
+            let names = global_names
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<String>>();
+            Some(names)
+        } else {
+            None
         }
     }
 
@@ -395,8 +394,9 @@ impl<T: ?Sized> Drop for ImportModule<T> {
     }
 }
 
-unsafe extern "C" fn import_data_finalizer<T>(ptr: *mut std::os::raw::c_void) {
-    let box_data: Box<T> = Box::from_raw(ptr as _);
+unsafe extern "C" fn import_data_finalizer<T>(ptr: *mut core::ffi::c_void) {
+    // SAFETY: `ptr` is the `Box::leak(data)` pointer WasmEdge hands back once at finalization; reconstruct the `Box<T>` to drop it.
+    let box_data: Box<T> = unsafe { Box::from_raw(ptr as _) };
     std::mem::drop(box_data)
 }
 
@@ -415,15 +415,22 @@ impl<T: Sized> ImportModule<T> {
     pub fn create(name: impl AsRef<str>, data: Box<T>) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
-        // ffi::WasmEdge_ModuleInstanceGetModuleName(Cxt)
-
+        // WasmEdge takes ownership of the host data, returned via `import_data_finalizer` only when the instance is destroyed.
+        let host_data = Box::into_raw(data);
         let ctx = unsafe {
             ffi::WasmEdge_ModuleInstanceCreateWithData(
                 raw_name.as_raw(),
-                Box::leak(data) as *mut _ as *mut std::ffi::c_void,
+                host_data as *mut std::ffi::c_void,
                 Some(import_data_finalizer::<T>),
             )
         };
+
+        if ctx.is_null() {
+            // Creation failed: the finalizer will never run, so reclaim the `Box` instead of leaking it or storing a null context.
+            // SAFETY: `host_data` is the still-owned `Box::into_raw` allocation the failed call did not consume.
+            drop(unsafe { Box::from_raw(host_data) });
+            return Err(Box::new(WasmEdgeError::ImportObjCreate));
+        }
 
         let import = Self {
             inner: InnerInstance(ctx),
@@ -446,8 +453,10 @@ impl<T: Sized> ImportModule<T> {
     ///
     /// This function will take over the lifetime management of `ctx`, so do not call `ffi::WasmEdge_ModuleInstanceDelete` on `ctx` after this.
     pub unsafe fn from_raw(ctx: *mut ffi::WasmEdge_ModuleInstanceContext) -> Self {
-        let wasmedge_s = WasmEdgeString::from_raw(ffi::WasmEdge_ModuleInstanceGetModuleName(ctx));
-        let name = (&wasmedge_s).into();
+        // SAFETY: `WasmEdge_ModuleInstanceGetModuleName` returns a *borrowed* string the C API says must NOT be
+        // `WasmEdge_StringDelete`d; read it into an owned `String` rather than an owning `WasmEdgeString` (whose Drop would double-free it).
+        let raw_name = unsafe { ffi::WasmEdge_ModuleInstanceGetModuleName(ctx) };
+        let name = String::from(&raw_name);
         Self {
             inner: InnerInstance(ctx),
             name,
@@ -594,11 +603,12 @@ impl WasiModule {
                 p_preopens_len as u32,
             )
         };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ImportObjCreate)),
-            false => Ok(Self(Instance {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ImportObjCreate))
+        } else {
+            Ok(Self(Instance {
                 inner: InnerInstance(ctx),
-            })),
+            }))
         }
     }
 
@@ -712,9 +722,25 @@ mod tests {
     use crate::{CallingFrame, Executor, GlobalType, ImportModule, Store, TableType, WasmValue};
 
     use wasmedge_types::{
-        error::{CoreError, CoreExecutionError},
         FuncType, MemoryType, Mutability, RefType, ValType,
+        error::{CoreError, CoreExecutionError},
     };
+
+    // `WasmEdge_ModuleInstanceGetModuleName` returns a borrowed name that must NOT be deleted;
+    // wrapping it in an owning `WasmEdgeString` would make Drop double-free the instance's buffer.
+    #[test]
+    fn test_from_raw_does_not_double_free_module_name() {
+        let import = ImportModule::create("extern_from_raw", Box::new(())).unwrap();
+        let ctx = unsafe { import.as_raw() };
+        // `from_raw` takes over the context's lifetime, so prevent the original from deleting it too.
+        std::mem::forget(import);
+
+        let rebuilt: ImportModule<()> = unsafe { ImportModule::from_raw(ctx) };
+        assert_eq!(rebuilt.name().as_deref(), Some("extern_from_raw"));
+
+        // Dropping `rebuilt` must delete the instance exactly once without freeing the borrowed name.
+        drop(rebuilt);
+    }
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]

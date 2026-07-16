@@ -1,31 +1,41 @@
 [package]
 categories = ["api-bindings", "wasm"]
 description = "WasmEdge Runtime is a high-performance, extensible, and hardware optimized WebAssembly Virtual Machine for automotive, cloud, AI, and blockchain applications."
-documentation = "https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/"
-edition = "2021"
+documentation = "https://docs.rs/wasmedge-sdk"
+edition.workspace = true
 exclude = ["examples/"]
-license = "Apache-2.0"
+keywords = ["wasmedge", "wasm", "webassembly", "runtime"]
+license.workspace = true
 name = "wasmedge-sdk"
 readme = "README.md"
-repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
-version = "0.16.1"
+repository.workspace = true
+rust-version.workspace = true
+version = "0.17.0"
 
 [dependencies]
-anyhow = "1.0"
-cfg-if.workspace = true
-num-derive = "0.3"
-num-traits = "0.2"
-thiserror = "1.0.30"
-wasmedge-macro.workspace = true
-wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.20.0", default-features = false }
+wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.21.0", default-features = false }
 wasmedge-types.workspace = true
 
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
+rust-version = "1.85"
+
 [workspace.dependencies]
-async-wasi = { path = "crates/async-wasi", version = "0.2.0" }
+async-wasi = { path = "crates/async-wasi", version = "0.3.0" }
+bindgen = { version = "0.72", default-features = false }
+bitflags = "2.13.0"
 cfg-if = "1.0.0"
-parking_lot = "0.12.1"
-wasmedge-macro = { path = "crates/wasmedge-macro", version = "0.6" }
-wasmedge-types = { path = "crates/wasmedge-types", version = "0.6" }
+futures = "0.3"
+getrandom = "0.4"
+libc = "0.2.186"
+log = "0.4"
+slab = "0.4.12"
+socket2 = "0.6"
+thiserror = "2"
+tokio = "1.43"
+wasmedge-types = { path = "crates/wasmedge-types", version = "0.7" }
 wat = "1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -44,7 +54,7 @@ wasi_nn = ["wasmedge-sys/wasi_nn"]
 wasmedge_process = ["wasmedge-sys/wasmedge_process"]
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 [[example]]
 name = "run_wasm"
@@ -54,6 +64,9 @@ path = "examples/run_wasm.rs"
 features = ["aot", "wasi_crypto", "wasi_nn", "wasmedge_process", "ffi"]
 rustdoc-args = ["--cfg", "docsrs"]
 
+[lints]
+workspace = true
+
 [workspace]
 members = [
     "crates/wasmedge-sys",
@@ -62,3 +75,19 @@ members = [
     "crates/async-wasi",
 ]
 exclude = ["test-wasm"]
+resolver = "3"
+
+[workspace.lints.rust]
+unused_extern_crates = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+trivial_numeric_casts = "warn"
+unused_import_braces = "warn"
+
+[workspace.lints.clippy]
+uninlined_format_args = "warn"
+clone_on_copy = "warn"
+dbg_macro = "warn"
+
+[profile.dev.package."*"]
+debug = false

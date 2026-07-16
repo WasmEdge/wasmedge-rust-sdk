@@ -18,6 +18,7 @@ pub struct ConfigBuilder {
 }
 impl ConfigBuilder {
     /// Creates a new [ConfigBuilder] with the given [CommonConfigOptions] setting.
+    #[must_use]
     pub fn new(options: CommonConfigOptions) -> Self {
         Self {
             common_config: options,
@@ -33,6 +34,7 @@ impl ConfigBuilder {
     /// # Argument
     ///
     /// - `options` specifies the [StatisticsConfigOptions] settings to set.
+    #[must_use]
     pub fn with_statistics_config(self, options: StatisticsConfigOptions) -> Self {
         Self {
             stat_config: Some(options),
@@ -45,6 +47,7 @@ impl ConfigBuilder {
     /// # Argument
     ///
     /// - `options` specifies the [RuntimeConfigOptions] settings to set.
+    #[must_use]
     pub fn with_runtime_config(self, options: RuntimeConfigOptions) -> Self {
         Self {
             runtime_config: Some(options),
@@ -59,6 +62,7 @@ impl ConfigBuilder {
     /// - `options` specifies the [CompilerConfigOptions] settings to set.
     #[cfg(feature = "aot")]
     #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
+    #[must_use]
     pub fn with_compiler_config(self, options: CompilerConfigOptions) -> Self {
         Self {
             compiler_config: Some(options),
@@ -100,8 +104,8 @@ impl ConfigBuilder {
             inner.generic_binary(compiler_config.generic_binary);
             inner.interruptible(compiler_config.interruptible);
         }
-        if let Some(runtim_config) = self.runtime_config {
-            inner.set_max_memory_pages(runtim_config.max_memory_pages);
+        if let Some(runtime_config) = self.runtime_config {
+            inner.set_max_memory_pages(runtime_config.max_memory_pages);
         }
 
         Ok(Config {
@@ -269,7 +273,7 @@ impl Config {
 /// Defines the common configuration options.
 ///
 /// [CommonConfigOptions] is used to set the common configuration options, which are
-///     
+///
 ///  - `ImportExportMutGlobals` supports mutable imported and exported globals.
 ///
 ///    Also see [Import/Export Mutable Globals Proposal](https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md#importexport-mutable-globals).
@@ -279,11 +283,11 @@ impl Config {
 ///    Also see [Non-trapping Float-to-int Conversions Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/nontrapping-float-to-int-conversion/Overview.md).
 ///
 ///  - `SignExtensionOperators` supports new integer instructions for sign-extending 8-bit, 16-bit, and 32-bit values.
-///     
+///
 ///    Also see [Sign-extension Operators Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/sign-extension-ops/Overview.md).
 ///
 ///  - `MultiValue` supports functions and instructions with multiple return values, and blocks with inputs.
-///     
+///
 ///    Also see [Multi-value Extension](https://github.com/WebAssembly/spec/blob/main/proposals/multi-value/Overview.md).
 ///
 ///  - `BulkMemoryOperations` supports bulk memory operations.
@@ -330,6 +334,7 @@ impl CommonConfigOptions {
     /// * tail_call: false,
     /// * function_references: false,
     /// * interpreter_mode: false,
+    #[must_use]
     pub fn new() -> Self {
         Self {
             mutable_globals: true,
@@ -353,6 +358,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn mutable_globals(self, enable: bool) -> Self {
         Self {
             mutable_globals: enable,
@@ -365,6 +371,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn non_trap_conversions(self, enable: bool) -> Self {
         Self {
             non_trap_conversions: enable,
@@ -377,6 +384,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn sign_extension_operators(self, enable: bool) -> Self {
         Self {
             sign_extension_operators: enable,
@@ -389,6 +397,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn multi_value(self, enable: bool) -> Self {
         Self {
             multi_value: enable,
@@ -401,6 +410,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn bulk_memory_operations(self, enable: bool) -> Self {
         Self {
             bulk_memory_operations: enable,
@@ -413,6 +423,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn reference_types(self, enable: bool) -> Self {
         Self {
             reference_types: enable,
@@ -425,6 +436,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn simd(self, enable: bool) -> Self {
         Self {
             simd: enable,
@@ -437,6 +449,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn multi_memories(self, enable: bool) -> Self {
         Self {
             multi_memories: enable,
@@ -449,6 +462,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn threads(self, enable: bool) -> Self {
         Self {
             threads: enable,
@@ -461,6 +475,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn gc(self, enable: bool) -> Self {
         Self { gc: enable, ..self }
     }
@@ -470,6 +485,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
+    #[must_use]
     pub fn tail_call(self, enable: bool) -> Self {
         Self {
             tail_call: enable,
@@ -482,6 +498,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// * `enable` - Whether the option turns on or not.
+    #[must_use]
     pub fn function_references(self, enable: bool) -> Self {
         Self {
             function_references: enable,
@@ -494,6 +511,7 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// * `enable` - Whether the option turns on or not.
+    #[must_use]
     pub fn interpreter_mode(self, enable: bool) -> Self {
         Self {
             interpreter_mode: enable,
@@ -514,6 +532,7 @@ impl Default for CommonConfigOptions {
     /// * simd: true,
     /// * multi_memories: false,
     /// * threads: false,
+    /// * gc: false,
     /// * tail_call: false,
     /// * function_references: false,
     /// * interpreter_mode: false,
@@ -528,22 +547,22 @@ impl Default for CommonConfigOptions {
 ///
 ///  - Compiler Optimization Levels
 ///    - `O0` performs as many optimizations as possible.
-///    
-///    - `O1` optimizes quickly without destroying debuggability  
+///
+///    - `O1` optimizes quickly without destroying debuggability
 ///    - `02` optimizes for fast execution as much as possible without triggering significant incremental
-///      compile time or code size growth  
-///    - `O3` optimizes for fast execution as much as possible  
+///      compile time or code size growth
+///    - `O3` optimizes for fast execution as much as possible
 ///    - `Os` optimizes for small code size as much as possible without triggering significant incremental
-///      compile time or execution time slowdowns  
-///    - `Oz` optimizes for small code size as much as possible  
+///      compile time or execution time slowdowns
+///    - `Oz` optimizes for small code size as much as possible
 ///  - Compiler Output Formats
-///    - `Native` specifies the output format is native dynamic library (`*.wasm.so`)  
+///    - `Native` specifies the output format is native dynamic library (`*.wasm.so`)
 ///    - `Wasm` specifies the output format is WebAssembly with AOT compiled codes in custom section (`*.wasm`).
-///  
-///  - `dump_ir` determines if AOT compiler generates IR or not  
+///
+///  - `dump_ir` determines if AOT compiler generates IR or not
 ///  - `generic_binary` determines if AOT compiler generates the generic binary or not.
 ///  - `interruptible` determines if AOT compiler generates interruptible binary or not.
-///  
+///
 ///  The configuration options above are only effective to [AOT compiler](crate::Compiler).
 #[cfg(feature = "aot")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
@@ -559,6 +578,7 @@ pub struct CompilerConfigOptions {
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 impl CompilerConfigOptions {
     /// Creates a new instance of [CompilerConfigOptions].
+    #[must_use]
     pub fn new() -> Self {
         Self {
             out_format: CompilerOutputFormat::Wasm,
@@ -574,6 +594,7 @@ impl CompilerConfigOptions {
     /// # Argument
     ///
     /// - `format` specifies the format of the output binary.
+    #[must_use]
     pub fn out_format(self, format: CompilerOutputFormat) -> Self {
         Self {
             out_format: format,
@@ -586,6 +607,7 @@ impl CompilerConfigOptions {
     /// # Argument
     ///
     /// - `level` specifies the optimization level of AOT compiler.
+    #[must_use]
     pub fn optimization_level(self, level: CompilerOptimizationLevel) -> Self {
         Self {
             opt_level: level,
@@ -598,6 +620,7 @@ impl CompilerConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if dump ir or not.
+    #[must_use]
     pub fn dump_ir(self, enable: bool) -> Self {
         Self {
             dump_ir: enable,
@@ -610,6 +633,7 @@ impl CompilerConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if generate the generic binary or not when perform AOT compilation.
+    #[must_use]
     pub fn generic_binary(self, enable: bool) -> Self {
         Self {
             generic_binary: enable,
@@ -624,6 +648,7 @@ impl CompilerConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if turn on the `Interruptible` option.
+    #[must_use]
     pub fn interruptible(self, enable: bool) -> Self {
         Self {
             interruptible: enable,
@@ -643,14 +668,15 @@ impl Default for CompilerConfigOptions {
 ///
 /// [RuntimeConfigOptions] is used to set the runtime configuration options, which are
 ///
-/// - `maximum_memory_page` limits the page size of [Memory](crate::Memory). This option is only effective to
-///   [Executor](crate::Executor).
+/// - `maximum_memory_page` limits the page size of [Memory](sys::Memory). This option is only effective to
+///   [Executor](sys::Executor).
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeConfigOptions {
     max_memory_pages: u32,
 }
 impl RuntimeConfigOptions {
     /// Creates a new instance of [RuntimeConfigOptions].
+    #[must_use]
     pub fn new() -> Self {
         Self {
             max_memory_pages: 65536,
@@ -662,6 +688,7 @@ impl RuntimeConfigOptions {
     /// # Argument
     ///
     /// - `count` specifies the page count (64KB per page).
+    #[must_use]
     pub fn max_memory_pages(self, count: u32) -> Self {
         Self {
             max_memory_pages: count,
@@ -679,9 +706,9 @@ impl Default for RuntimeConfigOptions {
 /// [StatisticsConfigOptions] is used to set the statistics configuration options, which are
 ///
 ///  - `count_instructions` determines if measuring the count of instructions when running a compiled or pure WASM.
-///   
+///
 ///  - `measure_cost` determines if measuring the instruction costs when running a compiled or pure WASM.
-///   
+///
 ///  - `measure_time` determines if measuring the running time when running a compiled or pure WASM.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct StatisticsConfigOptions {
@@ -691,6 +718,7 @@ pub struct StatisticsConfigOptions {
 }
 impl StatisticsConfigOptions {
     /// Creates a new instance of [StatisticsConfigOptions].
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -700,6 +728,7 @@ impl StatisticsConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if support instruction counting or not when execution after AOT compilation.
+    #[must_use]
     pub fn count_instructions(self, enable: bool) -> Self {
         Self {
             count_instructions: enable,
@@ -712,6 +741,7 @@ impl StatisticsConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if support cost measuring or not when execution after AOT compilation.
+    #[must_use]
     pub fn measure_cost(self, enable: bool) -> Self {
         Self {
             measure_cost: enable,
@@ -724,6 +754,7 @@ impl StatisticsConfigOptions {
     /// # Argument
     ///
     /// - `enable` specifies if support time measuring or not when execution after AOT compilation.
+    #[must_use]
     pub fn measure_time(self, enable: bool) -> Self {
         Self {
             measure_time: enable,

@@ -2,9 +2,6 @@
     html_logo_url = "https://github.com/cncf/artwork/blob/master/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.png?raw=true",
     html_favicon_url = "https://raw.githubusercontent.com/cncf/artwork/49169bdbc88a7ce3c4a722c641cc2d548bd5c340/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.svg"
 )]
-// If the version of rust used is less than v1.63, please uncomment the follow attribute.
-// #![feature(explicit_generic_args_with_impl_trait)]
-#![allow(clippy::vec_init_then_push)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # Overview
@@ -23,11 +20,12 @@
 //!
 //! Since this crate depends on the WasmEdge C API, it needs to be installed in your system first. Please refer to [WasmEdge Installation and Uninstallation](https://wasmedge.org/book/en/quick_start/install.html) to install the WasmEdge library. The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 //!
-//! | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
-//! | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
-//! | 0.16.1        | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
-//! | 0.14.1        | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
-//! | 0.14.0        | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
+//! | wasmedge-sdk       | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
+//! | :----------------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+//! | 0.17.0             | 0.17.1        | 0.21.0        | 0.7.0         | 0.7.0         | 0.3.0     |
+//! | 0.16.1 †           | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
+//! | 0.14.1 †           | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
+//! | 0.14.0             | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
 //! | 0.13.5-newapi | 0.13.5        | 0.18.0        | 0.5.0         | 0.6.1         | 0.2.0     |
 //! | 0.13.2        | 0.13.5        | 0.17.5        | 0.4.4         | 0.6.1         | 0.1.0     |
 //! | 0.13.1        | 0.13.5        | 0.17.4        | 0.4.4         | 0.6.1         | 0.1.0     |
@@ -51,6 +49,12 @@
 //! | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             | -         |
 //! | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             | -         |
 //!
+//! † `wasmedge-sdk` **0.16.1** and **0.14.1** are manifest versions that were bumped in this
+//! repository but never published to crates.io (nor was the `wasmedge-sys` **0.20.0** paired
+//! with the 0.16.1 row; `wasmedge-sys` **0.19.4**, paired with the 0.14.1 row, *was* published).
+//! The latest versions actually released are `wasmedge-sdk` **0.14.0** and `wasmedge-sys`
+//! **0.19.4** — both rows are kept here for historical accuracy rather than deleted. New code
+//! should depend on `0.17.0`.
 //!
 //! WasmEdge Rust SDK will automatically search for the WasmEdge library in your system. Alternatively you can set the `WASMEDGE_DIR` environment variable to the path of the WasmEdge library (or the `WASMEDGE_INCLUDE_DIR` and `WASMEDGE_LIB_DIR` variables for more fine-grained control). If you want to use a local `cmake` build of WasmEdge you can set the `WASMEDGE_BUILD_DIR` instead.
 //!
@@ -72,13 +76,19 @@
 //! | linux | `glibc` | `x86_64`, `aarch64` | static, dynamic |
 //! | linux | `musl`  | `x86_64`, `aarch64` | static          |
 //!
-//! This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
+//! The `bundled` feature (`standalone` + `static` combined) statically links the WasmEdge
+//! library into your application binary, producing a fully self-contained executable that
+//! needs neither the WasmEdge library installed on the target system nor any
+//! `LD_LIBRARY_PATH` configuration. Static linking is available on Linux (`glibc` and
+//! `musl`); macOS currently only supports dynamic linking.
 //!
-//! **Notice:** The minimum supported Rust version is 1.71.
+//! This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)). The external `bindgen` executable must be **version 0.71 or newer**, since the build script asks it to emit edition-2024-compatible bindings via `--rust-edition 2024`, a flag older `bindgen-cli` releases don't support.
+//!
+//! **Notice:** The minimum supported Rust version is 1.85.
 //!
 //! ## API Reference
 //!
-//! - [API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/index.html)
+//! - [API Reference](https://docs.rs/wasmedge-sdk)
 //! - [Async API Reference](https://second-state.github.io/wasmedge-async-rust-sdk/wasmedge_sdk/index.html)
 //!
 //! ## Examples
@@ -91,7 +101,7 @@
 //!
 //! ## License
 //!
-//! This project is licensed under the terms of the [Apache 2.0 license](https://github.com/tensorflow/rust/blob/HEAD/LICENSE).
+//! This project is licensed under the terms of the [Apache 2.0 license](https://github.com/WasmEdge/wasmedge-rust-sdk/blob/main/LICENSE).
 //!
 
 #[doc(hidden)]
@@ -99,9 +109,6 @@
 #[cfg_attr(docsrs, doc(cfg(feature = "aot")))]
 mod compiler;
 pub mod config;
-
-// #[cfg(feature = "dock")]
-// pub mod dock;
 
 mod import;
 mod instance;
@@ -140,18 +147,17 @@ pub use statistics::Statistics;
 #[doc(inline)]
 pub use store::Store;
 #[doc(inline)]
-pub use vm::Vm;
-
-pub use wasmedge_types::{
-    error, wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType,
-    FuncType, GlobalType, HostRegistration, MemoryType, Mutability, RefType, TableType, ValType,
-    WasmEdgeResult,
-};
+pub use vm::{SyncInst, Vm};
 
 #[cfg(all(feature = "async", target_os = "linux"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-pub use wasmedge_macro::async_host_function;
-pub use wasmedge_macro::host_function;
+pub use r#async::vm::AsyncInst;
+
+pub use wasmedge_types::{
+    CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType, FuncType, GlobalType,
+    HostRegistration, MemoryType, Mutability, RefType, TableType, ValType, WasmEdgeResult, error,
+    wat2wasm,
+};
 
 /// WebAssembly value type.
 pub type WasmValue = wasmedge_sys::types::WasmValue;

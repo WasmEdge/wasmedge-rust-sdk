@@ -17,10 +17,14 @@ on:
       - ".github/workflows/ci-build.yml"
       - ".github/workflows/rust-static-lib.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build_ubuntu:
     name: Ubuntu
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       matrix:
         rust: [stable]
@@ -44,6 +48,9 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
       - name: Build test WASM modules
         working-directory: examples/wasmedge-sys
         run: |
@@ -62,6 +69,7 @@ jobs:
   build_macos:
     name: macOS arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         os: [macos-15]
@@ -78,6 +86,9 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
       - name: Install build tools
         run: brew install llvm ninja boost cmake
 
@@ -90,7 +101,8 @@ jobs:
 
       - name: Run in the standalone mode
         run: |
-          export LLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
+          LLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
+          export LLVM_DIR
           export CC=clang
           export CXX=clang++
           export DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib

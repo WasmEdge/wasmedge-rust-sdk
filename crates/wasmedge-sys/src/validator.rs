@@ -1,6 +1,6 @@
 //! Defines WasmEdge Validator struct.
 
-use crate::{ffi, utils::check, Config, Module, WasmEdgeResult};
+use crate::{Config, Module, WasmEdgeResult, ffi, utils::check};
 use wasmedge_types::error::WasmEdgeError;
 
 /// Struct of WasmEdge Validator.
@@ -23,21 +23,22 @@ impl Validator {
             Some(config) => unsafe { ffi::WasmEdge_ValidatorCreate(config.inner.0) },
             None => unsafe { ffi::WasmEdge_ValidatorCreate(std::ptr::null_mut()) },
         };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::CompilerCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ValidatorCreate))
+        } else {
+            Ok(Self {
                 inner: InnerValidator(ctx),
-            }),
+            })
         }
     }
 
-    /// Validates a given WasmEdge [Module](crate::Module).
+    /// Validates a given WasmEdge [Module].
     ///
-    /// [Module](crate::Module)s are valid when all components they contain are valid. Furthermore, most definitions are themselves classified with a suitable type.
+    /// [Module]s are valid when all components they contain are valid. Furthermore, most definitions are themselves classified with a suitable type.
     ///
     /// # Arguments
     ///
-    /// * `module` - The [Module](crate::Module) to be validated.
+    /// * `module` - The [Module] to be validated.
     ///
     /// # Error
     ///
@@ -66,6 +67,7 @@ impl Drop for Validator {
 
 #[derive(Debug)]
 pub(crate) struct InnerValidator(pub(crate) *mut ffi::WasmEdge_ValidatorContext);
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerValidator {}
 unsafe impl Sync for InnerValidator {}
 
@@ -95,12 +97,8 @@ mod tests {
         let loader = result.unwrap();
 
         // load a WASM module
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/test.wasm");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/test.wasm");
         let result = loader.from_file(path);
         assert!(result.is_ok());
         let module = result.unwrap();
@@ -130,12 +128,8 @@ mod tests {
             let loader = result.unwrap();
 
             // load a WASM module
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/test.wasm");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
@@ -164,12 +158,8 @@ mod tests {
             let loader = result.unwrap();
 
             // load a WASM module
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/test.wasm");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
