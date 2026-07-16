@@ -572,7 +572,7 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
 #[proc_macro_attribute]
 #[deprecated(
     since = "0.7.0",
-    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::Function::create_sync_func and register via ImportModule::add_func"
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::r#async::function::AsyncFunction::create_async_func and register via AsyncImportObject::add_async_func"
 )]
 pub fn sys_async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
@@ -987,7 +987,7 @@ fn sys_expand_wasi_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::
 #[proc_macro_attribute]
 #[deprecated(
     since = "0.7.0",
-    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::Function::create_sync_func and register via ImportModule::add_func"
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::r#async::function::AsyncFunction::create_async_func and register via AsyncImportObject::add_async_func"
 )]
 pub fn sys_async_wasi_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
