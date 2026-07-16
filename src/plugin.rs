@@ -79,8 +79,7 @@ impl std::str::FromStr for NNPreload {
         let nn_preload: Vec<&str> = preload.split(':').collect();
         if nn_preload.len() != 4 {
             return Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to NNPreload value. Invalid preload string: {}. The correct format is: 'alias:backend:target:path'",
-                preload
+                "Failed to convert to NNPreload value. Invalid preload string: {preload}. The correct format is: 'alias:backend:target:path'"
             )));
         }
         let (alias, backend, target, path) = (
@@ -199,8 +198,7 @@ impl std::str::FromStr for GraphEncoding {
             "autodetect" => Ok(GraphEncoding::Autodetect),
             "ggml" => Ok(GraphEncoding::GGML),
             _ => Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to NNBackend value. Unknown NNBackend type: {}",
-                s
+                "Failed to convert to NNBackend value. Unknown NNBackend type: {s}"
             ))),
         }
     }
@@ -241,8 +239,7 @@ impl std::str::FromStr for ExecutionTarget {
             "TPU" => Ok(ExecutionTarget::TPU),
             "AUTO" => Ok(ExecutionTarget::AUTO),
             _ => Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to ExecutionTarget value. Unknown ExecutionTarget type: {}",
-                s
+                "Failed to convert to ExecutionTarget value. Unknown ExecutionTarget type: {s}"
             ))),
         }
     }

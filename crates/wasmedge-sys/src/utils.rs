@@ -46,6 +46,8 @@ pub fn log_off() {
 }
 
 // Checks the result of a `FFI` function.
+// bindgen maps C enums to i32 on MSVC but u32 on unix: these casts are load-bearing on Windows
+#[allow(trivial_numeric_casts)]
 pub(crate) fn check(result: WasmEdge_Result) -> WasmEdgeResult<()> {
     let category = unsafe { ffi::WasmEdge_ResultGetCategory(result) };
     let code = unsafe {
@@ -54,15 +56,17 @@ pub(crate) fn check(result: WasmEdge_Result) -> WasmEdgeResult<()> {
         } else {
             0u32
         }
-    };
+    } as ffi::WasmEdge_ErrCode;
 
     match category {
-        ffi::WasmEdge_ErrCategory_UserLevelError => Err(Box::new(WasmEdgeError::User(code))),
+        ffi::WasmEdge_ErrCategory_UserLevelError => Err(Box::new(WasmEdgeError::User(code as _))),
         ffi::WasmEdge_ErrCategory_WASM => gen_runtime_error(code),
         _ => panic!("Invalid category value: {category}"),
     }
 }
 
+// bindgen maps C enums to i32 on MSVC but u32 on unix: these casts are load-bearing on Windows
+#[allow(trivial_numeric_casts)]
 fn gen_runtime_error(code: ffi::WasmEdge_ErrCode) -> WasmEdgeResult<()> {
     match code {
         // Success or terminated (exit and return success)
@@ -429,11 +433,15 @@ fn gen_runtime_error(code: ffi::WasmEdge_ErrCode) -> WasmEdgeResult<()> {
         ffi::WasmEdge_ErrCode_MalformedName => Err(Box::new(WasmEdgeError::Core(
             CoreError::Component(CoreComponentError::MalformedName),
         ))),
-        c => Err(Box::new(WasmEdgeError::Core(CoreError::UnknownError(c)))),
+        c => Err(Box::new(WasmEdgeError::Core(CoreError::UnknownError(
+            c as _,
+        )))),
     }
 }
 
 impl From<CoreError> for WasmEdge_Result {
+    // bindgen maps C enums to i32 on MSVC but u32 on unix: these casts are load-bearing on Windows
+    #[allow(trivial_numeric_casts)]
     fn from(val: CoreError) -> WasmEdge_Result {
         let code = match val {
             // Common errors
@@ -613,9 +621,9 @@ impl From<CoreError> for WasmEdge_Result {
                 }
                 CoreComponentError::MalformedName => ffi::WasmEdge_ErrCode_MalformedName,
             },
-            CoreError::UnknownError(c) => c,
+            CoreError::UnknownError(c) => c as ffi::WasmEdge_ErrCode,
         };
-        unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code) }
+        unsafe { ffi::WasmEdge_ResultGen(ffi::WasmEdge_ErrCategory_WASM, code as _) }
     }
 }
 

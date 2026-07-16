@@ -2,6 +2,7 @@ pub mod common;
 pub mod env;
 pub mod preview_1;
 
+#[cfg(all(unix, feature = "async_tokio"))]
 use common::error::Errno;
 
 use self::env::{VFS, vfs::WasiFileSys};

@@ -298,7 +298,7 @@ impl WasiFile for MemoryFile {
     }
 
     fn fd_tell(&mut self) -> Result<crate::snapshots::env::wasi_types::__wasi_filesize_t, Errno> {
-        Ok(self.context.position() as _)
+        Ok(self.context.position())
     }
 }
 

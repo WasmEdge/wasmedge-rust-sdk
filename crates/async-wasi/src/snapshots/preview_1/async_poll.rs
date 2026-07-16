@@ -299,7 +299,7 @@ async fn poll_oneoff_impl<M: Memory>(
     let subs = mem.get_slice(in_ptr, nsubscriptions)?;
     let prepoll = PrePoll::from_wasi_subscription(subs)?;
 
-    log::trace!("poll_oneoff subs prepoll={:#?}", prepoll);
+    log::trace!("poll_oneoff subs prepoll={prepoll:#?}");
 
     match prepoll {
         PrePoll::OnlyFd(fd_vec) => {
