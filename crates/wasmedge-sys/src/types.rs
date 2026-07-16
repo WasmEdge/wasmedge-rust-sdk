@@ -307,16 +307,15 @@ impl WasmValue {
     /// If the [WasmValue] is a `NullRef`, then `None` is returned.
     pub fn func_ref(&self) -> Option<FuncRef<&Self>> {
         unsafe {
-            match ffi::WasmEdge_ValueIsNullRef(self.ctx) {
-                true => None,
-                false => {
-                    let ctx = ffi::WasmEdge_ValueGetFuncRef(self.ctx);
-                    let f = Function::from_raw(ctx as _);
-                    Some(FuncRef::create_from_ref(
-                        std::mem::ManuallyDrop::new(f),
-                        self,
-                    ))
-                }
+            if ffi::WasmEdge_ValueIsNullRef(self.ctx) {
+                None
+            } else {
+                let ctx = ffi::WasmEdge_ValueGetFuncRef(self.ctx);
+                let f = Function::from_raw(ctx as _);
+                Some(FuncRef::create_from_ref(
+                    std::mem::ManuallyDrop::new(f),
+                    self,
+                ))
             }
         }
     }
@@ -354,13 +353,12 @@ impl WasmValue {
     /// If the [WasmValue] is a `NullRef`, then `None` is returned.
     pub fn extern_ref<T>(&self) -> Option<&T> {
         unsafe {
-            match ffi::WasmEdge_ValueIsNullRef(self.ctx) {
-                true => None,
-                false => {
-                    let ptr = ffi::WasmEdge_ValueGetExternRef(self.ctx);
-                    let x = ptr as *mut T;
-                    Some(&*x)
-                }
+            if ffi::WasmEdge_ValueIsNullRef(self.ctx) {
+                None
+            } else {
+                let ptr = ffi::WasmEdge_ValueGetExternRef(self.ctx);
+                let x = ptr as *mut T;
+                Some(&*x)
             }
         }
     }

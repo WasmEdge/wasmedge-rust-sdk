@@ -24,11 +24,12 @@ impl Store {
     /// If fail to create, then an error is returned.
     pub fn create() -> WasmEdgeResult<Self> {
         let ctx = unsafe { ffi::WasmEdge_StoreCreate() };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Store(StoreError::Create))),
-            false => Ok(Store {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Store(StoreError::Create)))
+        } else {
+            Ok(Store {
                 inner: InnerStore(ctx),
-            }),
+            })
         }
     }
 
@@ -40,25 +41,20 @@ impl Store {
     /// Returns the names of all registered [modules](crate::Module).
     pub fn module_names(&self) -> Option<Vec<String>> {
         let len_mod_names = self.module_len();
-        match len_mod_names > 0 {
-            true => {
-                let mut mod_names = Vec::with_capacity(len_mod_names as usize);
-                unsafe {
-                    ffi::WasmEdge_StoreListModule(
-                        self.inner.0,
-                        mod_names.as_mut_ptr(),
-                        len_mod_names,
-                    );
-                    mod_names.set_len(len_mod_names as usize);
-                };
+        if len_mod_names > 0 {
+            let mut mod_names = Vec::with_capacity(len_mod_names as usize);
+            unsafe {
+                ffi::WasmEdge_StoreListModule(self.inner.0, mod_names.as_mut_ptr(), len_mod_names);
+                mod_names.set_len(len_mod_names as usize);
+            };
 
-                let names = mod_names
-                    .into_iter()
-                    .map(|x| x.into())
-                    .collect::<Vec<String>>();
-                Some(names)
-            }
-            false => None,
+            let names = mod_names
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<String>>();
+            Some(names)
+        } else {
+            None
         }
     }
 
@@ -74,20 +70,19 @@ impl Store {
     pub fn module(&self, name: impl AsRef<str>) -> WasmEdgeResult<InnerRef<Instance, &Self>> {
         let mod_name: WasmEdgeString = name.as_ref().into();
         let ctx = unsafe { ffi::WasmEdge_StoreFindModule(self.inner.0, mod_name.as_raw()) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Store(StoreError::NotFoundModule(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Store(StoreError::NotFoundModule(
                 name.as_ref().to_string(),
-            )))),
-            false => {
-                let inst = Instance {
-                    inner: InnerInstance(ctx as _),
-                };
-                unsafe {
-                    Ok(InnerRef::create_from_ref(
-                        std::mem::ManuallyDrop::new(inst),
-                        self,
-                    ))
-                }
+            ))))
+        } else {
+            let inst = Instance {
+                inner: InnerInstance(ctx as _),
+            };
+            unsafe {
+                Ok(InnerRef::create_from_ref(
+                    std::mem::ManuallyDrop::new(inst),
+                    self,
+                ))
             }
         }
     }

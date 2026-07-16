@@ -23,11 +23,12 @@ impl Validator {
             Some(config) => unsafe { ffi::WasmEdge_ValidatorCreate(config.inner.0) },
             None => unsafe { ffi::WasmEdge_ValidatorCreate(std::ptr::null_mut()) },
         };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::CompilerCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::CompilerCreate))
+        } else {
+            Ok(Self {
                 inner: InnerValidator(ctx),
-            }),
+            })
         }
     }
 
@@ -95,12 +96,8 @@ mod tests {
         let loader = result.unwrap();
 
         // load a WASM module
-        let path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/test.wasm");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/test.wasm");
         let result = loader.from_file(path);
         assert!(result.is_ok());
         let module = result.unwrap();
@@ -130,12 +127,8 @@ mod tests {
             let loader = result.unwrap();
 
             // load a WASM module
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/test.wasm");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
@@ -164,12 +157,8 @@ mod tests {
             let loader = result.unwrap();
 
             // load a WASM module
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/test.wasm");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/test.wasm");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();

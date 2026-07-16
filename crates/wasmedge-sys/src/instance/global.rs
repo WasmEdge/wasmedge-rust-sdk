@@ -44,14 +44,13 @@ impl Global {
     ///
     pub fn ty(&self) -> WasmEdgeResult<wasmedge_types::GlobalType> {
         let ty_ctx = unsafe { ffi::WasmEdge_GlobalInstanceGetGlobalType(self.inner.0) };
-        match ty_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Global(GlobalError::Type))),
-            false => {
-                let ty = std::mem::ManuallyDrop::new(GlobalType {
-                    inner: InnerGlobalType(ty_ctx as *mut _),
-                });
-                Ok((&*ty).into())
-            }
+        if ty_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Global(GlobalError::Type)))
+        } else {
+            let ty = std::mem::ManuallyDrop::new(GlobalType {
+                inner: InnerGlobalType(ty_ctx as *mut _),
+            });
+            Ok((&*ty).into())
         }
     }
 
@@ -138,11 +137,12 @@ impl GlobalType {
     /// If fail to create a new [GlobalType], then an error is returned.
     pub(crate) fn create(val_ty: ValType, mutable: Mutability) -> WasmEdgeResult<Self> {
         let ctx = unsafe { ffi::WasmEdge_GlobalTypeCreate(val_ty.into(), mutable.into()) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::GlobalTypeCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::GlobalTypeCreate))
+        } else {
+            Ok(Self {
                 inner: InnerGlobalType(ctx),
-            }),
+            })
         }
     }
 

@@ -17,11 +17,12 @@ impl Statistics {
     /// If fail to create a [Statistics], then an error is returned.
     pub fn create() -> WasmEdgeResult<Self> {
         let ctx = unsafe { ffi::WasmEdge_StatisticsCreate() };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::StatisticsCreate)),
-            false => Ok(Statistics {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::StatisticsCreate))
+        } else {
+            Ok(Statistics {
                 inner: Arc::new(InnerStat(ctx)),
-            }),
+            })
         }
     }
 

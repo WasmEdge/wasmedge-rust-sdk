@@ -50,8 +50,7 @@ impl PluginManager {
             .iter()
             .map(|&x| std::ffi::CString::new(x).unwrap())
             .collect();
-        let c_strs: Vec<*const ::std::os::raw::c_char> =
-            c_args.iter().map(|x| x.as_ptr()).collect();
+        let c_strs: Vec<*const core::ffi::c_char> = c_args.iter().map(|x| x.as_ptr()).collect();
         let len = c_strs.len() as u32;
         unsafe { ffi::WasmEdge_PluginInitWASINN(c_strs.as_ptr(), len) }
     }
@@ -88,13 +87,14 @@ impl PluginManager {
 
         let ctx = unsafe { ffi::WasmEdge_PluginFind(plugin_name.as_raw()) };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::NotFound(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Plugin(PluginError::NotFound(
                 name.as_ref().into(),
-            )))),
-            false => Ok(Plugin {
+            ))))
+        } else {
+            Ok(Plugin {
                 inner: InnerPlugin(ctx as *mut _),
-            }),
+            })
         }
     }
 
@@ -193,13 +193,14 @@ impl Plugin {
 
         let ctx = unsafe { ffi::WasmEdge_PluginCreateModule(self.inner.0, mod_name.as_raw()) };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Plugin(PluginError::Create(
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Plugin(PluginError::Create(
                 name.as_ref().into(),
-            )))),
-            false => Ok(Instance {
+            ))))
+        } else {
+            Ok(Instance {
                 inner: InnerInstance(ctx),
-            }),
+            })
         }
     }
 

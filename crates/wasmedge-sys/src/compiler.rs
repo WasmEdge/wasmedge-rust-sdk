@@ -28,11 +28,12 @@ impl Compiler {
             None => unsafe { ffi::WasmEdge_CompilerCreate(std::ptr::null_mut()) },
         };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::CompilerCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::CompilerCreate))
+        } else {
+            Ok(Self {
                 inner: InnerCompiler(ctx),
-            }),
+            })
         }
     }
 
@@ -180,12 +181,8 @@ mod tests {
             let compiler = result.unwrap();
 
             // compile a file for universal WASM output format
-            let in_path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let in_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot.so");
             #[cfg(target_os = "macos")]
@@ -219,12 +216,8 @@ mod tests {
             let result = Compiler::create(Some(&config));
             assert!(result.is_ok());
             let compiler = result.unwrap();
-            let in_path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let in_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             #[cfg(target_os = "linux")]
             let out_path = std::path::PathBuf::from("test_aot_from_file.so");
             #[cfg(target_os = "macos")]
@@ -439,12 +432,8 @@ mod tests {
         let compiler = result.unwrap();
 
         // compile a file for universal WASM output format
-        let in_path = std::env::current_dir()
-            .unwrap()
-            .ancestors()
-            .nth(2)
-            .unwrap()
-            .join("examples/wasmedge-sys/data/fibonacci.wat");
+        let in_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/wasmedge-sys/data/fibonacci.wat");
         #[cfg(target_os = "macos")]
         let out_path = std::path::PathBuf::from("fibonacci_aot.dylib");
         #[cfg(target_os = "linux")]

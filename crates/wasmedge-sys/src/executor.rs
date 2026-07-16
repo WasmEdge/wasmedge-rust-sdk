@@ -15,7 +15,7 @@ use crate::{
     utils::check,
 };
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
-use std::os::raw::c_void;
+use core::ffi::c_void;
 use wasmedge_types::error::WasmEdgeError;
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]

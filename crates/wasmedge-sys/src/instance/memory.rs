@@ -28,11 +28,12 @@ impl Memory {
         let ty: MemType = ty.into();
         let ctx = unsafe { ffi::WasmEdge_MemoryInstanceCreate(ty.inner.0 as *const _) };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::Create))),
-            false => Ok(Memory {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::Create)))
+        } else {
+            Ok(Memory {
                 inner: InnerMemory(ctx),
-            }),
+            })
         }
     }
 
@@ -44,14 +45,13 @@ impl Memory {
     ///
     pub fn ty(&self) -> WasmEdgeResult<wasmedge_types::MemoryType> {
         let ty_ctx = unsafe { ffi::WasmEdge_MemoryInstanceGetMemoryType(self.inner.0) };
-        match ty_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::Type))),
-            false => {
-                let ty = std::mem::ManuallyDrop::new(MemType {
-                    inner: InnerMemType(ty_ctx as *mut _),
-                });
-                Ok((&*ty).into())
-            }
+        if ty_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::Type)))
+        } else {
+            let ty = std::mem::ManuallyDrop::new(MemType {
+                inner: InnerMemType(ty_ctx as *mut _),
+            });
+            Ok((&*ty).into())
         }
     }
 
@@ -127,9 +127,10 @@ impl Memory {
         let ptr = unsafe {
             ffi::WasmEdge_MemoryInstanceGetPointerConst(self.inner.0, offset.into(), len.into())
         };
-        match ptr.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::ConstPtr))),
-            false => Ok(ptr),
+        if ptr.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::ConstPtr)))
+        } else {
+            Ok(ptr)
         }
     }
 
@@ -153,9 +154,10 @@ impl Memory {
         let ptr = unsafe {
             ffi::WasmEdge_MemoryInstanceGetPointer(self.inner.0, offset.into(), len.into())
         };
-        match ptr.is_null() {
-            true => Err(Box::new(WasmEdgeError::Mem(MemError::MutPtr))),
-            false => Ok(ptr),
+        if ptr.is_null() {
+            Err(Box::new(WasmEdgeError::Mem(MemError::MutPtr)))
+        } else {
+            Ok(ptr)
         }
     }
 
@@ -278,11 +280,12 @@ impl MemType {
         let limit_ctx = WasmEdgeLimit::new(min, max, shared).to_context();
         let ctx = unsafe { ffi::WasmEdge_MemoryTypeCreate(limit_ctx) };
         unsafe { ffi::WasmEdge_LimitDelete(limit_ctx) };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::MemTypeCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::MemTypeCreate))
+        } else {
+            Ok(Self {
                 inner: InnerMemType(ctx),
-            }),
+            })
         }
     }
 

@@ -132,6 +132,37 @@ impl Drop for Config {
         unsafe { ffi::WasmEdge_ConfigureDelete(self.inner.0) }
     }
 }
+/// Generates the `enable`/`_enabled` method pair for a WasmEdge proposal toggle.
+/// Each entry lists the setter's doc comment and name, then the getter's doc
+/// comment and name, then the `WasmEdge_Proposal_*` constant; the bodies (the
+/// Add/Remove/Has FFI calls) are identical across all proposals.
+macro_rules! proposal_config_options {
+    ($(
+        $(#[$setter_meta:meta])*
+        $setter:ident,
+        $(#[$getter_meta:meta])*
+        $getter:ident => $proposal:ident;
+    )*) => {
+        $(
+            $(#[$setter_meta])*
+            pub fn $setter(&mut self, enable: bool) {
+                unsafe {
+                    if enable {
+                        ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::$proposal)
+                    } else {
+                        ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::$proposal)
+                    }
+                }
+            }
+
+            $(#[$getter_meta])*
+            pub fn $getter(&self) -> bool {
+                unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::$proposal) }
+            }
+        )*
+    };
+}
+
 impl Config {
     /// Creates a new [Config](crate::Config).
     ///
@@ -140,11 +171,12 @@ impl Config {
     /// If fail to create, then an error is returned.
     pub fn create() -> WasmEdgeResult<Self> {
         let ctx = unsafe { ffi::WasmEdge_ConfigureCreate() };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ConfigCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ConfigCreate))
+        } else {
+            Ok(Self {
                 inner: InnerConfig(ctx),
-            }),
+            })
         }
     }
 
@@ -162,396 +194,141 @@ impl Config {
         unsafe { ffi::WasmEdge_ConfigureGetMaxMemoryPage(self.inner.0) as u32 }
     }
 
-    /// Enables or disables the ImportExportMutGlobals option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn mutable_globals(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_ImportExportMutGlobals,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_ImportExportMutGlobals,
-                )
-            }
-        }
-    }
+    proposal_config_options! {
+        /// Enables or disables the ImportExportMutGlobals option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        mutable_globals,
+        /// Checks if the ImportExportMutGlobals option turns on or not.
+        mutable_globals_enabled => WasmEdge_Proposal_ImportExportMutGlobals;
 
-    /// Checks if the ImportExportMutGlobals option turns on or not.
-    pub fn mutable_globals_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(
-                self.inner.0,
-                ffi::WasmEdge_Proposal_ImportExportMutGlobals,
-            )
-        }
-    }
+        /// Enables or disables the NonTrapFloatToIntConversions option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        non_trap_conversions,
+        /// Checks if the NonTrapFloatToIntConversions option turns on or not.
+        non_trap_conversions_enabled => WasmEdge_Proposal_NonTrapFloatToIntConversions;
 
-    /// Enables or disables the NonTrapFloatToIntConversions option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn non_trap_conversions(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_NonTrapFloatToIntConversions,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_NonTrapFloatToIntConversions,
-                )
-            }
-        }
-    }
+        /// Enables or disables the SignExtensionOperators option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        sign_extension_operators,
+        /// Checks if the SignExtensionOperators option turns on or not.
+        sign_extension_operators_enabled => WasmEdge_Proposal_SignExtensionOperators;
 
-    /// Checks if the NonTrapFloatToIntConversions option turns on or not.
-    pub fn non_trap_conversions_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(
-                self.inner.0,
-                ffi::WasmEdge_Proposal_NonTrapFloatToIntConversions,
-            )
-        }
-    }
+        /// Enables or disables the MultiValue option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        multi_value,
+        /// Checks if the MultiValue option turns on or not.
+        multi_value_enabled => WasmEdge_Proposal_MultiValue;
 
-    /// Enables or disables the SignExtensionOperators option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn sign_extension_operators(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_SignExtensionOperators,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_SignExtensionOperators,
-                )
-            }
-        }
-    }
+        /// Enables or disables the BulkMemoryOperations option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        bulk_memory_operations,
+        /// Checks if the BulkMemoryOperations option turns on or not.
+        bulk_memory_operations_enabled => WasmEdge_Proposal_BulkMemoryOperations;
 
-    /// Checks if the SignExtensionOperators option turns on or not.
-    pub fn sign_extension_operators_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(
-                self.inner.0,
-                ffi::WasmEdge_Proposal_SignExtensionOperators,
-            )
-        }
-    }
+        /// Enables or disables the ReferenceTypes option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        reference_types,
+        /// Checks if the ReferenceTypes option turns on or not.
+        reference_types_enabled => WasmEdge_Proposal_ReferenceTypes;
 
-    /// Enables or disables the MultiValue option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn multi_value(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_MultiValue)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_MultiValue,
-                )
-            }
-        }
-    }
+        /// Enables or disables the SIMD option. By default, the option is enabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        simd,
+        /// Checks if the SIMD option turns on or not.
+        simd_enabled => WasmEdge_Proposal_SIMD;
 
-    /// Checks if the MultiValue option turns on or not.
-    pub fn multi_value_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_MultiValue)
-        }
-    }
+        /// Enables or disables the TailCall option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        tail_call,
+        /// Checks if the TailCall option turns on or not.
+        tail_call_enabled => WasmEdge_Proposal_TailCall;
 
-    /// Enables or disables the BulkMemoryOperations option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn bulk_memory_operations(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_BulkMemoryOperations,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_BulkMemoryOperations,
-                )
-            }
-        }
-    }
+        /// Enables or disables the Annotations option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        annotations,
+        /// Checks if the Annotations option turns on or not.
+        annotations_enabled => WasmEdge_Proposal_Annotations;
 
-    /// Checks if the BulkMemoryOperations option turns on or not.
-    pub fn bulk_memory_operations_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(
-                self.inner.0,
-                ffi::WasmEdge_Proposal_BulkMemoryOperations,
-            )
-        }
-    }
+        /// Enables or disables the Memory64 option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        memory64,
+        /// Checks if the Memory64 option turns on or not.
+        memory64_enabled => WasmEdge_Proposal_Memory64;
 
-    /// Enables or disables the ReferenceTypes option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn reference_types(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_ReferenceTypes,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_ReferenceTypes,
-                )
-            }
-        }
-    }
+        /// Enables or disables the Threads option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        threads,
+        /// Checks if the Threads option turns on or not.
+        threads_enabled => WasmEdge_Proposal_Threads;
 
-    /// Checks if the ReferenceTypes option turns on or not.
-    pub fn reference_types_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_ReferenceTypes)
-        }
-    }
+        /// Enables or disables the GC option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        gc,
+        /// Checks if the GC option turns on or not.
+        gc_enabled => WasmEdge_Proposal_GC;
 
-    /// Enables or disables the SIMD option. By default, the option is enabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn simd(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_SIMD)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::WasmEdge_Proposal_SIMD)
-            }
-        }
-    }
+        /// Enables or disables the ExceptionHandling option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        exception_handling,
+        /// Checks if the ExceptionHandling option turns on or not.
+        exception_handling_enabled => WasmEdge_Proposal_ExceptionHandling;
 
-    /// Checks if the SIMD option turns on or not.
-    pub fn simd_enabled(&self) -> bool {
-        unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_SIMD) }
-    }
+        /// Enables or disables the FunctionReferences option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        function_references,
+        /// Checks if the FunctionReferences option turns on or not.
+        function_references_enabled => WasmEdge_Proposal_FunctionReferences;
 
-    /// Enables or disables the TailCall option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn tail_call(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_TailCall)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::WasmEdge_Proposal_TailCall)
-            }
-        }
-    }
-
-    /// Checks if the TailCall option turns on or not.
-    pub fn tail_call_enabled(&self) -> bool {
-        unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_TailCall) }
-    }
-
-    /// Enables or disables the Annotations option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn annotations(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_Annotations)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_Annotations,
-                )
-            }
-        }
-    }
-
-    /// Checks if the Annotations option turns on or not.
-    pub fn annotations_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_Annotations)
-        }
-    }
-
-    /// Enables or disables the Memory64 option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn memory64(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_Memory64)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::WasmEdge_Proposal_Memory64)
-            }
-        }
-    }
-
-    /// Checks if the Memory64 option turns on or not.
-    pub fn memory64_enabled(&self) -> bool {
-        unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_Memory64) }
-    }
-
-    /// Enables or disables the Threads option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn threads(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_Threads)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::WasmEdge_Proposal_Threads)
-            }
-        }
-    }
-
-    /// Checks if the Threads option turns on or not.
-    pub fn threads_enabled(&self) -> bool {
-        unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_Threads) }
-    }
-
-    /// Enables or disables the GC option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn gc(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_GC)
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(self.inner.0, ffi::WasmEdge_Proposal_GC)
-            }
-        }
-    }
-
-    /// Checks if the GC option turns on or not.
-    pub fn gc_enabled(&self) -> bool {
-        unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_GC) }
-    }
-
-    /// Enables or disables the ExceptionHandling option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn exception_handling(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_ExceptionHandling,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_ExceptionHandling,
-                )
-            }
-        }
-    }
-
-    /// Checks if the ExceptionHandling option turns on or not.
-    pub fn exception_handling_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(
-                self.inner.0,
-                ffi::WasmEdge_Proposal_ExceptionHandling,
-            )
-        }
-    }
-
-    /// Enables or disables the FunctionReferences option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn function_references(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_FunctionReferences,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_FunctionReferences,
-                )
-            }
-        }
-    }
-
-    /// Checks if the FunctionReferences option turns on or not.
-    pub fn function_references_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(
-                self.inner.0,
-                ffi::WasmEdge_Proposal_FunctionReferences,
-            )
-        }
-    }
-
-    /// Enables or disables the MultiMemories option. By default, the option is disabled.
-    ///
-    /// # Argument
-    ///
-    /// * `enable` - Whether the option turns on or not.
-    pub fn multi_memories(&mut self, enable: bool) {
-        unsafe {
-            if enable {
-                ffi::WasmEdge_ConfigureAddProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_MultiMemories,
-                )
-            } else {
-                ffi::WasmEdge_ConfigureRemoveProposal(
-                    self.inner.0,
-                    ffi::WasmEdge_Proposal_MultiMemories,
-                )
-            }
-        }
-    }
-
-    /// Checks if the MultiMemories option turns on or not.
-    pub fn multi_memories_enabled(&self) -> bool {
-        unsafe {
-            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_MultiMemories)
-        }
+        /// Enables or disables the MultiMemories option. By default, the option is disabled.
+        ///
+        /// # Argument
+        ///
+        /// * `enable` - Whether the option turns on or not.
+        multi_memories,
+        /// Checks if the MultiMemories option turns on or not.
+        multi_memories_enabled => WasmEdge_Proposal_MultiMemories;
     }
 
     /// Enables or disables the `ForceInterpreter` option. By default, the option is disabled.

@@ -30,11 +30,12 @@ impl Loader {
             None => unsafe { ffi::WasmEdge_LoaderCreate(std::ptr::null_mut()) },
         };
 
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::LoaderCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::LoaderCreate))
+        } else {
+            Ok(Self {
                 inner: InnerLoader(ctx),
-            }),
+            })
         }
     }
 
@@ -88,12 +89,13 @@ impl Loader {
             ))?;
         }
 
-        match mod_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ModuleCreate)),
-            false => Ok(Module {
+        if mod_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ModuleCreate))
+        } else {
+            Ok(Module {
                 inner: InnerModule(mod_ctx),
             }
-            .into()),
+            .into())
         }
     }
 
@@ -144,12 +146,13 @@ impl Loader {
             libc::free(ptr);
         }
 
-        match mod_ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::ModuleCreate)),
-            false => Ok(Module {
+        if mod_ctx.is_null() {
+            Err(Box::new(WasmEdgeError::ModuleCreate))
+        } else {
+            Ok(Module {
                 inner: InnerModule(mod_ctx),
             }
-            .into()),
+            .into())
         }
     }
 }
@@ -193,23 +196,15 @@ mod tests {
         // load from file
         {
             // load .wasm file
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
             let module = result.unwrap();
             assert!(!module.inner.0.is_null());
 
-            let path = std::env::current_dir()
-                .unwrap()
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .join("examples/wasmedge-sys/data/fibonacci.wat");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/wasmedge-sys/data/fibonacci.wat");
             let result = loader.from_file(path);
             assert!(result.is_ok());
 

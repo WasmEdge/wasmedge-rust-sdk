@@ -2,7 +2,8 @@ use crate::{
     CallingFrame, FuncType, Function, Instance, WasmEdgeResult, WasmValue, r#async::fiber::AsyncCx,
     ffi, instance::module::InnerInstance,
 };
-use std::{future::Future, os::raw::c_void};
+use core::ffi::c_void;
+use std::future::Future;
 use wasmedge_types::error::CoreError;
 
 use super::module::AsyncInstance;
@@ -21,7 +22,7 @@ pub type AsyncFn<'data, 'inst, 'frame, 'fut, Data>
 
 unsafe extern "C" fn wrap_async_fn<Data>(
     key_ptr: *mut c_void,
-    data: *mut std::os::raw::c_void,
+    data: *mut c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
     params: *const ffi::WasmEdge_Value,
     param_len: u32,

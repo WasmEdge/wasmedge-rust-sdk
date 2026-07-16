@@ -33,7 +33,7 @@ pub type CustomFnWrapper = unsafe extern "C" fn(
 // Wrapper function for thread-safe scenarios.
 unsafe extern "C" fn wrap_fn<Data>(
     key_ptr: *mut c_void,
-    data: *mut std::os::raw::c_void,
+    data: *mut c_void,
     call_frame_ctx: *const ffi::WasmEdge_CallingFrameContext,
     params: *const ffi::WasmEdge_Value,
     param_len: u32,
@@ -316,11 +316,12 @@ impl FuncTypeOwn {
                 ret_tys.len() as u32,
             )
         };
-        match ctx.is_null() {
-            true => Err(Box::new(WasmEdgeError::FuncTypeCreate)),
-            false => Ok(Self {
+        if ctx.is_null() {
+            Err(Box::new(WasmEdgeError::FuncTypeCreate))
+        } else {
+            Ok(Self {
                 inner: InnerFuncType(ctx),
-            }),
+            })
         }
     }
 }
