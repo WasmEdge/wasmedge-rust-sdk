@@ -107,7 +107,7 @@ pub(crate) unsafe fn init_signal_listen() {
 pub struct Executor {
     pub(crate) inner: InnerExecutor,
     // `WasmEdge_ExecutorCreate` stores the raw stat pointer without taking ownership, so hold this `Arc` to keep it
-    // alive; `Drop for Executor` runs `WasmEdge_ExecutorDelete` before this field drops (not by declaration order).
+    // alive; `Drop::drop` runs `WasmEdge_ExecutorDelete` before any field is dropped, so `_stat` outlives the delete.
     _stat: Option<Arc<InnerStat>>,
 }
 
