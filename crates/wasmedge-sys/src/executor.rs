@@ -28,18 +28,27 @@ scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
-    if let Some(info) = info.as_mut() {
-        let si_value = info.si_value();
-        let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
-        let dist_pthread = *value;
-        let self_pthread = libc::pthread_self();
-        if self_pthread == dist_pthread {
-            if JMP_BUF.is_set() {
-                let env = JMP_BUF.with(|s| s.sigjmp_buf);
-                setjmp::siglongjmp(env, 1);
+    // SAFETY: this is the POSIX signal handler installed for `timeout_signo()`.
+    // `info` is the `siginfo_t*` the kernel passes in; dereferencing it and
+    // reading `si_value()` is valid inside the handler, and `*value` reads back
+    // the `pthread_t` the timer was armed with (stored in `sival_ptr`).
+    // `pthread_self`, `siglongjmp` (into the `JMP_BUF` set by
+    // `TimeoutFiberFuture::poll`) and `pthread_sigqueue` are the
+    // async-signal-safe primitives this timeout mechanism relies on.
+    unsafe {
+        if let Some(info) = info.as_mut() {
+            let si_value = info.si_value();
+            let value: *mut libc::pthread_t = si_value.sival_ptr.cast();
+            let dist_pthread = *value;
+            let self_pthread = libc::pthread_self();
+            if self_pthread == dist_pthread {
+                if JMP_BUF.is_set() {
+                    let env = JMP_BUF.with(|s| s.sigjmp_buf);
+                    setjmp::siglongjmp(env, 1);
+                }
+            } else {
+                libc::pthread_sigqueue(dist_pthread, sig, si_value);
             }
-        } else {
-            libc::pthread_sigqueue(dist_pthread, sig, si_value);
         }
     }
 }
@@ -47,19 +56,29 @@ unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
 unsafe extern "C" fn pre_host_func(_: *mut c_void) {
     use libc::SIG_BLOCK;
 
-    let mut set = std::mem::zeroed();
-    libc::sigemptyset(&mut set);
-    libc::sigaddset(&mut set, timeout_signo());
-    libc::pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut());
+    // SAFETY: registered as WasmEdge's pre-host-function hook. Zero-initializes a
+    // `sigset_t`, adds the timeout signal to it and blocks that signal on the
+    // current thread. All are standard libc calls on the locally owned `set`.
+    unsafe {
+        let mut set = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, timeout_signo());
+        libc::pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut());
+    }
 }
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn post_host_func(_: *mut c_void) {
     use libc::SIG_UNBLOCK;
 
-    let mut set = std::mem::zeroed();
-    libc::sigemptyset(&mut set);
-    libc::sigaddset(&mut set, timeout_signo());
-    libc::pthread_sigmask(SIG_UNBLOCK, &set, std::ptr::null_mut());
+    // SAFETY: mirror of `pre_host_func`, registered as the post-host-function
+    // hook; unblocks the timeout signal on the current thread. Standard libc
+    // calls on the locally owned `set`.
+    unsafe {
+        let mut set = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, timeout_signo());
+        libc::pthread_sigmask(SIG_UNBLOCK, &set, std::ptr::null_mut());
+    }
 }
 
 #[inline]
@@ -78,10 +97,17 @@ static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 pub(crate) unsafe fn init_signal_listen() {
     INIT_SIGNAL_LISTEN.call_once(|| {
-        let mut new_act: libc::sigaction = std::mem::zeroed();
-        new_act.sa_sigaction = sync_timeout as *const () as usize;
-        new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
-        libc::sigaction(timeout_signo(), &new_act, std::ptr::null_mut());
+        // SAFETY: runs once via `Once`. Installs `sync_timeout` as the handler for
+        // `timeout_signo()`: `new_act` is a zero-initialized `sigaction` populated
+        // with the handler pointer and flags before `sigaction` registers it.
+        // Standard libc usage on locally owned data. (The enclosing fn is `unsafe`,
+        // but this closure is a separate context and needs its own block.)
+        unsafe {
+            let mut new_act: libc::sigaction = std::mem::zeroed();
+            new_act.sa_sigaction = sync_timeout as *const () as usize;
+            new_act.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
+            libc::sigaction(timeout_signo(), &new_act, std::ptr::null_mut());
+        }
     });
 }
 

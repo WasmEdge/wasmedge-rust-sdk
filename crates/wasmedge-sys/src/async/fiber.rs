@@ -329,26 +329,35 @@ impl AsyncCx {
         &self,
         mut future: Pin<&mut (dyn Future<Output = U> + Send)>,
     ) -> Result<U, ()> {
-        let suspend = *self.current_suspend;
-        let _reset = Reset(self.current_suspend, suspend);
-        *self.current_suspend = ptr::null();
-        assert!(!suspend.is_null());
+        // SAFETY: `self.current_suspend` and `self.current_poll_cx` are raw
+        // pointers captured from a live `AsyncState` when this `AsyncCx` was set
+        // up for the running fiber (see `FiberFuture::poll` / `AsyncCx::new`).
+        // Per the fiber protocol `block_on` only runs while that state is alive
+        // on the polling task's stack, so both pointers are non-null (asserted)
+        // and valid to dereference; each `Reset` guard restores the previous
+        // value when its scope ends.
+        unsafe {
+            let suspend = *self.current_suspend;
+            let _reset = Reset(self.current_suspend, suspend);
+            *self.current_suspend = ptr::null();
+            assert!(!suspend.is_null());
 
-        loop {
-            let future_result = {
-                let poll_cx = *self.current_poll_cx;
-                let _reset = Reset(self.current_poll_cx, poll_cx);
-                *self.current_poll_cx = ptr::null_mut();
-                assert!(!poll_cx.is_null());
-                future.as_mut().poll(&mut *poll_cx)
-            };
+            loop {
+                let future_result = {
+                    let poll_cx = *self.current_poll_cx;
+                    let _reset = Reset(self.current_poll_cx, poll_cx);
+                    *self.current_poll_cx = ptr::null_mut();
+                    assert!(!poll_cx.is_null());
+                    future.as_mut().poll(&mut *poll_cx)
+                };
 
-            match future_result {
-                Poll::Ready(t) => break Ok(t),
-                Poll::Pending => {}
+                match future_result {
+                    Poll::Ready(t) => break Ok(t),
+                    Poll::Pending => {}
+                }
+                let res = (*suspend).suspend(());
+                res?;
             }
-            let res = (*suspend).suspend(());
-            res?;
         }
     }
 }

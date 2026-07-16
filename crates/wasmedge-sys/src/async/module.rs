@@ -73,7 +73,9 @@ impl<T: Send> AsMut<ImportModule<T>> for AsyncImportObject<T> {
 
 impl<T: Send> AsInstance for AsyncImportObject<T> {
     unsafe fn as_ptr(&self) -> *const crate::ffi::WasmEdge_ModuleInstanceContext {
-        self.0.as_ptr()
+        // SAFETY: delegates to the inner instance's `as_ptr`; the same contract
+        // (returned pointer must not outlive `self`) is propagated unchanged.
+        unsafe { self.0.as_ptr() }
     }
 }
 

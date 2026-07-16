@@ -2,8 +2,6 @@
     html_logo_url = "https://github.com/cncf/artwork/blob/master/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.png?raw=true",
     html_favicon_url = "https://raw.githubusercontent.com/cncf/artwork/49169bdbc88a7ce3c4a722c641cc2d548bd5c340/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.svg"
 )]
-// If the version of rust used is less than v1.63, please uncomment the follow attribute.
-// #![feature(explicit_generic_args_with_impl_trait)]
 #![allow(clippy::vec_init_then_push)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -74,7 +72,7 @@
 //!
 //! This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
 //!
-//! **Notice:** The minimum supported Rust version is 1.71.
+//! **Notice:** The minimum supported Rust version is 1.85.
 //!
 //! ## API Reference
 //!

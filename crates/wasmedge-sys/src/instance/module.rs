@@ -33,7 +33,9 @@ where
     Inst: AsMut<Instance> + AsRef<Instance>,
 {
     unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
-        self.as_ref().as_ptr()
+        // SAFETY: delegates to the underlying `Instance`'s `as_ptr`; the same
+        // contract (returned pointer must not outlive `self`) is propagated.
+        unsafe { self.as_ref().as_ptr() }
     }
 }
 
@@ -396,7 +398,10 @@ impl<T: ?Sized> Drop for ImportModule<T> {
 }
 
 unsafe extern "C" fn import_data_finalizer<T>(ptr: *mut std::os::raw::c_void) {
-    let box_data: Box<T> = Box::from_raw(ptr as _);
+    // SAFETY: `ptr` is the pointer WasmEdge stored via `Box::leak(data)` in
+    // `ImportModule::create` and hands back exactly once at finalization;
+    // reconstructing the `Box<T>` re-takes ownership so it can be dropped.
+    let box_data: Box<T> = unsafe { Box::from_raw(ptr as _) };
     std::mem::drop(box_data)
 }
 
@@ -446,7 +451,11 @@ impl<T: Sized> ImportModule<T> {
     ///
     /// This function will take over the lifetime management of `ctx`, so do not call `ffi::WasmEdge_ModuleInstanceDelete` on `ctx` after this.
     pub unsafe fn from_raw(ctx: *mut ffi::WasmEdge_ModuleInstanceContext) -> Self {
-        let wasmedge_s = WasmEdgeString::from_raw(ffi::WasmEdge_ModuleInstanceGetModuleName(ctx));
+        // SAFETY: `ctx` is a valid module-instance context per this function's
+        // contract; `WasmEdge_ModuleInstanceGetModuleName` reads its name and
+        // `WasmEdgeString::from_raw` wraps the returned `WasmEdge_String`.
+        let wasmedge_s =
+            unsafe { WasmEdgeString::from_raw(ffi::WasmEdge_ModuleInstanceGetModuleName(ctx)) };
         let name = (&wasmedge_s).into();
         Self {
             inner: InnerInstance(ctx),

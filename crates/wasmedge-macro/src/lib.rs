@@ -138,7 +138,7 @@ fn expand_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::Token
 
     let data_arg = item_fn.sig.inputs.last().unwrap().clone();
     let ty_ptr = match &data_arg {
-        FnArg::Typed(PatType { ref ty, .. }) => match **ty {
+        FnArg::Typed(PatType { ty, .. }) => match **ty {
             syn::Type::Reference(syn::TypeReference { ref elem, .. }) => syn::TypePtr {
                 star_token: parse_quote!(*),
                 const_token: None,
@@ -158,7 +158,7 @@ fn expand_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::Token
                                     Some(arg) => match arg {
                                         syn::GenericArgument::Type(ty) => match ty {
                                             syn::Type::Reference(syn::TypeReference {
-                                                ref elem,
+                                                elem,
                                                 ..
                                             }) => syn::TypePtr {
                                                 star_token: parse_quote!(*),
@@ -341,7 +341,7 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
     // get the type of the third argument
     let data_arg = item_fn.sig.inputs.last().unwrap().clone();
     let ty_third_arg = match &data_arg {
-        FnArg::Typed(PatType { ref ty, .. }) => match **ty {
+        FnArg::Typed(PatType { ty, .. }) => match **ty {
             syn::Type::Reference(syn::TypeReference { ref elem, .. }) => syn::TypePtr {
                 star_token: parse_quote!(*),
                 const_token: None,
@@ -361,7 +361,7 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
                                     Some(arg) => match arg {
                                         syn::GenericArgument::Type(ty) => match ty {
                                             syn::Type::Reference(syn::TypeReference {
-                                                ref elem,
+                                                elem,
                                                 ..
                                             }) => syn::TypePtr {
                                                 star_token: parse_quote!(*),
@@ -568,7 +568,7 @@ fn sys_expand_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::T
         3 => {
             let data_arg = item_fn.sig.inputs.last().unwrap().clone();
             let ty_ptr = match &data_arg {
-                FnArg::Typed(PatType { ref ty, .. }) => match **ty {
+                FnArg::Typed(PatType { ty, .. }) => match **ty {
                     syn::Type::Reference(syn::TypeReference { ref elem, .. }) => syn::TypePtr {
                         star_token: parse_quote!(*),
                         const_token: None,
@@ -588,7 +588,7 @@ fn sys_expand_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::T
                                             Some(arg) => match arg {
                                                 syn::GenericArgument::Type(ty) => match ty {
                                                     syn::Type::Reference(syn::TypeReference {
-                                                        ref elem,
+                                                        elem,
                                                         ..
                                                     }) => syn::TypePtr {
                                                         star_token: parse_quote!(*),

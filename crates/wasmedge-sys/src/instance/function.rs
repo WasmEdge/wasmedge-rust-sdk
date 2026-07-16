@@ -42,11 +42,17 @@ unsafe extern "C" fn wrap_fn<Data>(
 ) -> ffi::WasmEdge_Result {
     let mut frame = CallingFrame::create(call_frame_ctx);
     // let executor_ctx = ffi::WasmEdge_CallingFrameGetExecutor(call_frame_ctx);
-    let inst_ctx = ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx);
+    // SAFETY: `call_frame_ctx` is the calling-frame handle the WasmEdge runtime
+    // passes into this host-function trampoline; it stays valid for the duration
+    // of the call, so reading the module instance from it is sound.
+    let inst_ctx = unsafe { ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx) };
     let mut inst = std::mem::ManuallyDrop::new(Instance {
         inner: InnerInstance(inst_ctx as _),
     });
-    let data = &mut *(data as *mut Data);
+    // SAFETY: `data` is the `*mut Data` host-context pointer registered with this
+    // function via `create_with_custom_wrapper`; the runtime hands it back
+    // unchanged and guarantees it outlives and is uniquely borrowed for the call.
+    let data = unsafe { &mut *(data as *mut Data) };
 
     let input = if params.is_null() || param_len == 0 {
         vec![]
@@ -64,7 +70,10 @@ unsafe extern "C" fn wrap_fn<Data>(
         unsafe { std::slice::from_raw_parts_mut(returns, return_len) }
     };
 
-    let real_fn: SyncFn<Data> = std::mem::transmute(key_ptr);
+    // SAFETY: `key_ptr` was produced by casting a `SyncFn<Data>` to a raw pointer
+    // at registration time; transmuting it back to the same type recovers the
+    // original, still-valid function pointer.
+    let real_fn: SyncFn<Data> = unsafe { std::mem::transmute(key_ptr) };
 
     match real_fn(data, &mut inst, &mut frame, input) {
         Ok(returns) => {
@@ -141,7 +150,10 @@ impl Function {
         data: *mut T,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        Self::create_with_custom_wrapper(ty, wrap_fn::<T>, real_fn as _, data as _, cost)
+        // SAFETY: forwards to `create_with_custom_wrapper` using this function's
+        // own `wrap_fn` trampoline; the caller's guarantee that `real_fn` and
+        // `data` outlive the returned `Function` satisfies that function's contract.
+        unsafe { Self::create_with_custom_wrapper(ty, wrap_fn::<T>, real_fn as _, data as _, cost) }
     }
 
     /// Creates a [host function](crate::Function) with the given function type and the custom function wrapper.
@@ -174,13 +186,19 @@ impl Function {
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let ty: FuncTypeOwn = ty.into();
-        let ctx = ffi::WasmEdge_FunctionInstanceCreateBinding(
-            ty.inner.0,
-            Some(fn_wrapper),
-            real_fn,
-            data,
-            cost,
-        );
+        // SAFETY: `ty.inner.0` is the valid function-type handle owned by the local
+        // `ty`; `fn_wrapper` is a valid `extern "C"` trampoline and `real_fn`/`data`
+        // are the caller-provided pointers whose lifetimes the caller guarantees.
+        // The binding copies the type and stores the pointers.
+        let ctx = unsafe {
+            ffi::WasmEdge_FunctionInstanceCreateBinding(
+                ty.inner.0,
+                Some(fn_wrapper),
+                real_fn,
+                data,
+                cost,
+            )
+        };
 
         if ctx.is_null() {
             Err(Box::new(WasmEdgeError::Func(FuncError::Create)))
@@ -245,7 +263,9 @@ impl AsFunc for Function {
 }
 impl<F: AsRef<Function>> AsFunc for F {
     unsafe fn get_func_raw(&self) -> *mut ffi::WasmEdge_FunctionInstanceContext {
-        self.as_ref().get_func_raw()
+        // SAFETY: delegates to the inner `Function`'s `get_func_raw`; its contract
+        // (the returned pointer must not outlive `self`) is propagated unchanged.
+        unsafe { self.as_ref().get_func_raw() }
     }
 }
 
