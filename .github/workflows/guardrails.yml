@@ -103,5 +103,28 @@ jobs:
       # wasmedge-sys/wasmedge-sdk need to link against libwasmedge, so a full
       # each-feature matrix isn't practical here. Instead check the one fixed
       # combination that matters most: --no-default-features still builds.
-      - name: cargo check --no-default-features --features standalone (wasmedge-sys, wasmedge-sdk)
-        run: cargo check -p wasmedge-sys -p wasmedge-sdk --no-default-features --features standalone
+      - name: cargo check --no-default-features --features standalone,wasi_crypto (wasmedge-sys, wasmedge-sdk)
+        run: cargo check -p wasmedge-sys -p wasmedge-sdk --no-default-features --features standalone,wasi_crypto
+
+  msrv:
+    name: msrv
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust 1.85 (MSRV)
+        uses: dtolnay/rust-toolchain@1.85
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # workspace.package.rust-version = 1.85 and resolver = "3" already keep
+      # every dependency MSRV-compatible; this job is the proof, not the
+      # enforcement mechanism. standalone,aot,ffi matches the `docs` job's
+      # feature set so no system WasmEdge install is needed here either.
+      - name: cargo check --workspace (MSRV)
+        run: cargo check --workspace --features standalone,aot,ffi

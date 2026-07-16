@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       dry_run:
-        description: "Validate the release without publishing or deploying documentation"
+        description: "Validate the release without publishing"
         required: true
         default: true
         type: boolean
@@ -43,9 +43,8 @@ jobs:
           echo "DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib" >> "$GITHUB_ENV"
           echo "$HOME/.wasmedge/bin" >> "$GITHUB_PATH"
 
-      # must use nightly, because of the feature `doc_cfg`
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
 
       # Workspace dependency versions may not exist on crates.io until the
       # preceding release workflows complete.
@@ -56,10 +55,6 @@ jobs:
       - name: Dry run cargo publish
         if: inputs.dry_run == false
         run: cargo publish --dry-run -p wasmedge-sdk
-
-      - name: Build API document
-        run: |
-          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
   release_wasmedge_sdk:
     name: Release wasmedge-sdk crate
@@ -93,9 +88,8 @@ jobs:
           ldconfig
           /usr/local/bin/wasmedge --version
 
-      # must use nightly, because of the feature `doc_cfg`
-      - name: Install Rust-nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
 
       # Workspace dependency versions may not exist on crates.io until the
       # preceding release workflows complete.
@@ -118,38 +112,3 @@ jobs:
         shell: bash
         run: |
           cargo publish -p wasmedge-sdk
-
-      - name: Build API document
-        run: |
-          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
-
-      - name: Upload API document
-        if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-        uses: actions/upload-artifact@v7
-        with:
-          name: wasmedge-sdk-api-docs
-          path: target/doc
-          if-no-files-found: error
-
-  deploy_api_document:
-    name: Deploy API document
-    if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-    needs: release_wasmedge_sdk
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download API document
-        uses: actions/download-artifact@v8
-        with:
-          name: wasmedge-sdk-api-docs
-          path: target/doc
-
-      - name: Deploy API document
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: target/doc
-          force_orphan: true

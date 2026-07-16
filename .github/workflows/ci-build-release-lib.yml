@@ -6,11 +6,15 @@ concurrency:
 
 env:
   WASMEDGE_VERSION: "0.17.1"
+  # WasmEdge/WasmEdge doesn't publish install_v2.sh support for Windows (the
+  # script hard-errors on Windows_NT/MinGW), so the Windows job still builds
+  # WasmEdge from source. Pinning the LLVM archive here keeps that one-off
+  # build recipe bumpable without touching the PowerShell script below.
+  WINDOWS_LLVM_URL: "https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-17.0.6/LLVM-17.0.6-win64-MultiThreadedDLL.zip"
 
 on:
   push:
-    branches:
-      - '!bump/**'
+    branches: [main]
     paths-ignore:
       - "**/*.md"
       - ".github/workflows/standalone.yml"
@@ -21,10 +25,14 @@ on:
       - ".github/workflows/standalone.yml"
       - ".github/workflows/rust-static-lib.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build_ubuntu:
     name: Ubuntu
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       matrix:
         rust: [stable]
@@ -50,6 +58,9 @@ jobs:
         with:
           components: rustfmt, clippy
           toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Rustfmt
         run: cargo fmt --all -- --check
@@ -84,6 +95,7 @@ jobs:
   build_macos:
     name: macOS arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         os: [macos-15]
@@ -107,6 +119,9 @@ jobs:
           components: rustfmt, clippy
           toolchain: ${{ matrix.rust }}
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
 
@@ -123,6 +138,7 @@ jobs:
   build_windows:
     name: Windows
     runs-on: windows-2022
+    timeout-minutes: 60
     strategy:
       matrix:
         rust: [stable]
@@ -151,14 +167,39 @@ jobs:
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
-          git checkout $(git tag -l --sort=-version:refname | Where-Object { $_ -match '^0.[0-9][0-9].[0-9]$' } | Select-Object -First 1)
+          # Pin to the exact release tag this workflow already targets via
+          # env.WASMEDGE_VERSION (matches the other jobs' `-v` install_v2.sh
+          # argument), rather than guessing "whatever tag sorts first". The
+          # regex only filters the candidate list for a readable error if the
+          # pin doesn't exist as a tag.
+          $releaseTags = git tag -l --sort=-version:refname | Where-Object { $_ -match '^\d+\.\d+\.\d+$' }
+          if ($releaseTags -notcontains $env:WASMEDGE_VERSION) {
+            Write-Error "WasmEdge tag '$env:WASMEDGE_VERSION' (env.WASMEDGE_VERSION) not found in WasmEdge/WasmEdge release tags: $($releaseTags -join ', ')"
+            exit 1
+          }
+          git checkout $env:WASMEDGE_VERSION
+
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
-          $llvm = "LLVM-17.0.6-win64-MultiThreadedDLL.zip"
-          curl -sLO https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-17.0.6/LLVM-17.0.6-win64-MultiThreadedDLL.zip -o $llvm
-          Expand-Archive -Path $llvm
-          $llvm_dir = "$pwd\\LLVM-17.0.6-win64-MultiThreadedDLL\\LLVM-17.0.6-win64\\lib\\cmake\\llvm"
+
+          # LLVM archive URL/version lives in env.WINDOWS_LLVM_URL (workflow
+          # env block) so bumping it doesn't require touching this script.
+          # The extraction dir is searched rather than hardcoded, since the
+          # zip's internal top-level folder name doesn't always match the
+          # archive's own file name.
+          $llvm = [System.IO.Path]::GetFileName($env:WINDOWS_LLVM_URL)
+          curl -sSfL --retry 3 -o $llvm $env:WINDOWS_LLVM_URL
+          $llvmExtractDir = [System.IO.Path]::GetFileNameWithoutExtension($llvm)
+          Expand-Archive -Path $llvm -DestinationPath $llvmExtractDir
+          $llvm_dir = (Get-ChildItem -Path $llvmExtractDir -Recurse -Directory -Filter "llvm" |
+            Where-Object { $_.FullName -match '\\cmake\\llvm$' } |
+            Select-Object -First 1).FullName
+          if (-not $llvm_dir) {
+            Write-Error "Could not locate lib/cmake/llvm under extracted archive $llvmExtractDir"
+            exit 1
+          }
+
           $Env:CC = "clang-cl"
           $Env:CXX = "clang-cl"
           $cmake_sys_version = "10.0.19041.0"
@@ -170,6 +211,9 @@ jobs:
         with:
           components: rustfmt, clippy
           toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Rustfmt
         run: cargo fmt --all -- --check

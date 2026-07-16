@@ -24,10 +24,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   integration-test-ubuntu:
     name: Integration Tests (Ubuntu)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -42,16 +46,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Install WasmEdge
         run: |
@@ -59,14 +55,14 @@ jobs:
             https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
           bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
           "$HOME/.wasmedge/bin/wasmedge" --version
-          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
-          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> "$GITHUB_ENV"
+          echo "$HOME/.wasmedge/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
 
       - name: Verify WasmEdge installation
         run: |
           wasmedge --version
-          ls -la $HOME/.wasmedge/lib/
+          ls -la "$HOME/.wasmedge/lib/"
 
       - name: Build SDK
         run: cargo build --release
@@ -99,6 +95,7 @@ jobs:
   integration-test-macos:
     name: Integration Tests (macOS arm64)
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -114,16 +111,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.rust }}-
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Install WasmEdge
         run: |
@@ -131,14 +120,14 @@ jobs:
             https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
           bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
           "$HOME/.wasmedge/bin/wasmedge" --version
-          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
-          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
-          echo "DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> "$GITHUB_ENV"
+          echo "$HOME/.wasmedge/bin" >> "$GITHUB_PATH"
+          echo "DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib:$DYLD_LIBRARY_PATH" >> "$GITHUB_ENV"
 
       - name: Verify WasmEdge installation
         run: |
           wasmedge --version
-          ls -la $HOME/.wasmedge/lib/
+          ls -la "$HOME/.wasmedge/lib/"
 
       - name: Build SDK
         run: cargo build --release
@@ -171,6 +160,7 @@ jobs:
   integration-test-standalone:
     name: Integration Tests (Standalone)
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -186,16 +176,10 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@v6
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-standalone-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-standalone-${{ matrix.rust }}-
+          key: standalone
 
       - name: Build SDK with standalone feature
         run: cargo build --release --features standalone
@@ -214,6 +198,7 @@ jobs:
   integration-test-bundled:
     name: Integration Tests (Bundled/Static)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -233,16 +218,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libzstd-dev libfmt-dev
 
-      - name: Cache cargo registry
-        uses: actions/cache@v6
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-bundled-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-bundled-${{ matrix.rust }}-
+          key: bundled
 
       - name: Install wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
