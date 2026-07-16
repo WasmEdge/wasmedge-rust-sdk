@@ -1,0 +1,107 @@
+name: Guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  semver-checks:
+    name: semver-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # wasmedge-macro is a proc-macro crate: cargo-semver-checks cannot scan it (covered by macro ui-tests instead). exclude-only selection picks nothing in a root-package workspace (first-run failure), so packages are listed explicitly.
+      - name: semver-checks (wasmedge-types, async-wasi)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: wasmedge-types,async-wasi
+
+      - name: semver-checks (wasmedge-sys, wasmedge-sdk; standalone feature)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: wasmedge-sys,wasmedge-sdk
+          features: standalone
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo-deny (advisories + licenses)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses
+
+  docs:
+    name: docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # TODO(Phase 6): re-add RUSTDOCFLAGS="-D warnings" (and eventually
+      # -D rustdoc::broken_intra_doc_links) once the known-broken intra-doc
+      # links are fixed (P6-1). Enabling it now would fail on pre-existing
+      # links, not on anything this workflow is meant to catch.
+      - name: cargo doc
+        run: cargo doc --workspace --no-deps --features standalone,aot,ffi
+
+  feature-hack:
+    name: feature-hack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      # TODO(P2-4): re-add async-wasi once --no-default-features compiles (pre-existing breakage, PR #147 first CI run).
+      - name: cargo hack check --each-feature (wasmedge-types, wasmedge-macro)
+        run: cargo hack check --each-feature --no-dev-deps -p wasmedge-types -p wasmedge-macro
+
+      # wasmedge-sys/wasmedge-sdk need to link against libwasmedge, so a full
+      # each-feature matrix isn't practical here. Instead check the one fixed
+      # combination that matters most: --no-default-features still builds.
+      - name: cargo check --no-default-features --features standalone (wasmedge-sys, wasmedge-sdk)
+        run: cargo check -p wasmedge-sys -p wasmedge-sdk --no-default-features --features standalone

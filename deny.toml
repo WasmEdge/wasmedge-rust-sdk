@@ -1,0 +1,42 @@
+# cargo-deny configuration (Phase 0 guardrail).
+#
+# Scope for now is intentionally limited to `advisories` + `licenses` (see
+# .github/workflows/guardrails.yml). `bans`/`sources` cleanup (duplicate crate
+# versions etc.) is tracked separately in the modernization plan and is not
+# gated here yet.
+
+[advisories]
+# Only fail when an unmaintained advisory applies to a crate that is a direct
+# dependency of a workspace member (not arbitrary transitive dependencies).
+unmaintained = "workspace"
+
+ignore = [
+    # paste is unmaintained (repo archived); paste is dropped from
+    # wasmedge-sys in Phase 2 (P2-3), at which point this entry is removed.
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (repo archived); removed in Phase 2 (P2-3)" },
+
+    # rustls-webpki 0.101.7 (pulled in transitively via wasmedge-sys's
+    # (build)-only dependency on reqwest 0.11's rustls-tls backend, used
+    # solely by build.rs to download the WasmEdge release archive over
+    # HTTPS, which is separately verified via SHA-256 checksum). Fixing
+    # these means bumping reqwest, which is D-13 / Phase 4 scope, not
+    # Phase 0. Revisit and drop these three entries when reqwest is
+    # upgraded off the rustls 0.21 chain.
+    { id = "RUSTSEC-2026-0098", reason = "build-dependency only (reqwest, via build.rs); fixed by the reqwest upgrade tracked in D-13 (Phase 4)" },
+    { id = "RUSTSEC-2026-0099", reason = "build-dependency only (reqwest, via build.rs); fixed by the reqwest upgrade tracked in D-13 (Phase 4)" },
+    { id = "RUSTSEC-2026-0104", reason = "build-dependency only (reqwest, via build.rs); fixed by the reqwest upgrade tracked in D-13 (Phase 4)" },
+]
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Unicode-3.0",
+    # Used by fiber-for-wasmedge and its wasmtime-* build helpers.
+    "Apache-2.0 WITH LLVM-exception",
+    # Used by webpki-roots (build-only, via reqwest's rustls-tls backend).
+    "MPL-2.0",
+]
