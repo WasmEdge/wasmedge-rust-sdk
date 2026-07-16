@@ -203,32 +203,36 @@ impl Drop for Memory {
 impl Memory {
     pub fn get_ref<T: Sized>(&self, offset: usize) -> Option<&T> {
         unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self.data_pointer(offset as u32, r as u32).ok()?;
+            let r = u32::try_from(std::mem::size_of::<T>()).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer(offset, r).ok()?;
             ptr.cast::<T>().as_ref()
         }
     }
 
     pub fn slice<T: Sized>(&self, offset: usize, len: usize) -> Option<&[T]> {
         unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self.data_pointer(offset as u32, r as u32).ok()? as *const T;
+            let r = u32::try_from(std::mem::size_of::<T>().checked_mul(len)?).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer(offset, r).ok()? as *const T;
             Some(std::slice::from_raw_parts(ptr, len))
         }
     }
 
     pub fn get_ref_mut<T: Sized>(&mut self, offset: usize) -> Option<&mut T> {
         unsafe {
-            let r = std::mem::size_of::<T>();
-            let ptr = self.data_pointer_mut(offset as u32, r as u32).ok()?;
+            let r = u32::try_from(std::mem::size_of::<T>()).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer_mut(offset, r).ok()?;
             ptr.cast::<T>().as_mut()
         }
     }
 
     pub fn mut_slice<T: Sized>(&mut self, offset: usize, len: usize) -> Option<&mut [T]> {
         unsafe {
-            let r = std::mem::size_of::<T>() * len;
-            let ptr = self.data_pointer(offset as u32, r as u32).ok()? as *mut T;
+            let r = u32::try_from(std::mem::size_of::<T>().checked_mul(len)?).ok()?;
+            let offset = u32::try_from(offset).ok()?;
+            let ptr = self.data_pointer_mut(offset, r).ok()? as *mut T;
             Some(std::slice::from_raw_parts_mut(ptr, len))
         }
     }
