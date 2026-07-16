@@ -6,6 +6,32 @@
 //! # Overview
 //! The [wasmedge-macro](https://crates.io/crates/wasmedge-macro) crate defines a group of procedural macros used by both [wasmedge-sdk](https://crates.io/crates/wasmedge-sdk) and [wasmedge-sys](https://crates.io/crates/wasmedge-sys) crates.
 
+// -----------------------------------------------------------------------
+// Deprecated: all six macros below (`host_function`,
+// `async_host_function`, and the four `#[doc(hidden)]` `sys_*_host_function`
+// macros) expand to the pre-0.14 host-function ABI, which was removed when
+// `wasmedge-sdk` reached 0.14 / `wasmedge-sys` reached 0.19. Code using any
+// of them does not compile against current crates. See each macro's doc
+// comment for the modern replacement. They are marked `#[deprecated]` as of
+// `wasmedge-macro` 0.7.0.
+//
+// Deprecation mechanics verified: rustc emits deprecated-attribute warnings
+// at attribute use sites.
+//
+// Verified empirically (rustc/cargo 1.97.0) with a throwaway two-crate probe:
+// a proc-macro crate exporting `#[deprecated] #[proc_macro_attribute] fn`,
+// consumed via `#[that_attr]` on an item in a separate downstream crate.
+// `cargo build` on the consumer emitted
+// `warning: use of deprecated macro '<name>': <note>` pointing at the
+// attribute's use site in the *consumer's* source — not just inside the
+// macro-defining crate. This held with `#[deprecated]` placed both before
+// and after `#[proc_macro_attribute]` on the function. A non-deprecated
+// control macro produced no warning, isolating the effect to `#[deprecated]`
+// itself. Conclusion: the standard `#[deprecated]` mechanism works as
+// expected for `#[proc_macro_attribute]` fns — no ui-test fallback is
+// needed.
+// -----------------------------------------------------------------------
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{FnArg, Item, Pat, PatType, parse_macro_input, parse_quote, spanned::Spanned};
@@ -13,7 +39,52 @@ use syn::{FnArg, Item, Pat, PatType, parse_macro_input, parse_quote, spanned::Sp
 // ================== macros for wasmedge-sdk ==================
 
 /// Declare a native function that will be used to create a host function instance.
+///
+/// # Deprecated: targets an API that no longer exists
+///
+/// This macro expands to the **pre-0.14** host-function ABI: a 3-argument free
+/// function `(CallingFrame, Vec<WasmValue>, *mut c_void) -> Result<Vec<WasmValue>,
+/// HostFuncError>`, wrapped around a generated call to `Caller::new(frame)`.
+/// `Caller` no longer exists — it was removed when `wasmedge-sdk` reached 0.14 /
+/// `wasmedge-sys` reached 0.19. `HostFuncError` still exists in
+/// `wasmedge_types::error`, but it is unrelated to and unused by the current
+/// host-function signature, which returns `Result<Vec<WasmValue>, CoreError>`
+/// instead. **Any function annotated with `#[host_function]` fails to compile**
+/// against current `wasmedge-sdk` (>= 0.14) or `wasmedge-sys` (>= 0.19).
+///
+/// This macro is marked `#[deprecated]` as of `wasmedge-macro` 0.7.0 (see the
+/// verification note near the top of this file).
+///
+/// ## Modern replacement
+///
+/// Write the host function with today's signature directly — no macro needed —
+/// and register it with `ImportObjectBuilder::with_func`:
+///
+/// ```rust,ignore
+/// // This crate cannot depend on `wasmedge-sdk` (that would be circular), so
+/// // this example is illustrative only. For a compiled, tested version, see
+/// // `ImportObjectBuilder::with_func` in the wasmedge-sdk crate docs:
+/// // https://docs.rs/wasmedge-sdk/latest/wasmedge_sdk/struct.ImportObjectBuilder.html
+/// use wasmedge_sdk::{CallingFrame, ImportObjectBuilder, Instance, WasmValue, error::CoreError};
+///
+/// fn add(
+///     _data: &mut (),
+///     _inst: &mut Instance,
+///     _frame: &mut CallingFrame,
+///     args: Vec<WasmValue>,
+/// ) -> Result<Vec<WasmValue>, CoreError> {
+///     let (a, b) = (args[0].to_i32(), args[1].to_i32());
+///     Ok(vec![WasmValue::from_i32(a + b)])
+/// }
+///
+/// let mut builder = ImportObjectBuilder::new("env", ())?;
+/// builder.with_func::<(i32, i32), i32>("add", add)?;
+/// ```
 #[proc_macro_attribute]
+#[deprecated(
+    since = "0.7.0",
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sdk; write the host function directly and register it with wasmedge_sdk::ImportObjectBuilder::with_func"
+)]
 pub fn host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
@@ -206,7 +277,60 @@ fn expand_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2::Token
 }
 
 /// Declare a native async function that will be used to create an async host function instance.
+///
+/// # Deprecated: targets an API that no longer exists
+///
+/// Like `host_function`, this macro expands to the **pre-0.14** ABI: a
+/// 3-argument wrapper built around a generated `Caller::new(frame)` call,
+/// returning `Box<dyn Future<Output = Result<Vec<WasmValue>, HostFuncError>> +
+/// Send>`. `Caller` no longer exists — it was removed when `wasmedge-sdk`
+/// reached 0.14 / `wasmedge-sys` reached 0.19. `HostFuncError` still exists in
+/// `wasmedge_types::error`, but it is unrelated to and unused by the current
+/// host-function signature, which returns `Result<Vec<WasmValue>, CoreError>`
+/// instead. **Any function annotated with `#[async_host_function]` fails to
+/// compile** against current `wasmedge-sdk` (>= 0.14) or `wasmedge-sys` (>=
+/// 0.19).
+///
+/// This macro is marked `#[deprecated]` as of `wasmedge-macro` 0.7.0 (see the
+/// verification note near the top of this file).
+///
+/// ## Modern replacement
+///
+/// Write the async host function with today's signature directly — no macro
+/// needed — and register it with the async `ImportObjectBuilder::with_func`
+/// (`wasmedge_sdk::r#async::import`, requires the `async` feature):
+///
+/// ```rust,ignore
+/// // This crate cannot depend on `wasmedge-sdk` (that would be circular), so
+/// // this example is illustrative only. For a compiled, tested version, see
+/// // `ImportObjectBuilder::with_func` in the wasmedge-sdk crate docs:
+/// // https://docs.rs/wasmedge-sdk/latest/wasmedge_sdk/r#async/import/struct.ImportObjectBuilder.html
+/// use wasmedge_sdk::{
+///     CallingFrame, WasmValue,
+///     error::CoreError,
+///     r#async::{AsyncInstance, import::ImportObjectBuilder},
+/// };
+///
+/// fn add(
+///     _data: &mut (),
+///     _inst: &mut AsyncInstance,
+///     _frame: &mut CallingFrame,
+///     args: Vec<WasmValue>,
+/// ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, CoreError>> + Send> {
+///     Box::new(async move {
+///         let (a, b) = (args[0].to_i32(), args[1].to_i32());
+///         Ok(vec![WasmValue::from_i32(a + b)])
+///     })
+/// }
+///
+/// let mut builder = ImportObjectBuilder::new("env", ())?;
+/// builder.with_func::<(i32, i32), i32>("add", add)?;
+/// ```
 #[proc_macro_attribute]
+#[deprecated(
+    since = "0.7.0",
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sdk; write the host function directly and register it with wasmedge_sdk::ImportObjectBuilder::with_func"
+)]
 pub fn async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
@@ -413,8 +537,59 @@ fn expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_macro2:
 
 // ================== macros for wasmedge-sys ==================
 
+/// Internal helper macro for `wasmedge-sys` async host functions.
+///
+/// # Deprecated: targets an API that no longer exists
+///
+/// Hidden from public docs, and — as of this writing — not used by any crate
+/// in this workspace: `crates/wasmedge-sys/Cargo.toml` does not even depend
+/// on `wasmedge-macro`. It expands the annotated function's body into
+/// `Box<dyn Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>`,
+/// the pre-0.14 async host-function return convention. `HostFuncError` still
+/// exists in `wasmedge_types::error`, but it is unrelated to and unused by
+/// the current `AsyncFn<Data>` signature, which returns
+/// `Result<Vec<WasmValue>, CoreError>` instead — so **any function annotated
+/// with `#[sys_async_host_function]` fails to compile** against current
+/// `wasmedge-sys` (>= 0.19).
+///
+/// Marked `#[deprecated]` as of `wasmedge-macro` 0.7.0 (see the verification
+/// note near the top of this file).
+///
+/// ## Modern replacement
+///
+/// Write the function directly with today's `AsyncFn<Data>` shape — no macro
+/// needed — and register it with `wasmedge_sys::r#async::function::AsyncFunction::create_async_func`
+/// plus `AsyncImportObject::add_async_func` (or, for most users working
+/// through the high-level crate, `wasmedge_sdk`'s async `ImportObjectBuilder::with_func`):
+///
+/// ```rust,ignore
+/// // This crate cannot depend on `wasmedge-sys` (that would be circular), so
+/// // this example is illustrative only. For a compiled, tested version, see
+/// // `wasmedge-sys`'s `r#async::function::AsyncFn` and `AsyncImportObject` docs.
+/// use wasmedge_sys::{
+///     CallingFrame, WasmValue,
+///     r#async::module::AsyncInstance,
+/// };
+/// use wasmedge_types::error::CoreError;
+///
+/// fn add(
+///     _data: &mut (),
+///     _inst: &mut AsyncInstance,
+///     _frame: &mut CallingFrame,
+///     args: Vec<WasmValue>,
+/// ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, CoreError>> + Send> {
+///     Box::new(async move {
+///         let (a, b) = (args[0].to_i32(), args[1].to_i32());
+///         Ok(vec![WasmValue::from_i32(a + b)])
+///     })
+/// }
+/// ```
 #[doc(hidden)]
 #[proc_macro_attribute]
+#[deprecated(
+    since = "0.7.0",
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::Function::create_sync_func and register via ImportModule::add_func"
+)]
 pub fn sys_async_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
@@ -493,8 +668,54 @@ fn sys_expand_async_host_func_with_three_args(item_fn: &syn::ItemFn) -> proc_mac
     )
 }
 
+/// Internal helper macro for `wasmedge-sys` sync host functions.
+///
+/// # Deprecated: targets an API that no longer exists
+///
+/// Hidden from public docs, and — as of this writing — not used by any crate
+/// in this workspace: `crates/wasmedge-sys/Cargo.toml` does not even depend
+/// on `wasmedge-macro`. It generates a wrapper whose data argument is threaded
+/// as a positional `*mut c_void` — the pre-0.14 shape — rather than as the
+/// leading `&mut Data` parameter of today's
+/// `SyncFn<Data> = fn(&mut Data, &mut Instance, &mut CallingFrame, Vec<WasmValue>)
+/// -> Result<Vec<WasmValue>, CoreError>`. A function written against the old
+/// `HostFuncError`-based convention this macro assumes **fails to compile**
+/// against current `wasmedge-sys` (>= 0.19), which uses
+/// `wasmedge_types::error::CoreError` instead.
+///
+/// Marked `#[deprecated]` as of `wasmedge-macro` 0.7.0 (see the verification
+/// note near the top of this file).
+///
+/// ## Modern replacement
+///
+/// Write the function directly with today's `SyncFn<Data>` shape — no macro
+/// needed — and register it with `wasmedge_sys::Function::create_sync_func`
+/// plus `ImportModule::add_func` (or, for most users working through the
+/// high-level crate, `wasmedge_sdk::ImportObjectBuilder::with_func`):
+///
+/// ```rust,ignore
+/// // This crate cannot depend on `wasmedge-sys` (that would be circular), so
+/// // this example is illustrative only. For a compiled, tested version, see
+/// // `wasmedge-sys`'s `SyncFn` and `ImportModule` docs.
+/// use wasmedge_sys::{CallingFrame, Instance, WasmValue};
+/// use wasmedge_types::error::CoreError;
+///
+/// fn add(
+///     _data: &mut (),
+///     _inst: &mut Instance,
+///     _frame: &mut CallingFrame,
+///     args: Vec<WasmValue>,
+/// ) -> Result<Vec<WasmValue>, CoreError> {
+///     let (a, b) = (args[0].to_i32(), args[1].to_i32());
+///     Ok(vec![WasmValue::from_i32(a + b)])
+/// }
+/// ```
 #[doc(hidden)]
 #[proc_macro_attribute]
+#[deprecated(
+    since = "0.7.0",
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::Function::create_sync_func and register via ImportModule::add_func"
+)]
 pub fn sys_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
@@ -644,8 +865,54 @@ fn sys_expand_host_func_new(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::T
 
 // ================== macros for wasmedge-sys wasi host functions ==================
 
+/// Internal helper macro for `wasmedge-sys` WASI-flavored sync host functions.
+///
+/// # Deprecated: targets an API that no longer exists
+///
+/// Hidden from public docs, and — as of this writing — not used by any crate
+/// in this workspace: `crates/wasmedge-sys/Cargo.toml` does not even depend
+/// on `wasmedge-macro`. It requires exactly 3 arguments and re-emits the
+/// function body largely unchanged, so it inherits whatever ABI the caller's
+/// function signature declares — historically the pre-0.14,
+/// `HostFuncError`-returning convention that this macro family targets.
+/// `HostFuncError` still exists in `wasmedge_types::error`, but it is
+/// unrelated to and unused by the current `SyncFn<Data>` signature, which
+/// returns `Result<Vec<WasmValue>, CoreError>` instead — so a function
+/// written against the old convention **fails to compile** against current
+/// `wasmedge-sys` (>= 0.19).
+///
+/// Marked `#[deprecated]` as of `wasmedge-macro` 0.7.0 (see the verification
+/// note near the top of this file).
+///
+/// ## Modern replacement
+///
+/// Write the function directly with today's `SyncFn<Data>` shape — no macro
+/// needed — and register it with `wasmedge_sys::Function::create_sync_func`
+/// plus `ImportModule::add_func`, or use the `WasiModule` builder for WASI
+/// imports specifically:
+///
+/// ```rust,ignore
+/// // This crate cannot depend on `wasmedge-sys` (that would be circular), so
+/// // this example is illustrative only. For a compiled, tested version, see
+/// // `wasmedge-sys`'s `SyncFn` and `WasiModule` docs.
+/// use wasmedge_sys::{CallingFrame, Instance, WasmValue};
+/// use wasmedge_types::error::CoreError;
+///
+/// fn wasi_like(
+///     _data: &mut (),
+///     _inst: &mut Instance,
+///     _frame: &mut CallingFrame,
+///     args: Vec<WasmValue>,
+/// ) -> Result<Vec<WasmValue>, CoreError> {
+///     Ok(args)
+/// }
+/// ```
 #[doc(hidden)]
 #[proc_macro_attribute]
+#[deprecated(
+    since = "0.7.0",
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::Function::create_sync_func and register via ImportModule::add_func"
+)]
 pub fn sys_wasi_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {
@@ -688,8 +955,56 @@ fn sys_expand_wasi_host_func(item_fn: &syn::ItemFn) -> syn::Result<proc_macro2::
     Ok(ret)
 }
 
+/// Internal helper macro for `wasmedge-sys` WASI-flavored async host functions.
+///
+/// # Deprecated: targets an API that no longer exists
+///
+/// Hidden from public docs, and — as of this writing — not used by any crate
+/// in this workspace: `crates/wasmedge-sys/Cargo.toml` does not even depend
+/// on `wasmedge-macro`. It expands the annotated function's body into
+/// `Box<dyn Future<Output = Result<Vec<WasmValue>, HostFuncError>> + Send>`,
+/// the pre-0.14 async host-function return convention. `HostFuncError` still
+/// exists in `wasmedge_types::error`, but it is unrelated to and unused by
+/// the current `AsyncFn<Data>` signature, which returns
+/// `Result<Vec<WasmValue>, CoreError>` instead — so **any function annotated
+/// with `#[sys_async_wasi_host_function]` fails to compile** against current
+/// `wasmedge-sys` (>= 0.19).
+///
+/// Marked `#[deprecated]` as of `wasmedge-macro` 0.7.0 (see the verification
+/// note near the top of this file).
+///
+/// ## Modern replacement
+///
+/// Write the function directly with today's `AsyncFn<Data>` shape — no macro
+/// needed — and register it with `wasmedge_sys::r#async::function::AsyncFunction::create_async_func`
+/// plus `AsyncImportObject::add_async_func`, or use the async `WasiModule`
+/// builder for WASI imports specifically:
+///
+/// ```rust,ignore
+/// // This crate cannot depend on `wasmedge-sys` (that would be circular), so
+/// // this example is illustrative only. For a compiled, tested version, see
+/// // `wasmedge-sys`'s `r#async::function::AsyncFn` and `AsyncWasiModule` docs.
+/// use wasmedge_sys::{
+///     CallingFrame, WasmValue,
+///     r#async::module::AsyncInstance,
+/// };
+/// use wasmedge_types::error::CoreError;
+///
+/// fn wasi_like(
+///     _data: &mut (),
+///     _inst: &mut AsyncInstance,
+///     _frame: &mut CallingFrame,
+///     args: Vec<WasmValue>,
+/// ) -> Box<dyn std::future::Future<Output = Result<Vec<WasmValue>, CoreError>> + Send> {
+///     Box::new(async move { Ok(args) })
+/// }
+/// ```
 #[doc(hidden)]
 #[proc_macro_attribute]
+#[deprecated(
+    since = "0.7.0",
+    note = "targets the pre-0.14 host-function API removed from wasmedge-sys; create it with wasmedge_sys::Function::create_sync_func and register via ImportModule::add_func"
+)]
 pub fn sys_async_wasi_host_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let body_ast = parse_macro_input!(item as Item);
     if let Item::Fn(item_fn) = body_ast {

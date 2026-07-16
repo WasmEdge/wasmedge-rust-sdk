@@ -53,6 +53,19 @@ deleting them, for historical accuracy.
   `[package.metadata.docs.rs]` and `keywords` to `wasmedge-types`, `wasmedge-macro`,
   and `async-wasi`.
 
+### Deprecated
+
+- `wasmedge-macro`: all six procedural macros — the public `host_function` and
+  `async_host_function`, plus the `#[doc(hidden)]` `sys_host_function`,
+  `sys_async_host_function`, `sys_wasi_host_function`, and
+  `sys_async_wasi_host_function` — are now `#[deprecated(since = "0.7.0")]`. They
+  expand to the pre-0.14 host-function ABI (a `Caller`-based three-argument free
+  function) that no longer compiles against `wasmedge-sdk` >= 0.14 /
+  `wasmedge-sys` >= 0.19, so they have had zero working callers since 0.14.0.
+  Write the host function directly and register it with
+  `ImportObjectBuilder::with_func` (or, at the `wasmedge-sys` layer,
+  `Function::create_sync_func` + `ImportModule::add_func`).
+
 ### Fixed
 
 All of the following are internal correctness fixes with no public API shape
@@ -106,6 +119,14 @@ called out below):
 
 ### Removed
 
+- **Breaking (nominal):** `wasmedge-sdk` no longer re-exports the `host_function`
+  and `async_host_function` attribute macros (`wasmedge_sdk::host_function` /
+  `wasmedge_sdk::async_host_function`). They re-exported the now-deprecated
+  `wasmedge-macro` macros above, which expand to code that does not compile
+  against the current API, so no working caller could reference them. Removed
+  while riding the 0.17.0 major-version bump so it is not a surprise on a
+  patch/minor release. Import from `wasmedge_macro` directly if you still need
+  the (deprecated) names.
 - Dead code: `src/dock.rs` and `src/executor.rs` (883 LOC, unreachable, referenced
   types that no longer exist), `crates/async-wasi/src/snapshots/common/vfs/sync.rs`
   (1148 LOC, an orphaned module never declared by its parent), 15 bit-rotted

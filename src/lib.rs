@@ -159,11 +159,6 @@ pub use wasmedge_types::{
     wat2wasm,
 };
 
-#[cfg(all(feature = "async", target_os = "linux"))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
-pub use wasmedge_macro::async_host_function;
-pub use wasmedge_macro::host_function;
-
 /// WebAssembly value type.
 pub type WasmValue = wasmedge_sys::types::WasmValue;
 
