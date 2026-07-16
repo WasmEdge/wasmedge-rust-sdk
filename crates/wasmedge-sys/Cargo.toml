@@ -3,22 +3,23 @@ build = "build.rs"
 categories = ["api-bindings", "wasm"]
 description = "WasmEdge Runtime is a high-performance, extensible, and hardware optimized WebAssembly Virtual Machine for automotive, cloud, AI, and blockchain applications."
 documentation = "https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/"
-edition = "2021"
+edition.workspace = true
 exclude = ["tests/", "examples/"]
-license = "Apache-2.0"
+license.workspace = true
 links = "wasmedge"
 name = "wasmedge-sys"
 readme = "README.md"
-repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
+repository.workspace = true
+rust-version.workspace = true
 version = "0.20.0"
 
 [dependencies]
-log = "0.4"
+log.workspace = true
 fiber-for-wasmedge = { version = "14.0.4", optional = true }
-libc = "0.2.94"
+libc.workspace = true
 paste = "1.0.5"
 scoped-tls = "1"
-thiserror = "1.0.30"
+thiserror.workspace = true
 wasmedge-macro.workspace = true
 wasmedge-types.workspace = true
 wat.workspace = true
@@ -33,14 +34,14 @@ async-wasi = { workspace = true, optional = true }
 setjmp = "0.1"
 
 [build-dependencies]
-bindgen = { version = "0.69", default-features = false, features = ["runtime"] }
+bindgen = { workspace = true, features = ["runtime"] }
 cmake = "0.1"
 reqwest = { version = "0.11", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
 flate2 = "1"
-tar = "0.4"
+tar = "0.4.46"
 sha256 = "1"
 lazy_static = "1.4.0"
 phf = { version = "0.11", features = ["macros"] }
@@ -48,12 +49,15 @@ phf = { version = "0.11", features = ["macros"] }
 
 [dev-dependencies]
 anyhow = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 
 [package.metadata.docs.rs]
 features = ["aot", "wasi_crypto", "wasi_nn", "wasmedge_process", "ffi"]
 rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
 
 [features]
 aot = []

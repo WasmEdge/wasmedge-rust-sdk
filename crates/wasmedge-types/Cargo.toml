@@ -2,13 +2,17 @@
 categories = ["data-structures"]
 description = "The common data structures for WasmEdge Rust bindings."
 documentation = "https://docs.rs/wasmedge-types/"
-edition = "2021"
-license = "Apache-2.0"
+edition.workspace = true
+license.workspace = true
 name = "wasmedge-types"
 readme = "README.md"
-repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
+repository.workspace = true
+rust-version.workspace = true
 version = "0.6.0"
 
 [dependencies]
-thiserror = "1.0.30"
-wat = "1.0"
+thiserror.workspace = true
+wat.workspace = true
+
+[lints]
+workspace = true

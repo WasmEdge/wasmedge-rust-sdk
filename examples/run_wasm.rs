@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If a function name is provided, call it
     if args.len() >= 3 {
         let func_name = &args[2];
-        println!("\nCalling function: {}", func_name);
+        println!("\nCalling function: {func_name}");
 
         // Parse integer arguments (simple i32 parsing for demo)
         let func_args: Vec<i32> = args[3..]
@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter_map(|s| s.parse::<i32>().ok())
             .collect();
 
-        println!("Arguments: {:?}", func_args);
+        println!("Arguments: {func_args:?}");
 
         // Build params based on argument count
         let result = match func_args.len() {
@@ -103,11 +103,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 // Try to display as different types
                 if let Some(v) = val.to_i32().checked_add(0) {
-                    print!("{} (i32)", v);
+                    print!("{v} (i32)");
                 } else if let Some(v) = val.to_i64().checked_add(0) {
-                    print!("{} (i64)", v);
+                    print!("{v} (i64)");
                 } else {
-                    print!("{:?}", val);
+                    print!("{val:?}");
                 }
             }
             println!();
