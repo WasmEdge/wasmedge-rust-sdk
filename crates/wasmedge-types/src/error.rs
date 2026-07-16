@@ -119,7 +119,7 @@ pub enum GlobalError {
     Type,
     #[error("Trying to set value to a const global variable")]
     ModifyConst,
-    #[error("")]
+    #[error("unmatched value type")]
     UnmatchedValType,
 }
 
@@ -700,10 +700,14 @@ mod tests {
     }
 
     #[test]
-    fn global_error_unmatched_val_type_display_is_currently_empty() {
-        // Known defect: this variant carries no message (`#[error("")]`).
-        // Captured as-is here; fixed in a later modernization phase, not this one.
-        assert_eq!(GlobalError::UnmatchedValType.to_string(), "");
+    fn global_error_unmatched_val_type_display() {
+        // Was `#[error("")]` (empty Display) prior to the P5a-6 idiom sweep; now carries a
+        // real message. See `global_error_unmatched_val_type_display_is_currently_empty` in
+        // git history (commit da63ae0) for the characterization test this replaces.
+        assert_eq!(
+            GlobalError::UnmatchedValType.to_string(),
+            "unmatched value type"
+        );
     }
 
     // ---- TableError ----
