@@ -173,6 +173,15 @@ fn main() {
             .arg("WasmEdge.*")
             .arg("--no-layout-tests")
             .arg("--formatter=none")
+            // Keep in lockstep with the in-process bindgen::builder() path
+            // below: pin to the crate's MSRV (1.85, the earliest Rust with
+            // edition 2024) so `unsafe extern "C"` blocks are emitted. That
+            // syntax has been valid on any edition since rustc 1.82, so the
+            // output stays usable under the crate's current edition 2021.
+            .arg("--rust-target")
+            .arg("1.85")
+            .arg("--rust-edition")
+            .arg("2024")
             .arg("-o")
             .arg(out_file)
             .arg(header)
@@ -190,6 +199,18 @@ fn main() {
             .dynamic_link_require_all(true)
             .allowlist_item("WasmEdge.*")
             .layout_tests(false)
+            // Pin to the crate's MSRV (1.85) instead of letting bindgen
+            // auto-detect whichever rustc happens to run this build script,
+            // so the generated code is deterministic and MSRV-safe. 1.85 is
+            // also the earliest Rust release with edition 2024, which is
+            // what unlocks `unsafe extern "C"` blocks (stable since 1.82) in
+            // the output. That syntax is edition-agnostic from 1.82 onward,
+            // so it stays valid under the crate's current edition 2021 too.
+            .rust_target(
+                bindgen::RustTarget::stable(85, 0)
+                    .expect("1.85 is newer than bindgen's EARLIEST_STABLE_RUST"),
+            )
+            .rust_edition(bindgen::RustEdition::Edition2024)
             .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
             .generate()
             .expect("failed to generate bindings")
