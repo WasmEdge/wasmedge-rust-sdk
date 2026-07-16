@@ -31,7 +31,7 @@ jobs:
       - name: Install WasmEdge
         run: |
           curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
-            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/678e63744c8a774eb68695f6c496c4bcf802f850/utils/install_v2.sh
           bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
           "$HOME/.wasmedge/bin/wasmedge" --version
           echo "WASMEDGE_DIR=$HOME/.wasmedge" >> "$GITHUB_ENV"
@@ -83,7 +83,7 @@ jobs:
           WASMEDGE_VERSION: ${{ inputs.wasmedge_version }}
         run: |
           curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
-            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/678e63744c8a774eb68695f6c496c4bcf802f850/utils/install_v2.sh
           bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p /usr/local
           ldconfig
           /usr/local/bin/wasmedge --version
@@ -139,8 +139,9 @@ jobs:
         env:
           WASMEDGE_VERSION: ${{ inputs.wasmedge_version }}
         run: |
+          # Pin remote code executed in this OIDC-enabled publish job.
           curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh \
-            https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install_v2.sh
+            https://raw.githubusercontent.com/WasmEdge/WasmEdge/678e63744c8a774eb68695f6c496c4bcf802f850/utils/install_v2.sh
           bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p /usr/local
           ldconfig
           /usr/local/bin/wasmedge --version
