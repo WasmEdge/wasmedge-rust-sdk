@@ -122,7 +122,7 @@ fn test_generate_nnpreload_from_str() {
     let err = result.unwrap_err();
     assert_eq!(
         WasmEdgeError::Operation(
-            "Failed to convert to NNBackend value. Unknown NNBackend type: CPU".to_string()
+            "Failed to convert to GraphEncoding value. Unknown GraphEncoding type: CPU".to_string()
         ),
         err
     );
@@ -198,7 +198,7 @@ impl std::str::FromStr for GraphEncoding {
             "autodetect" => Ok(GraphEncoding::Autodetect),
             "ggml" => Ok(GraphEncoding::GGML),
             _ => Err(WasmEdgeError::Operation(format!(
-                "Failed to convert to NNBackend value. Unknown NNBackend type: {s}"
+                "Failed to convert to GraphEncoding value. Unknown GraphEncoding type: {s}"
             ))),
         }
     }
