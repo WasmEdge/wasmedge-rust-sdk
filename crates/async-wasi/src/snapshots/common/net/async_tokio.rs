@@ -16,58 +16,63 @@ use tokio::io::{
 
 #[derive(Debug)]
 pub(crate) enum AsyncWasiSocketInner {
-    PreOpen(Socket),
+    PreOpen(Option<Socket>),
     AsyncFd(AsyncFd<Socket>),
 }
 
 impl AsyncWasiSocketInner {
     fn register(&mut self) -> io::Result<()> {
-        unsafe {
-            let inner = match self {
-                AsyncWasiSocketInner::PreOpen(s) => {
-                    let mut inner_socket = std::mem::zeroed();
-                    std::mem::swap(s, &mut inner_socket);
-                    inner_socket
-                }
-                AsyncWasiSocketInner::AsyncFd(_) => return Ok(()),
-            };
-            let mut new_self = Self::AsyncFd(AsyncFd::new(inner)?);
-            std::mem::swap(self, &mut new_self);
-            std::mem::forget(new_self);
-            Ok(())
-        }
+        // Take the socket out of the `PreOpen` slot (leaving `None`) and move it
+        // into an `AsyncFd`. Using an `Option` slot replaces the previous
+        // `mem::zeroed::<Socket>()` + double `mem::swap` + `mem::forget` dance,
+        // which fabricated an all-zero `Socket` (undefined behaviour once
+        // `Socket` wraps an `OwnedFd`). Timing and error behaviour are preserved:
+        // the state becomes `AsyncFd` only after `AsyncFd::new` succeeds; on
+        // failure the same error propagates and the slot is left `None` instead
+        // of holding a zeroed socket. An already-registered socket is a no-op.
+        let socket = match self {
+            AsyncWasiSocketInner::PreOpen(slot) => match slot.take() {
+                Some(socket) => socket,
+                None => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
+            },
+            AsyncWasiSocketInner::AsyncFd(_) => return Ok(()),
+        };
+        *self = AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?);
+        Ok(())
     }
 
     fn bind(&mut self, addr: &SockAddr) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => {
+            AsyncWasiSocketInner::PreOpen(Some(s)) => {
                 s.set_reuse_address(true)?;
                 s.bind(addr)
             }
-            AsyncWasiSocketInner::AsyncFd(_) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
+            _ => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn bind_device(&mut self, interface: Option<&[u8]>) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => s.bind_device(interface),
+            AsyncWasiSocketInner::PreOpen(Some(s)) => s.bind_device(interface),
             AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().bind_device(interface),
+            AsyncWasiSocketInner::PreOpen(None) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn device(&self) -> io::Result<Option<Vec<u8>>> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => s.device(),
+            AsyncWasiSocketInner::PreOpen(Some(s)) => s.device(),
             AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().device(),
+            AsyncWasiSocketInner::PreOpen(None) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn listen(&mut self, backlog: i32) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => {
+            AsyncWasiSocketInner::PreOpen(Some(s)) => {
                 s.listen(backlog)?;
             }
-            AsyncWasiSocketInner::AsyncFd(_) => {
+            _ => {
                 return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         }
@@ -76,7 +81,7 @@ impl AsyncWasiSocketInner {
 
     async fn accept(&mut self) -> io::Result<(Socket, SockAddr)> {
         match self {
-            AsyncWasiSocketInner::PreOpen(s) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
+            AsyncWasiSocketInner::PreOpen(_) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
             AsyncWasiSocketInner::AsyncFd(s) => {
                 match tokio::time::timeout(
                     std::time::Duration::from_millis(100),
@@ -93,8 +98,8 @@ impl AsyncWasiSocketInner {
 
     fn connect(&mut self, addr: &SockAddr) -> io::Result<()> {
         let r = match self {
-            AsyncWasiSocketInner::PreOpen(s) => s.connect(addr),
-            AsyncWasiSocketInner::AsyncFd(_) => {
+            AsyncWasiSocketInner::PreOpen(Some(s)) => s.connect(addr),
+            _ => {
                 return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         };
@@ -150,38 +155,45 @@ impl AsyncWasiSocketInner {
 }
 
 #[derive(Debug)]
-pub(crate) struct SocketWritable(pub(crate) AtomicI8);
+pub(crate) struct SocketWritable {
+    count: AtomicI8,
+    notify: tokio::sync::Notify,
+}
 impl SocketWritable {
     pub(crate) async fn writable(&self) {
-        let b = self.0.fetch_sub(1, std::sync::atomic::Ordering::Acquire);
-        tokio::time::timeout(Duration::from_secs(10), SocketWritableFuture(b)).await;
+        // Consume one unit of the small write budget; while budget remains
+        // (pre-decrement value >= 0) the caller proceeds immediately.
+        let b = self
+            .count
+            .fetch_sub(1, std::sync::atomic::Ordering::Acquire);
+        if b >= 0 {
+            return;
+        }
+        // Budget exhausted: wait for set_writable() to signal writability, capped
+        // at 10s as a safety net. The previous SocketWritableFuture registered no
+        // waker and could only be released by the (discarded) timeout, so this
+        // path stalled for the full 10s. Notify delivers a real wakeup, and the
+        // timeout result is inspected instead of discarded.
+        if tokio::time::timeout(Duration::from_secs(10), self.notify.notified())
+            .await
+            .is_err()
+        {
+            log::trace!("SocketWritable::writable timed out waiting for writability");
+        }
     }
 
     pub(crate) fn set_writable(&self) {
-        self.0.store(5, std::sync::atomic::Ordering::Release)
+        self.count.store(5, std::sync::atomic::Ordering::Release);
+        // notify_one() stores a permit when no waiter is parked, so a signal that
+        // races ahead of writable().await is not lost.
+        self.notify.notify_one();
     }
 }
 impl Default for SocketWritable {
     fn default() -> Self {
-        Self(AtomicI8::new(5))
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SocketWritableFuture(i8);
-
-impl Future for SocketWritableFuture {
-    type Output = ();
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        log::trace!("SocketWritableFuture self.0={}", self.0);
-        if self.0 >= 0 {
-            std::task::Poll::Ready(())
-        } else {
-            std::task::Poll::Pending
+        Self {
+            count: AtomicI8::new(5),
+            notify: tokio::sync::Notify::new(),
         }
     }
 }
@@ -302,7 +314,7 @@ impl AsyncWasiSocket {
             inner.bind_device(Some(&state.bind_device))?;
         }
         Ok(AsyncWasiSocket {
-            inner: AsyncWasiSocketInner::PreOpen(inner),
+            inner: AsyncWasiSocketInner::PreOpen(Some(inner)),
             state: Box::new(state),
             writable: Default::default(),
         })
@@ -737,5 +749,96 @@ impl AsyncWasiSocket {
 
     pub fn get_so_error(&mut self) -> io::Result<Option<io::Error>> {
         self.inner.get_ref()?.take_error()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshots::common::net::{AddressFamily, SocketType, WasiSocketState};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    fn tcp_socket() -> AsyncWasiSocket {
+        let state = WasiSocketState {
+            sock_type: (AddressFamily::Inet4, SocketType::Stream),
+            ..Default::default()
+        };
+        AsyncWasiSocket::open(state).unwrap()
+    }
+
+    // P5b-6: `AsyncWasiSocketInner::register()` used to move the socket out with
+    // `mem::zeroed::<Socket>()` + double `mem::swap` + `mem::forget`. This drives
+    // the rewritten `Option`-based state machine end to end: `listen` (server)
+    // and `connect` (client) both call register(), moving PreOpen -> AsyncFd, and
+    // the resulting loopback connection must carry data.
+    #[tokio::test]
+    async fn register_tcp_loopback_roundtrip() {
+        let loopback = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+
+        let mut server = tcp_socket();
+        server.bind(loopback).unwrap();
+        server.listen(128).unwrap(); // register() on the server side
+        // bind() caches the requested addr (port 0), so read the real
+        // OS-assigned port from the now-registered socket.
+        let addr = server
+            .inner
+            .get_ref()
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .as_socket()
+            .unwrap();
+        assert!(addr.port() > 0);
+
+        let mut client = tcp_socket();
+        let (accepted, connected) = tokio::join!(server.accept(), client.connect(addr));
+        let accepted = accepted.unwrap(); // server-side accepted socket
+        connected.unwrap(); // register() on the client side
+
+        client
+            .send(&[std::io::IoSlice::new(b"ping")], 0)
+            .await
+            .unwrap();
+
+        let mut buf = [0u8; 8];
+        let (n, _) = accepted
+            .recv(&mut [std::io::IoSliceMut::new(&mut buf)], 0)
+            .await
+            .unwrap();
+        assert_eq!(&buf[..n], b"ping");
+    }
+
+    // P5b-7: once the write budget is exhausted, SocketWritable::writable()
+    // parked on a future that registered no waker, so set_writable() could not
+    // release it and the caller stalled until the discarded 10s timeout. With
+    // tokio::sync::Notify the wakeup is real. Virtual time makes this
+    // deterministic: if set_writable() failed to wake the waiter, the only escape
+    // would be the 10s timeout, so the 1s bound below would elapse first.
+    #[tokio::test(start_paused = true)]
+    async fn set_writable_wakes_blocked_writable() {
+        use std::sync::Arc;
+
+        let sw = Arc::new(SocketWritable::default());
+        // Drain the initial budget of 5 (pre-decrement values 5,4,3,2,1,0).
+        for _ in 0..6 {
+            sw.writable().await;
+        }
+
+        // The next call has no budget left and must block until set_writable().
+        let waiter = {
+            let sw = sw.clone();
+            tokio::spawn(async move { sw.writable().await })
+        };
+        tokio::task::yield_now().await;
+        assert!(
+            !waiter.is_finished(),
+            "writable() should block once the budget is exhausted"
+        );
+
+        sw.set_writable();
+        tokio::time::timeout(Duration::from_secs(1), waiter)
+            .await
+            .expect("set_writable() did not wake writable() within 1s")
+            .unwrap();
     }
 }

@@ -292,7 +292,7 @@ impl<D: WasiVirtualDir, F: WasiVirtualFile> WasiFileSys for WasiVirtualSys<D, F>
                     return Ok(ino);
                 }
 
-                Err(Errno::__WASI_ERRNO_EXIST)
+                Err(Errno::__WASI_ERRNO_NOENT)
             }
         }
     }
@@ -1207,7 +1207,7 @@ impl WasiFileSys for DiskFileSys {
     }
 
     fn path_unlink_file(&mut self, dir_ino: Self::Index, path: &str) -> Result<(), Errno> {
-        self.dir_rights.can(WASIRights::PATH_REMOVE_DIRECTORY)?;
+        self.dir_rights.can(WASIRights::PATH_UNLINK_FILE)?;
         let parent_dir = match self.inodes.get(dir_ino).ok_or(Errno::__WASI_ERRNO_BADF)? {
             DiskInode::Dir(dir) => dir,
             _ => return Err(Errno::__WASI_ERRNO_NOTDIR),
@@ -1675,5 +1675,60 @@ where
 
     fn get_dir(&self, ino: usize) -> Result<&dyn WasiDir, Errno> {
         Err(Errno::__WASI_ERRNO_NOTDIR)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Create a fresh, empty temp directory unique to `tag`.
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("async_wasi_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    // P5b-2: `DiskFileSys::path_unlink_file` checked `PATH_REMOVE_DIRECTORY`
+    // instead of `PATH_UNLINK_FILE`, so a preopen granted unlink rights (but not
+    // remove-directory rights) wrongly failed with NOTCAPABLE.
+    #[test]
+    fn disk_path_unlink_file_uses_unlink_right() {
+        let dir = temp_dir("p5b2");
+        let victim = dir.join("victim.txt");
+        std::fs::write(&victim, b"bytes").unwrap();
+
+        let mut fs = DiskFileSys::new(dir.clone()).unwrap();
+        // Grant PATH_UNLINK_FILE only (deliberately without PATH_REMOVE_DIRECTORY).
+        fs.dir_rights = WASIRights::PATH_UNLINK_FILE;
+
+        let r = fs.path_unlink_file(0, "victim.txt");
+        assert!(r.is_ok(), "expected Ok, got {r:?}");
+        assert!(!victim.exists(), "victim.txt should have been removed");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // P5b-5: opening a missing path without O_CREAT returned EEXIST ("file
+    // exists") instead of NOENT ("no such file"). It must report NOENT.
+    #[test]
+    fn virtual_path_open_missing_without_create_returns_noent() {
+        use crate::snapshots::common::vfs::impls::{MemoryDir, MemoryFile};
+
+        let mut fs = WasiVirtualSys::<MemoryDir, MemoryFile>::default();
+        let r = fs.path_open(
+            0,
+            "does_not_exist",
+            OFlags::empty(),
+            WASIRights::FD_READ,
+            WASIRights::empty(),
+            FdFlags::empty(),
+        );
+        assert_eq!(
+            r.err(),
+            Some(Errno::__WASI_ERRNO_NOENT),
+            "expected NOENT for a missing file opened without CREATE"
+        );
     }
 }

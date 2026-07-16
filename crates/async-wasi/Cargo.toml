@@ -27,7 +27,13 @@ tokio = { workspace = true, features = [
     "time",
     "io-util",
     "macros",
+    "sync",
 ], optional = true }
+
+# Test-only: the async socket tests need a Tokio runtime (`AsyncFd`, timers).
+# The library itself never enables `rt`; the embedder provides the runtime.
+[target.'cfg(unix)'.dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "test-util"] }
 
 [features]
 async_tokio = ["tokio"]

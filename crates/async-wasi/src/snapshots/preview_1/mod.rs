@@ -192,8 +192,9 @@ pub fn fd_prestat_dir_name<M: Memory>(
     if path_len > path_max_len as usize {
         return Err(Errno::__WASI_ERRNO_NAMETOOLONG);
     }
-    let path_buf = mem.mut_slice(path_buf_ptr, path_max_len as usize)?;
-    path_buf.clone_from_slice(&path_bytes[0..path_max_len as usize]);
+    let copy_len = path_len.min(path_max_len as usize);
+    let path_buf = mem.mut_slice(path_buf_ptr, copy_len)?;
+    path_buf.clone_from_slice(&path_bytes[0..copy_len]);
     Ok(())
 }
 
@@ -658,4 +659,42 @@ pub fn proc_raise<M: Memory>(
 
 pub fn sched_yield<VM: AsyncVM>(_ctx: &mut WasiCtx, vm: &mut VM) -> Result<(), Errno> {
     vm.yield_now()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshots::common::memory::TestMemory;
+    use crate::snapshots::common::vfs::{
+        WasiFileSys,
+        impls::{MemoryDir, MemoryFile},
+        virtual_sys::WasiVirtualSys,
+    };
+
+    fn ctx_with_preopen(guest_path: &str) -> WasiCtx {
+        let mut ctx = WasiCtx::new();
+        let fs: Box<dyn WasiFileSys<Index = usize> + Send + Sync> =
+            Box::new(WasiVirtualSys::<MemoryDir, MemoryFile>::default());
+        ctx.mount_file_sys(guest_path, fs);
+        ctx
+    }
+
+    // P5b-1: `fd_prestat_dir_name` used to copy the preopen name using the
+    // guest-controlled `path_max_len`. When `path_max_len > name.len()` the slice
+    // `path_bytes[0..path_max_len]` read out of bounds and panicked. The copy must
+    // be clamped to the name length.
+    #[test]
+    fn fd_prestat_dir_name_no_oob_when_buffer_larger_than_name() {
+        let guest_path = "/preopen"; // 8 bytes
+        let mut ctx = ctx_with_preopen(guest_path);
+        let mut mem = TestMemory::new(64);
+
+        // fd 3 == first preopen; `path_max_len` (32) is larger than the name (8).
+        let r = fd_prestat_dir_name(&mut ctx, &mut mem, 3, WasmPtr::from(0usize), 32);
+
+        assert!(r.is_ok(), "expected Ok, got {r:?}");
+        assert_eq!(&mem.data[0..guest_path.len()], guest_path.as_bytes());
+        // Bytes beyond the name must be left untouched.
+        assert!(mem.data[guest_path.len()..].iter().all(|&b| b == 0));
+    }
 }

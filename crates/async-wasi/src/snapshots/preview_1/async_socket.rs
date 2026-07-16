@@ -480,7 +480,7 @@ pub fn sock_getsockopt<M: Memory>(
             let timeval = if let Some(timeout) = s.get_so_recv_timeout() {
                 __wasi_timeval {
                     tv_sec: (timeout.as_secs() as i64).to_le(),
-                    tv_usec: (timeout.subsec_nanos() as i64).to_le(),
+                    tv_usec: (timeout.subsec_micros() as i64).to_le(),
                 }
             } else {
                 __wasi_timeval {
@@ -502,7 +502,7 @@ pub fn sock_getsockopt<M: Memory>(
             let timeval = if let Some(timeout) = s.get_so_send_timeout() {
                 __wasi_timeval {
                     tv_sec: (timeout.as_secs() as i64).to_le(),
-                    tv_usec: (timeout.subsec_nanos() as i64).to_le(),
+                    tv_usec: (timeout.subsec_micros() as i64).to_le(),
                 }
             } else {
                 __wasi_timeval {
@@ -615,7 +615,10 @@ pub fn sock_setsockopt<M: Memory>(
             let timeout = if tv_sec == 0 && tv_usec == 0 {
                 None
             } else {
-                Some(std::time::Duration::new(tv_sec as u64, tv_usec as u32))
+                Some(
+                    std::time::Duration::from_secs(tv_sec as u64)
+                        .saturating_add(std::time::Duration::from_micros(tv_usec as u64)),
+                )
             };
 
             s.set_so_recv_timeout(timeout)?;
@@ -631,7 +634,10 @@ pub fn sock_setsockopt<M: Memory>(
             let timeout = if tv_sec == 0 && tv_usec == 0 {
                 None
             } else {
-                Some(std::time::Duration::new(tv_sec as u64, tv_usec as u32))
+                Some(
+                    std::time::Duration::from_secs(tv_sec as u64)
+                        .saturating_add(std::time::Duration::from_micros(tv_usec as u64)),
+                )
             };
 
             s.set_so_send_timeout(timeout)?;
@@ -791,6 +797,12 @@ pub mod addrinfo {
             wasi_addr.family = AddressFamily::Inet4;
             let sa_data_ptr: WasmPtr<u8> = (wasi_addr.sa_data as usize).into();
             let sa_data_len = wasi_addr.sa_data_len;
+            // The IPv4 result writes a 2-byte port and a 4-byte address into
+            // sa_data[0..6]; reject a too-small guest buffer instead of panicking
+            // on the out-of-range slice writes below.
+            if (sa_data_len as usize) < 6 {
+                return Err(Errno::__WASI_ERRNO_INVAL);
+            }
             let sa_data = mem.mut_slice(sa_data_ptr, sa_data_len as usize)?;
             let port_buf = ipv4.port().to_be_bytes();
             sa_data[0] = port_buf[0];
@@ -803,5 +815,148 @@ pub mod addrinfo {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshots::common::memory::TestMemory;
+    use std::time::Duration;
+
+    fn udp_socket() -> net::async_tokio::AsyncWasiSocket {
+        let state = WasiSocketState {
+            sock_type: (AddressFamily::Inet4, SocketType::Datagram),
+            ..Default::default()
+        };
+        net::async_tokio::AsyncWasiSocket::open(state).unwrap()
+    }
+
+    // P5b-4 (get side): sock_getsockopt wrote `Duration::subsec_nanos()` into the
+    // microseconds field `tv_usec`. A 1.5s timeout must be reported as
+    // tv_sec=1, tv_usec=500_000 (microseconds), not tv_usec=500_000_000 (nanos).
+    #[test]
+    fn sock_getsockopt_rcvtimeo_reports_microseconds() {
+        let mut ctx = WasiCtx::new();
+        let mut sock = udp_socket();
+        sock.set_so_recv_timeout(Some(Duration::from_millis(1500)))
+            .unwrap();
+        let fd = ctx.vfs.insert_socket(sock).unwrap();
+
+        let mut mem = TestMemory::new(64);
+        let tv_ptr = 16usize; // 8-aligned for __wasi_timeval
+        let size_ptr = 8usize;
+        mem.write_data(
+            WasmPtr::<__wasi_size_t>::from(size_ptr),
+            std::mem::size_of::<__wasi_timeval>() as __wasi_size_t,
+        )
+        .unwrap();
+
+        sock_getsockopt(
+            &mut ctx,
+            &mut mem,
+            fd as __wasi_fd_t,
+            __wasi_sock_opt_level_t::__WASI_SOCK_OPT_LEVEL_SOL_SOCKET,
+            __wasi_sock_opt_so_t::__WASI_SOCK_OPT_SO_RCVTIMEO,
+            WasmPtr::<i32>::from(tv_ptr),
+            WasmPtr::<__wasi_size_t>::from(size_ptr),
+        )
+        .unwrap();
+
+        let tv = *mem
+            .get_data(WasmPtr::<__wasi_timeval>::from(tv_ptr))
+            .unwrap();
+        assert_eq!(i64::from_le(tv.tv_sec), 1);
+        assert_eq!(i64::from_le(tv.tv_usec), 500_000);
+    }
+
+    // P5b-4 (set side): sock_setsockopt fed `tv_usec` (microseconds) into
+    // `Duration::new()`'s nanoseconds argument. tv_sec=1, tv_usec=500_000 must
+    // yield a 1.5s timeout, not 1.0005s.
+    #[test]
+    fn sock_setsockopt_rcvtimeo_interprets_microseconds() {
+        let mut ctx = WasiCtx::new();
+        let fd = ctx.vfs.insert_socket(udp_socket()).unwrap();
+
+        let mut mem = TestMemory::new(64);
+        let tv_ptr = 16usize;
+        mem.write_data(
+            WasmPtr::<__wasi_timeval>::from(tv_ptr),
+            __wasi_timeval {
+                tv_sec: 1i64.to_le(),
+                tv_usec: 500_000i64.to_le(),
+            },
+        )
+        .unwrap();
+
+        sock_setsockopt(
+            &mut ctx,
+            &mem,
+            fd as __wasi_fd_t,
+            __wasi_sock_opt_level_t::__WASI_SOCK_OPT_LEVEL_SOL_SOCKET,
+            __wasi_sock_opt_so_t::__WASI_SOCK_OPT_SO_RCVTIMEO,
+            WasmPtr::<i32>::from(tv_ptr),
+            std::mem::size_of::<__wasi_timeval>() as __wasi_size_t,
+        )
+        .unwrap();
+
+        let stored = ctx.vfs.get_mut_socket(fd).unwrap().get_so_recv_timeout();
+        assert_eq!(stored, Some(Duration::from_micros(1_500_000)));
+    }
+
+    // P5b-3: sock_getaddrinfo writes a 2-byte port + 4-byte IPv4 address into
+    // sa_data[0..6] without validating the guest-controlled sa_data_len, so
+    // sa_data_len < 6 panicked on the out-of-range slice. It must return INVAL.
+    #[test]
+    fn sock_getaddrinfo_rejects_short_sa_data() {
+        use addrinfo::{AddressFamily as AddrFamily, WasiAddrinfo, WasiSockaddr, sock_getaddrinfo};
+
+        let mut ctx = WasiCtx::new();
+        let mut mem = TestMemory::new(256);
+
+        // Offsets are all 4-byte aligned: node@0, res ptr@16, res_len@24,
+        // WasiAddrinfo@32, WasiSockaddr@64, sa_data@96.
+        let node = b"127.0.0.1\0"; // literal IPv4, resolved without DNS
+        mem.data[0..node.len()].copy_from_slice(node);
+        mem.write_data(WasmPtr::<u32>::from(16usize), 32u32)
+            .unwrap();
+        mem.write_data(
+            WasmPtr::<WasiAddrinfo>::from(32usize),
+            WasiAddrinfo {
+                ai_flags: 0,
+                ai_family: AddrFamily::Unspec,
+                ai_socktype: 0,
+                ai_protocol: 0,
+                ai_addrlen: 0,
+                ai_addr: 64,
+                ai_canonname: 0,
+                ai_canonnamelen: 0,
+                ai_next: 0,
+            },
+        )
+        .unwrap();
+        mem.write_data(
+            WasmPtr::<WasiSockaddr>::from(64usize),
+            WasiSockaddr {
+                family: AddrFamily::Unspec,
+                sa_data_len: 4, // < 6: too small for port + IPv4 address
+                sa_data: 96,
+            },
+        )
+        .unwrap();
+
+        let r = sock_getaddrinfo(
+            &mut ctx,
+            &mut mem,
+            WasmPtr::<u8>::from(0usize),
+            node.len() as u32,
+            WasmPtr::<u8>::from(0usize),
+            0,
+            WasmPtr::<()>::from(0usize),
+            WasmPtr::<u32>::from(16usize),
+            1,
+            WasmPtr::<u32>::from(24usize),
+        );
+        assert_eq!(r, Err(Errno::__WASI_ERRNO_INVAL));
     }
 }
