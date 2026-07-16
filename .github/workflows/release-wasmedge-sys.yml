@@ -42,7 +42,14 @@ jobs:
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
 
+      # Workspace dependency versions may not exist on crates.io until the
+      # preceding release workflows complete.
+      - name: Validate package contents
+        if: inputs.dry_run
+        run: cargo package --list -p wasmedge-sys
+
       - name: Dry run cargo publish
+        if: inputs.dry_run == false
         run: cargo publish --dry-run -p wasmedge-sys
 
       - name: Build API document
@@ -85,7 +92,16 @@ jobs:
       - name: Install Rust-nightly
         uses: dtolnay/rust-toolchain@nightly
 
+      # Workspace dependency versions may not exist on crates.io until the
+      # preceding release workflows complete.
+      - name: Validate package contents
+        if: inputs.dry_run
+        shell: bash
+        run: |
+          cargo package --list -p wasmedge-sys
+
       - name: Dry run cargo publish
+        if: inputs.dry_run == false
         shell: bash
         run: |
           cargo publish --dry-run -p wasmedge-sys
@@ -93,14 +109,6 @@ jobs:
       - name: Build API document
         run: |
           RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sys --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
-
-      - name: Upload API document
-        if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-        uses: actions/upload-artifact@v7
-        with:
-          name: wasmedge-sys-api-docs
-          path: target/doc
-          if-no-files-found: error
 
   publish_wasmedge_sys:
     name: Publish wasmedge-sys crate
@@ -150,26 +158,3 @@ jobs:
         shell: bash
         run: |
           cargo publish -p wasmedge-sys
-
-  deploy_api_document:
-    name: Deploy API document
-    if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-    needs: [release_wasmedge_sys, publish_wasmedge_sys]
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download API document
-        uses: actions/download-artifact@v8
-        with:
-          name: wasmedge-sys-api-docs
-          path: target/doc
-
-      - name: Deploy API document
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: target/doc
-          force_orphan: true

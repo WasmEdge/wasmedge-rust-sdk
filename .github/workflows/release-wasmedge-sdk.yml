@@ -166,26 +166,3 @@ jobs:
         shell: bash
         run: |
           cargo publish -p wasmedge-sdk
-
-  deploy_api_document:
-    name: Deploy API document
-    if: github.ref == 'refs/heads/main' && inputs.dry_run == false
-    needs: [release_wasmedge_sdk, publish_wasmedge_sdk]
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download API document
-        uses: actions/download-artifact@v8
-        with:
-          name: wasmedge-sdk-api-docs
-          path: target/doc
-
-      - name: Deploy API document
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: target/doc
-          force_orphan: true
