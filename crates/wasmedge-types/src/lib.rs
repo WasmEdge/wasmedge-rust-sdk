@@ -11,6 +11,8 @@
 
 pub mod error;
 
+use error::TryFromIntError;
+
 /// Defines WasmEdge reference types.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RefType {
@@ -78,40 +80,106 @@ pub enum Mutability {
     /// Identifies a mutable global variable.
     Var,
 }
-impl From<u32> for Mutability {
-    fn from(value: u32) -> Self {
-        match value {
-            0 => Mutability::Const,
-            1 => Mutability::Var,
-            _ => panic!("[wasmedge-types] Invalid WasmEdge_Mutability: {value:#X}"),
+/// Generates the `From<u32>`/`From<i32>` conversions (panicking) and their infallible inverses
+/// (`From<$enum_ty> for u32`/`i32`), plus non-panicking `TryFrom<u32>`/`TryFrom<i32>`
+/// counterparts, for a simple enum whose variants map 1:1 to small integer discriminants.
+///
+/// `$panic_msg` is the exact `panic!` format string used by the pre-existing hand-written
+/// `From<u32>`/`From<i32>` impls, preserved byte-for-byte (including the choice of decimal vs.
+/// `{:#X}` hex formatting) so this dedup changes no observable behavior.
+///
+/// N.B. the non-panicking counterparts are exposed as inherent `try_from_u32`/`try_from_i32`
+/// associated functions rather than `impl TryFrom<u32>`/`impl TryFrom<i32>`. A hand-written
+/// `TryFrom<u32> for $enum_ty` is rejected by rustc (E0119) once `From<u32> for $enum_ty`
+/// exists, because it conflicts with the standard library's blanket
+/// `impl<T, U> TryFrom<U> for T where U: Into<T>` (which is already satisfied transitively via
+/// `From` -> `Into`). Keeping the panicking `From` impls (required, zero behavior change) rules
+/// out the literal `TryFrom` trait for the fallible counterpart.
+macro_rules! impl_int_enum_conversions {
+    (
+        $enum_ty:ident { $($variant:ident = $val:literal),+ $(,)? },
+        $panic_msg:literal
+    ) => {
+        /// Converts an integer discriminant into the target enum.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `value` does not correspond to a known variant. Use
+        #[doc = concat!("[`", stringify!($enum_ty), "::try_from_u32`]")]
+        /// for a non-panicking alternative.
+        impl From<u32> for $enum_ty {
+            fn from(value: u32) -> Self {
+                match value {
+                    $($val => $enum_ty::$variant,)+
+                    _ => panic!($panic_msg, value),
+                }
+            }
         }
-    }
-}
-impl From<Mutability> for u32 {
-    fn from(value: Mutability) -> Self {
-        match value {
-            Mutability::Const => 0,
-            Mutability::Var => 1,
+        impl From<$enum_ty> for u32 {
+            fn from(value: $enum_ty) -> Self {
+                match value {
+                    $($enum_ty::$variant => $val,)+
+                }
+            }
         }
-    }
-}
-impl From<i32> for Mutability {
-    fn from(value: i32) -> Self {
-        match value {
-            0 => Mutability::Const,
-            1 => Mutability::Var,
-            _ => panic!("[wasmedge-types] Invalid WasmEdge_Mutability: {value:#X}"),
+        /// Converts an integer discriminant into the target enum.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `value` does not correspond to a known variant. Use
+        #[doc = concat!("[`", stringify!($enum_ty), "::try_from_i32`]")]
+        /// for a non-panicking alternative.
+        impl From<i32> for $enum_ty {
+            fn from(value: i32) -> Self {
+                match value {
+                    $($val => $enum_ty::$variant,)+
+                    _ => panic!($panic_msg, value),
+                }
+            }
         }
-    }
-}
-impl From<Mutability> for i32 {
-    fn from(value: Mutability) -> Self {
-        match value {
-            Mutability::Const => 0,
-            Mutability::Var => 1,
+        impl From<$enum_ty> for i32 {
+            fn from(value: $enum_ty) -> Self {
+                match value {
+                    $($enum_ty::$variant => $val,)+
+                }
+            }
         }
-    }
+
+        impl $enum_ty {
+            /// Attempts to convert a `u32` discriminant into
+            #[doc = concat!("[`", stringify!($enum_ty), "`].")]
+            ///
+            /// Returns [`Err`] instead of panicking when `value` does not correspond to a
+            /// known variant (unlike [`From<u32>`](From)).
+            pub fn try_from_u32(value: u32) -> Result<Self, TryFromIntError> {
+                match value {
+                    $($val => Ok($enum_ty::$variant),)+
+                    _ => Err(TryFromIntError::new(value as i64, stringify!($enum_ty))),
+                }
+            }
+
+            /// Attempts to convert an `i32` discriminant into
+            #[doc = concat!("[`", stringify!($enum_ty), "`].")]
+            ///
+            /// Returns [`Err`] instead of panicking when `value` does not correspond to a
+            /// known variant (unlike [`From<i32>`](From)).
+            pub fn try_from_i32(value: i32) -> Result<Self, TryFromIntError> {
+                match value {
+                    $($val => Ok($enum_ty::$variant),)+
+                    _ => Err(TryFromIntError::new(value as i64, stringify!($enum_ty))),
+                }
+            }
+        }
+    };
 }
+
+impl_int_enum_conversions!(
+    Mutability {
+        Const = 0,
+        Var = 1,
+    },
+    "[wasmedge-types] Invalid WasmEdge_Mutability: {:#X}"
+);
 
 /// Defines WasmEdge AOT compiler optimization level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,56 +203,17 @@ pub enum CompilerOptimizationLevel {
     /// Optimize for small code size as much as possible.
     Oz,
 }
-impl From<u32> for CompilerOptimizationLevel {
-    fn from(val: u32) -> CompilerOptimizationLevel {
-        match val {
-            0 => CompilerOptimizationLevel::O0,
-            1 => CompilerOptimizationLevel::O1,
-            2 => CompilerOptimizationLevel::O2,
-            3 => CompilerOptimizationLevel::O3,
-            4 => CompilerOptimizationLevel::Os,
-            5 => CompilerOptimizationLevel::Oz,
-            _ => panic!("Unknown CompilerOptimizationLevel value: {val}"),
-        }
-    }
-}
-impl From<CompilerOptimizationLevel> for u32 {
-    fn from(val: CompilerOptimizationLevel) -> u32 {
-        match val {
-            CompilerOptimizationLevel::O0 => 0,
-            CompilerOptimizationLevel::O1 => 1,
-            CompilerOptimizationLevel::O2 => 2,
-            CompilerOptimizationLevel::O3 => 3,
-            CompilerOptimizationLevel::Os => 4,
-            CompilerOptimizationLevel::Oz => 5,
-        }
-    }
-}
-impl From<i32> for CompilerOptimizationLevel {
-    fn from(val: i32) -> CompilerOptimizationLevel {
-        match val {
-            0 => CompilerOptimizationLevel::O0,
-            1 => CompilerOptimizationLevel::O1,
-            2 => CompilerOptimizationLevel::O2,
-            3 => CompilerOptimizationLevel::O3,
-            4 => CompilerOptimizationLevel::Os,
-            5 => CompilerOptimizationLevel::Oz,
-            _ => panic!("Unknown CompilerOptimizationLevel value: {val}"),
-        }
-    }
-}
-impl From<CompilerOptimizationLevel> for i32 {
-    fn from(val: CompilerOptimizationLevel) -> i32 {
-        match val {
-            CompilerOptimizationLevel::O0 => 0,
-            CompilerOptimizationLevel::O1 => 1,
-            CompilerOptimizationLevel::O2 => 2,
-            CompilerOptimizationLevel::O3 => 3,
-            CompilerOptimizationLevel::Os => 4,
-            CompilerOptimizationLevel::Oz => 5,
-        }
-    }
-}
+impl_int_enum_conversions!(
+    CompilerOptimizationLevel {
+        O0 = 0,
+        O1 = 1,
+        O2 = 2,
+        O3 = 3,
+        Os = 4,
+        Oz = 5,
+    },
+    "Unknown CompilerOptimizationLevel value: {}"
+);
 
 /// Defines WasmEdge AOT compiler output binary format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -195,38 +224,120 @@ pub enum CompilerOutputFormat {
     /// WebAssembly with AOT compiled codes in custom sections.
     Wasm,
 }
-impl From<u32> for CompilerOutputFormat {
-    fn from(val: u32) -> CompilerOutputFormat {
-        match val {
-            0 => CompilerOutputFormat::Native,
-            1 => CompilerOutputFormat::Wasm,
-            _ => panic!("Unknown CompilerOutputFormat value: {val}"),
+impl_int_enum_conversions!(
+    CompilerOutputFormat {
+        Native = 0,
+        Wasm = 1,
+    },
+    "Unknown CompilerOutputFormat value: {}"
+);
+
+#[cfg(test)]
+mod int_enum_conversions_tests {
+    use super::*;
+
+    #[test]
+    fn mutability_round_trip() {
+        assert_eq!(Mutability::from(0u32), Mutability::Const);
+        assert_eq!(Mutability::from(1u32), Mutability::Var);
+        assert_eq!(Mutability::from(0i32), Mutability::Const);
+        assert_eq!(Mutability::from(1i32), Mutability::Var);
+        assert_eq!(u32::from(Mutability::Const), 0);
+        assert_eq!(u32::from(Mutability::Var), 1);
+        assert_eq!(i32::from(Mutability::Const), 0);
+        assert_eq!(i32::from(Mutability::Var), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "[wasmedge-types] Invalid WasmEdge_Mutability: 0x2A")]
+    fn mutability_from_u32_panics_on_invalid_value() {
+        // Preserves the exact pre-existing panic message (hex, uppercase) of the hand-written
+        // `From<u32> for Mutability` impl this macro replaced.
+        let _ = Mutability::from(42u32);
+    }
+
+    #[test]
+    #[should_panic(expected = "[wasmedge-types] Invalid WasmEdge_Mutability: 0x2A")]
+    fn mutability_from_i32_panics_on_invalid_value() {
+        let _ = Mutability::from(42i32);
+    }
+
+    #[test]
+    fn mutability_try_from_valid() {
+        assert_eq!(Mutability::try_from_u32(0), Ok(Mutability::Const));
+        assert_eq!(Mutability::try_from_i32(1), Ok(Mutability::Var));
+    }
+
+    #[test]
+    fn mutability_try_from_invalid_does_not_panic() {
+        let err = Mutability::try_from_u32(42).unwrap_err();
+        assert_eq!(err.to_string(), "Unknown Mutability value: 42");
+
+        let err = Mutability::try_from_i32(-1).unwrap_err();
+        assert_eq!(err.to_string(), "Unknown Mutability value: -1");
+    }
+
+    #[test]
+    fn compiler_optimization_level_round_trip() {
+        let cases = [
+            (0u32, CompilerOptimizationLevel::O0),
+            (1, CompilerOptimizationLevel::O1),
+            (2, CompilerOptimizationLevel::O2),
+            (3, CompilerOptimizationLevel::O3),
+            (4, CompilerOptimizationLevel::Os),
+            (5, CompilerOptimizationLevel::Oz),
+        ];
+        for (val, variant) in cases {
+            assert_eq!(CompilerOptimizationLevel::from(val), variant);
+            assert_eq!(CompilerOptimizationLevel::from(val as i32), variant);
+            assert_eq!(u32::from(variant), val);
+            assert_eq!(i32::from(variant), val as i32);
+            assert_eq!(CompilerOptimizationLevel::try_from_u32(val), Ok(variant));
+            assert_eq!(
+                CompilerOptimizationLevel::try_from_i32(val as i32),
+                Ok(variant)
+            );
         }
     }
-}
-impl From<CompilerOutputFormat> for u32 {
-    fn from(val: CompilerOutputFormat) -> u32 {
-        match val {
-            CompilerOutputFormat::Native => 0,
-            CompilerOutputFormat::Wasm => 1,
+
+    #[test]
+    #[should_panic(expected = "Unknown CompilerOptimizationLevel value: 6")]
+    fn compiler_optimization_level_from_u32_panics_on_invalid_value() {
+        let _ = CompilerOptimizationLevel::from(6u32);
+    }
+
+    #[test]
+    fn compiler_optimization_level_try_from_invalid_does_not_panic() {
+        assert!(CompilerOptimizationLevel::try_from_u32(6).is_err());
+        assert!(CompilerOptimizationLevel::try_from_i32(-1).is_err());
+    }
+
+    #[test]
+    fn compiler_output_format_round_trip() {
+        let cases = [
+            (0u32, CompilerOutputFormat::Native),
+            (1, CompilerOutputFormat::Wasm),
+        ];
+        for (val, variant) in cases {
+            assert_eq!(CompilerOutputFormat::from(val), variant);
+            assert_eq!(CompilerOutputFormat::from(val as i32), variant);
+            assert_eq!(u32::from(variant), val);
+            assert_eq!(i32::from(variant), val as i32);
+            assert_eq!(CompilerOutputFormat::try_from_u32(val), Ok(variant));
+            assert_eq!(CompilerOutputFormat::try_from_i32(val as i32), Ok(variant));
         }
     }
-}
-impl From<i32> for CompilerOutputFormat {
-    fn from(val: i32) -> CompilerOutputFormat {
-        match val {
-            0 => CompilerOutputFormat::Native,
-            1 => CompilerOutputFormat::Wasm,
-            _ => panic!("Unknown CompilerOutputFormat value: {val}"),
-        }
+
+    #[test]
+    #[should_panic(expected = "Unknown CompilerOutputFormat value: 2")]
+    fn compiler_output_format_from_u32_panics_on_invalid_value() {
+        let _ = CompilerOutputFormat::from(2u32);
     }
-}
-impl From<CompilerOutputFormat> for i32 {
-    fn from(val: CompilerOutputFormat) -> i32 {
-        match val {
-            CompilerOutputFormat::Native => 0,
-            CompilerOutputFormat::Wasm => 1,
-        }
+
+    #[test]
+    fn compiler_output_format_try_from_invalid_does_not_panic() {
+        assert!(CompilerOutputFormat::try_from_u32(2).is_err());
+        assert!(CompilerOutputFormat::try_from_i32(-1).is_err());
     }
 }
 
@@ -377,7 +488,7 @@ impl TableType {
     ///
     /// * `min` - The minimum size of the table to be created.
     ///
-    /// * `max` - The maximum size of the table to be created.    
+    /// * `max` - The maximum size of the table to be created.
     pub fn new(elem_ty: RefType, min: u32, max: Option<u32>) -> Self {
         Self { elem_ty, min, max }
     }
@@ -497,7 +608,23 @@ pub use wat::parse_bytes as wat2wasm;
 pub type WasmEdgeResult<T> = Result<T, Box<error::WasmEdgeError>>;
 
 /// This is a workaround solution to the [`never`](https://doc.rust-lang.org/std/primitive.never.html) type in Rust. It will be replaced by `!` once it is stable.
+///
+/// As an uninhabited (empty) enum, `NeverType` is automatically [`Send`] and [`Sync`]: there are
+/// no variants that could hold non-`Send`/`Sync` data, so no `unsafe impl` is required.
 #[derive(Debug, Clone)]
 pub enum NeverType {}
-unsafe impl Send for NeverType {}
-unsafe impl Sync for NeverType {}
+
+#[cfg(test)]
+mod never_type_tests {
+    use super::NeverType;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn never_type_is_auto_send_sync() {
+        // Compile-time proof (this line simply must compile) that removing the redundant
+        // `unsafe impl Send/Sync for NeverType` did not change auto-trait behavior: an
+        // uninhabited enum is automatically `Send + Sync` without any `unsafe impl`.
+        assert_send_sync::<NeverType>();
+    }
+}

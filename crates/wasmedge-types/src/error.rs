@@ -582,6 +582,26 @@ pub enum HostFuncError {
     Runtime(u32),
 }
 
+/// The error returned by the `TryFrom<u32>`/`TryFrom<i32>` conversions for the small
+/// C-enum-like WasmEdge types (for example [Mutability](crate::Mutability),
+/// [CompilerOptimizationLevel](crate::CompilerOptimizationLevel), and
+/// [CompilerOutputFormat](crate::CompilerOutputFormat)) when the integer does not correspond to
+/// any known variant.
+///
+/// Unlike the corresponding `From<u32>`/`From<i32>` implementations, converting through
+/// `TryFrom` never panics.
+#[derive(Error, Clone, Copy, Debug, PartialEq, Eq)]
+#[error("Unknown {type_name} value: {value}")]
+pub struct TryFromIntError {
+    value: i64,
+    type_name: &'static str,
+}
+impl TryFromIntError {
+    pub(crate) fn new(value: i64, type_name: &'static str) -> Self {
+        Self { value, type_name }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -824,5 +844,19 @@ mod tests {
     #[test]
     fn host_func_error_user_display() {
         assert_eq!(HostFuncError::User(42).to_string(), "User error: 42");
+    }
+
+    // ---- TryFromIntError ----
+
+    #[test]
+    fn try_from_int_error_display() {
+        let err = TryFromIntError::new(42, "Mutability");
+        assert_eq!(err.to_string(), "Unknown Mutability value: 42");
+    }
+
+    #[test]
+    fn try_from_int_error_display_negative_value() {
+        let err = TryFromIntError::new(-1, "Mutability");
+        assert_eq!(err.to_string(), "Unknown Mutability value: -1");
     }
 }
