@@ -605,6 +605,20 @@ fn normalize(path: &Path) -> PathBuf {
     result
 }
 
+/// The single sandbox-boundary check for guest paths: joins `sub_path` onto `real_path`,
+/// resolves `..`/`.` lexically, and rejects anything that escapes `real_path`.
+///
+/// `real_path` is always absolute (canonicalized in `DiskFileSys::new` or already-checked in
+/// `path_open`), so `join` is too; an absolute `sub_path` replaces it, which the `starts_with`
+/// check below rejects unless it already lives under `real_path`.
+fn sandboxed_join(real_path: &Path, sub_path: impl AsRef<Path>) -> Result<PathBuf, Errno> {
+    let new_path = normalize(&real_path.join(sub_path.as_ref()));
+    if !new_path.starts_with(real_path) {
+        return Err(Errno::__WASI_ERRNO_NOENT);
+    }
+    Ok(new_path)
+}
+
 #[derive(Debug)]
 pub struct DiskDir {
     // absolutize
@@ -615,14 +629,7 @@ pub struct DiskDir {
 
 impl DiskDir {
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        // `real_path` is always absolute (canonicalized in `DiskFileSys::new` or already-checked in
-        // `path_open`), so `join` is too; an absolute `sub_path` replaces it, which `normalize` rejects
-        // below unless it already lives under `real_path`.
-        let new_path = normalize(&self.real_path.join(sub_path));
-        if !new_path.starts_with(&self.real_path) {
-            return Err(Errno::__WASI_ERRNO_NOENT);
-        }
-        Ok(new_path)
+        sandboxed_join(&self.real_path, sub_path)
     }
 }
 
@@ -1089,15 +1096,10 @@ impl DiskFileSys {
         })
     }
 
-    /// See `DiskDir::get_absolutize_path` for the sandboxing semantics this
-    /// preserves (lexical `..`/`.` resolution, rejecting anything that
-    /// normalizes outside of `real_path`).
+    /// See `sandboxed_join` for the sandboxing semantics (lexical `..`/`.`
+    /// resolution, rejecting anything that normalizes outside of `real_path`).
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        let new_path = normalize(&self.real_path.join(sub_path));
-        if !new_path.starts_with(&self.real_path) {
-            return Err(Errno::__WASI_ERRNO_NOENT);
-        }
-        Ok(new_path)
+        sandboxed_join(&self.real_path, sub_path)
     }
 }
 
