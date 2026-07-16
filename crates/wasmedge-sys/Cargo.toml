@@ -12,7 +12,7 @@ name = "wasmedge-sys"
 readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
-version = "0.20.0"
+version = "0.21.0"
 
 [dependencies]
 log.workspace = true

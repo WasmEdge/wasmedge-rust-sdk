@@ -22,7 +22,7 @@
 //!
 //! | wasmedge-sdk       | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
 //! | :----------------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
-//! | 0.17.0 (upcoming)  | 0.17.1        | 0.21.0        | 0.7.0         | 0.7.0         | 0.3.0     |
+//! | 0.17.0             | 0.17.1        | 0.21.0        | 0.7.0         | 0.7.0         | 0.3.0     |
 //! | 0.16.1 †           | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
 //! | 0.14.1 †           | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
 //! | 0.14.0             | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
@@ -54,7 +54,7 @@
 //! with the 0.16.1 row; `wasmedge-sys` **0.19.4**, paired with the 0.14.1 row, *was* published).
 //! The latest versions actually released are `wasmedge-sdk` **0.14.0** and `wasmedge-sys`
 //! **0.19.4** — both rows are kept here for historical accuracy rather than deleted. New code
-//! should depend on `0.14.0` today (or `0.17.0` once it ships).
+//! should depend on `0.17.0`.
 //!
 //! WasmEdge Rust SDK will automatically search for the WasmEdge library in your system. Alternatively you can set the `WASMEDGE_DIR` environment variable to the path of the WasmEdge library (or the `WASMEDGE_INCLUDE_DIR` and `WASMEDGE_LIB_DIR` variables for more fine-grained control). If you want to use a local `cmake` build of WasmEdge you can set the `WASMEDGE_BUILD_DIR` instead.
 //!

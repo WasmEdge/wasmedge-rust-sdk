@@ -30,10 +30,9 @@ The easiest way to get started is with the `bundled` feature, which automaticall
 
 Add the following to your `Cargo.toml`:
 
-<!-- TODO(P9-1): bump quick-start snippets on release -->
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.14.0", features = ["bundled"] }
+wasmedge-sdk = { version = "0.17.0", features = ["bundled"] }
 ```
 
 This creates a fully self-contained executable with no runtime dependencies. Your binary will work on any compatible Linux system without needing WasmEdge installed.
@@ -52,16 +51,14 @@ sudo dnf install -y libzstd-devel fmt-devel
 For dynamic linking with automatic download (all platforms):
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.14.0", features = ["standalone"] }
+wasmedge-sdk = { version = "0.17.0", features = ["standalone"] }
 ```
 
 For dynamic linking with system-installed WasmEdge:
 ```toml
 [dependencies]
-wasmedge-sdk = "0.14.0"
+wasmedge-sdk = "0.17.0"
 ```
-
-**Note:** `0.14.0` is the latest `wasmedge-sdk` release published to crates.io; `0.17.0` is upcoming — see the [Compatibility Matrix](#compatibility-matrix).
 
 ### Run a WebAssembly Function
 
@@ -155,10 +152,8 @@ The `bundled` feature enables static linking of the WasmEdge library into your a
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.14.0", features = ["bundled"] }
+wasmedge-sdk = { version = "0.17.0", features = ["bundled"] }
 ```
-
-**Note:** `0.14.0` is the latest `wasmedge-sdk` release published to crates.io; `0.17.0` is upcoming — see the [Compatibility Matrix](#compatibility-matrix).
 
 The `bundled` feature is equivalent to enabling both `standalone` and `static` features together. It downloads the static WasmEdge library at build time and links it directly into your binary.
 
@@ -290,10 +285,8 @@ Add the WasmEdge SDK to `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.14.0", features = ["standalone"] }
+wasmedge-sdk = { version = "0.17.0", features = ["standalone"] }
 ```
-
-**Note:** `0.14.0` is the latest `wasmedge-sdk` release published to crates.io; `0.17.0` is upcoming — see the [Compatibility Matrix](#compatibility-matrix).
 
 ### Step 5: Load and Run the WASM Module
 
@@ -508,7 +501,7 @@ The versioning table below shows the version of the WasmEdge library required by
 
   | wasmedge-sdk       | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :----------------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
-  | 0.17.0 (upcoming)  | 0.17.1        | 0.21.0        | 0.7.0         | 0.7.0         | 0.3.0     |
+  | 0.17.0             | 0.17.1        | 0.21.0        | 0.7.0         | 0.7.0         | 0.3.0     |
   | 0.16.1 †           | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.1 †           | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.0             | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
@@ -540,4 +533,4 @@ repository but never published to crates.io (nor was the `wasmedge-sys` **0.20.0
 with the 0.16.1 row; `wasmedge-sys` **0.19.4**, paired with the 0.14.1 row, *was* published).
 The latest versions actually released are `wasmedge-sdk` **0.14.0** and `wasmedge-sys`
 **0.19.4** — both rows are kept here for historical accuracy rather than deleted. New code
-should depend on `0.14.0` today (or `0.17.0` once it ships).
+should depend on `0.17.0`.

@@ -10,11 +10,10 @@ name = "wasmedge-sdk"
 readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
-version = "0.16.1"
+version = "0.17.0"
 
 [dependencies]
-wasmedge-macro.workspace = true
-wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.20.0", default-features = false }
+wasmedge-sys = { path = "crates/wasmedge-sys", version = "0.21.0", default-features = false }
 wasmedge-types.workspace = true
 
 [workspace.package]
@@ -24,7 +23,7 @@ repository = "https://github.com/WasmEdge/wasmedge-rust-sdk"
 rust-version = "1.85"
 
 [workspace.dependencies]
-async-wasi = { path = "crates/async-wasi", version = "0.2.0" }
+async-wasi = { path = "crates/async-wasi", version = "0.3.0" }
 bindgen = { version = "0.72", default-features = false }
 bitflags = "2.13.0"
 cfg-if = "1.0.0"
@@ -36,8 +35,7 @@ slab = "0.4.12"
 socket2 = "0.6"
 thiserror = "2"
 tokio = "1.43"
-wasmedge-macro = { path = "crates/wasmedge-macro", version = "0.6" }
-wasmedge-types = { path = "crates/wasmedge-types", version = "0.6" }
+wasmedge-types = { path = "crates/wasmedge-types", version = "0.7" }
 wat = "1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
