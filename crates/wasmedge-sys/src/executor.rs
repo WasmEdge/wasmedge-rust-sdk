@@ -33,8 +33,11 @@ unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
     // reading `si_value()` is valid inside the handler, and `*value` reads back
     // the `pthread_t` the timer was armed with (stored in `sival_ptr`).
     // `pthread_self`, `siglongjmp` (into the `JMP_BUF` set by
-    // `TimeoutFiberFuture::poll`) and `pthread_sigqueue` are the
-    // async-signal-safe primitives this timeout mechanism relies on.
+    // `TimeoutFiberFuture::poll`) and `pthread_sigqueue` are the primitives this
+    // timeout mechanism relies on from within a signal handler. Caveat:
+    // `pthread_sigqueue` is a GNU (glibc) extension, not POSIX — POSIX lists only
+    // `sigqueue` as async-signal-safe, so calling it here relies on glibc
+    // implementing it as signal-safe by analogy, not on a standard guarantee.
     unsafe {
         if let Some(info) = info.as_mut() {
             let si_value = info.si_value();
@@ -195,6 +198,10 @@ impl Executor {
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
+        // SAFETY: `returns` is reserved with capacity `returns_len` (the callee's return
+        // arity). On success `WasmEdge_ExecutorInvoke` writes exactly that many
+        // `WasmEdge_Value`s; the `?` on `check(..)` ensures `set_len` runs only after a
+        // successful invoke, so every slot is initialized.
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
@@ -288,6 +295,10 @@ impl Executor {
                 }
             })?;
 
+            // SAFETY: `returns` is reserved with capacity `returns_len` (the callee's
+            // return arity). The `?` above only falls through here after
+            // `WasmEdge_ExecutorInvoke` (in the `sigsetjmp` fast path) returned success,
+            // writing exactly `returns_len` `WasmEdge_Value`s, so every slot is initialized.
             returns.set_len(returns_len);
             Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
         }
@@ -376,6 +387,10 @@ impl Executor {
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
+        // SAFETY: `returns` is reserved with capacity `returns_len` (the callee's return
+        // arity). On success `WasmEdge_ExecutorInvoke` writes exactly that many
+        // `WasmEdge_Value`s; the `?` on `check(..)` ensures `set_len` runs only after a
+        // successful invoke, so every slot is initialized.
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
@@ -525,5 +540,10 @@ impl Executor {
 
 #[derive(Debug, Clone)]
 pub(crate) struct InnerExecutor(pub(crate) *mut ffi::WasmEdge_ExecutorContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_ExecutorContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls, e.g. `call_func_with_timeout`
+// invokes through `&self`) — WasmEdge documents no thread-safety for this context, so
+// it is an unverified, inherited invariant.
 unsafe impl Send for InnerExecutor {}
 unsafe impl Sync for InnerExecutor {}

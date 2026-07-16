@@ -65,6 +65,10 @@ impl PluginManager {
         let count = Self::count();
         let mut names = Vec::with_capacity(count as usize);
 
+        // SAFETY: `names` is reserved with capacity `count` — the exact count just
+        // queried via `Self::count` (`WasmEdge_PluginListPluginsLength`) — and
+        // `WasmEdge_PluginListPlugins` fills that many POD `WasmEdge_String`s, so all
+        // `count` slots are initialized before `set_len`.
         unsafe {
             ffi::WasmEdge_PluginListPlugins(names.as_mut_ptr(), count);
             names.set_len(count as usize);
@@ -171,6 +175,10 @@ impl Plugin {
         let count = self.mod_count();
         let mut names = Vec::with_capacity(count as usize);
 
+        // SAFETY: `names` is reserved with capacity `count` — the exact count just
+        // queried via `mod_count` (`WasmEdge_PluginListModuleLength`) — and
+        // `WasmEdge_PluginListModule` fills that many POD `WasmEdge_String`s, so all
+        // `count` slots are initialized before `set_len`.
         unsafe {
             ffi::WasmEdge_PluginListModule(self.inner.0, names.as_mut_ptr(), count);
             names.set_len(count as usize);
@@ -214,6 +222,10 @@ impl Plugin {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct InnerPlugin(pub(crate) *mut ffi::WasmEdge_PluginContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_PluginContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
+// no thread-safety for this context, so it is an unverified, inherited invariant.
 unsafe impl Send for InnerPlugin {}
 unsafe impl Sync for InnerPlugin {}
 
@@ -311,6 +323,11 @@ impl ProgramOption {
         Ok(po)
     }
 }
+// SAFETY: `ProgramOption` owns its `name`/`desc` `CString`s; the raw `Name`/
+// `Description` pointers stored in `inner` point into those heap allocations,
+// which stay valid across moves, and the struct has no interior mutability. So
+// `Send` (a move keeps the pointers valid) and `Sync` (read-only `&` sharing)
+// are both sound.
 unsafe impl Send for ProgramOption {}
 unsafe impl Sync for ProgramOption {}
 

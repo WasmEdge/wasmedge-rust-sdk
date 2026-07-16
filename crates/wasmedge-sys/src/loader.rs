@@ -164,6 +164,10 @@ impl Drop for Loader {
 
 #[derive(Debug)]
 pub(crate) struct InnerLoader(pub(crate) *mut ffi::WasmEdge_LoaderContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_LoaderContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
+// no thread-safety for this context, so it is an unverified, inherited invariant.
 unsafe impl Send for InnerLoader {}
 unsafe impl Sync for InnerLoader {}
 

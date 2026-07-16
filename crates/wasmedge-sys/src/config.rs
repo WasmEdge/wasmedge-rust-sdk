@@ -523,6 +523,13 @@ impl Config {
 
 #[derive(Debug)]
 pub(crate) struct InnerConfig(pub(crate) *mut ffi::WasmEdge_ConfigureContext);
+// SAFETY: (verified) owns an opaque `*mut WasmEdge_ConfigureContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is verified: wasmedge_configure.h documents "This function is
+// thread-safe." on the Configure accessors, including the mutating
+// `WasmEdge_ConfigureAddProposal`, `WasmEdge_ConfigureRemoveProposal`,
+// `WasmEdge_ConfigureSetWASMStandard`, and `WasmEdge_ConfigureAddHostRegistration`,
+// so upstream documents internal synchronization for concurrent `&self` calls.
 unsafe impl Send for InnerConfig {}
 unsafe impl Sync for InnerConfig {}
 

@@ -41,6 +41,13 @@ where
 
 #[derive(Debug, Clone)]
 pub(crate) struct InnerInstance(pub(crate) *mut ffi::WasmEdge_ModuleInstanceContext);
+// SAFETY: (verified) owns an opaque `*mut WasmEdge_ModuleInstanceContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is verified: wasmedge_instance.h documents "This function is
+// thread-safe." on every ModuleInstance Find/List/Add accessor, including the
+// mutating `WasmEdge_ModuleInstanceAddFunction`, `WasmEdge_ModuleInstanceAddTable`,
+// `WasmEdge_ModuleInstanceAddMemory`, and `WasmEdge_ModuleInstanceAddGlobal`, so
+// upstream documents internal synchronization for concurrent `&self` calls.
 unsafe impl Send for InnerInstance {}
 unsafe impl Sync for InnerInstance {}
 
@@ -210,6 +217,10 @@ pub trait AsInstance {
         let len_func_names = self.func_len();
         if len_func_names > 0 {
             let mut func_names = Vec::with_capacity(len_func_names as usize);
+            // SAFETY: `func_names` is reserved with capacity `len_func_names` — the exact
+            // count just queried via `func_len` (`WasmEdge_ModuleInstanceListFunctionLength`)
+            // — and `WasmEdge_ModuleInstanceListFunction` fills that many POD
+            // `WasmEdge_String`s, so all slots are initialized before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListFunction(
                     self.as_ptr(),
@@ -291,6 +302,10 @@ pub trait AsInstance {
         let len_table_names = self.table_len();
         if len_table_names > 0 {
             let mut table_names = Vec::with_capacity(len_table_names as usize);
+            // SAFETY: `table_names` is reserved with capacity `len_table_names` — the exact
+            // count just queried via `table_len` (`WasmEdge_ModuleInstanceListTableLength`)
+            // — and `WasmEdge_ModuleInstanceListTable` fills that many POD
+            // `WasmEdge_String`s, so all slots are initialized before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListTable(
                     self.as_ptr(),
@@ -320,6 +335,10 @@ pub trait AsInstance {
         let len_mem_names = self.mem_len();
         if len_mem_names > 0 {
             let mut mem_names = Vec::with_capacity(len_mem_names as usize);
+            // SAFETY: `mem_names` is reserved with capacity `len_mem_names` — the exact
+            // count just queried via `mem_len` (`WasmEdge_ModuleInstanceListMemoryLength`)
+            // — and `WasmEdge_ModuleInstanceListMemory` fills that many POD
+            // `WasmEdge_String`s, so all slots are initialized before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListMemory(
                     self.as_ptr(),
@@ -349,6 +368,11 @@ pub trait AsInstance {
         let len_global_names = self.global_len();
         if len_global_names > 0 {
             let mut global_names = Vec::with_capacity(len_global_names as usize);
+            // SAFETY: `global_names` is reserved with capacity `len_global_names` — the
+            // exact count just queried via `global_len`
+            // (`WasmEdge_ModuleInstanceListGlobalLength`) — and
+            // `WasmEdge_ModuleInstanceListGlobal` fills that many POD `WasmEdge_String`s,
+            // so all slots are initialized before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListGlobal(
                     self.as_ptr(),

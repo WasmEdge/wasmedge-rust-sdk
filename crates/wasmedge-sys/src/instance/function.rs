@@ -276,6 +276,10 @@ impl<F: AsRef<Function>> AsFunc for F {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct InnerFunc(pub(crate) *mut ffi::WasmEdge_FunctionInstanceContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_FunctionInstanceContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
+// no thread-safety for this context, so it is an unverified, inherited invariant.
 unsafe impl Send for InnerFunc {}
 unsafe impl Sync for InnerFunc {}
 
@@ -341,6 +345,10 @@ impl FuncTypeOwn {
     pub(crate) fn params_type_iter(&self) -> impl Iterator<Item = ValType> {
         let len = self.params_len();
         let mut types = Vec::with_capacity(len as usize);
+        // SAFETY: `types` is reserved with capacity `len` — the exact count just queried
+        // via `params_len` (`WasmEdge_FunctionTypeGetParametersLength`) — and
+        // `WasmEdge_FunctionTypeGetParameters` fills that many POD `WasmEdge_ValType`s, so
+        // all `len` slots are initialized before `set_len`.
         unsafe {
             ffi::WasmEdge_FunctionTypeGetParameters(self.inner.0, types.as_mut_ptr(), len);
             types.set_len(len as usize);
@@ -358,6 +366,10 @@ impl FuncTypeOwn {
     pub(crate) fn returns_type_iter(&self) -> impl Iterator<Item = ValType> {
         let len = self.returns_len();
         let mut types = Vec::with_capacity(len as usize);
+        // SAFETY: `types` is reserved with capacity `len` — the exact count just queried
+        // via `returns_len` (`WasmEdge_FunctionTypeGetReturnsLength`) — and
+        // `WasmEdge_FunctionTypeGetReturns` fills that many POD `WasmEdge_ValType`s, so
+        // all `len` slots are initialized before `set_len`.
         unsafe {
             ffi::WasmEdge_FunctionTypeGetReturns(self.inner.0, types.as_mut_ptr(), len);
             types.set_len(len as usize);
@@ -390,6 +402,10 @@ impl From<&FuncTypeOwn> for wasmedge_types::FuncType {
 
 #[derive(Debug)]
 pub(crate) struct InnerFuncType(pub(crate) *const ffi::WasmEdge_FunctionTypeContext);
+// SAFETY: (assumed, pre-existing) wraps an immutable `*const WasmEdge_FunctionTypeContext`
+// read only through pure `Get*` getters — no interior mutation — so `Send`/`Sync` are
+// sound in practice; the residual "concurrent C reads are safe" guarantee is undocumented,
+// so this stays an assumption inherited from the original bindings.
 unsafe impl Send for InnerFuncType {}
 unsafe impl Sync for InnerFuncType {}
 

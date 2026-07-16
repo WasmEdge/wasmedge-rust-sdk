@@ -75,6 +75,11 @@ impl Future for FiberFuture<'_> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
+            // SAFETY: erase the `Context` lifetime to `'static` behind a raw pointer. The
+            // pointer is stored only for the duration of this `poll` — the `Reset` guard
+            // above restores the previous value on scope exit — and is dereferenced only by
+            // `block_on` while `cx` is live on this thread, so it never outlives the real
+            // `Context`.
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
@@ -85,6 +90,12 @@ impl Future for FiberFuture<'_> {
         }
     }
 }
+// SAFETY: the raw pointers borrow into the owning `AsyncState` and are only
+// dereferenced during an active `poll`/`resume` on the current thread. `Send` is
+// load-bearing: it lets the future be driven across executor worker threads (the
+// standard async-fiber pattern). `Sync` is NOT load-bearing — a `FiberFuture` is only
+// ever driven through `&mut` (`poll`), never shared by `&`; it is kept only for API
+// stability.
 unsafe impl Send for FiberFuture<'_> {}
 unsafe impl Sync for FiberFuture<'_> {}
 
@@ -178,6 +189,11 @@ impl Future for TimeoutFiberFuture<'_> {
             crate::executor::init_signal_listen();
 
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
+            // SAFETY: erase the `Context` lifetime to `'static` behind a raw pointer. The
+            // pointer is stored only for the duration of this `poll` — the `Reset` guard
+            // above restores the previous value on scope exit — and is dereferenced only by
+            // `block_on` while `cx` is live on this thread, so it never outlives the real
+            // `Context`.
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
             let async_cx = AsyncCx {
@@ -232,6 +248,11 @@ impl Future for TimeoutFiberFuture<'_> {
         }
     }
 }
+// SAFETY: same argument as `FiberFuture` — the raw pointers borrow into the owning
+// `AsyncState` and are only dereferenced during an active `poll`/`resume` on the current
+// thread. `Send` is load-bearing (drives the future across executor worker threads);
+// `Sync` is NOT load-bearing (only ever driven through `&mut` (`poll`), never shared by
+// `&`) and is kept only for API stability.
 #[cfg(not(target_env = "musl"))]
 unsafe impl Send for TimeoutFiberFuture<'_> {}
 #[cfg(not(target_env = "musl"))]
@@ -296,6 +317,10 @@ impl AsyncState {
         })
     }
 }
+// SAFETY: (assumed, pre-existing) the two `UnsafeCell`s hold raw pointers that are only
+// written/read during an active `poll` on the thread currently driving the fiber. The
+// single-driver invariant (no concurrent poll of the same state) is upheld by the async
+// executor, not by the compiler; carried over from the original bindings.
 unsafe impl Send for AsyncState {}
 unsafe impl Sync for AsyncState {}
 
@@ -333,9 +358,12 @@ impl AsyncCx {
         // pointers captured from a live `AsyncState` when this `AsyncCx` was set
         // up for the running fiber (see `FiberFuture::poll` / `AsyncCx::new`).
         // Per the fiber protocol `block_on` only runs while that state is alive
-        // on the polling task's stack, so both pointers are non-null (asserted)
-        // and valid to dereference; each `Reset` guard restores the previous
-        // value when its scope ends.
+        // on the polling task's stack, so these two outer pointers are valid to
+        // dereference — their non-null-ness is a protocol precondition, not
+        // checked here. The `assert!`s below instead guard the inner values read
+        // back out (the suspend and poll-context pointers), which must be non-null
+        // before they are used. Each `Reset` guard restores the previous value
+        // when its scope ends.
         unsafe {
             let suspend = *self.current_suspend;
             let _reset = Reset(self.current_suspend, suspend);

@@ -113,6 +113,10 @@ impl Drop for Global {
 
 #[derive(Debug)]
 pub(crate) struct InnerGlobal(pub(crate) *mut ffi::WasmEdge_GlobalInstanceContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_GlobalInstanceContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
+// no thread-safety for this context, so it is an unverified, inherited invariant.
 unsafe impl Send for InnerGlobal {}
 unsafe impl Sync for InnerGlobal {}
 
@@ -183,6 +187,10 @@ impl From<&GlobalType> for wasmedge_types::GlobalType {
 
 #[derive(Debug)]
 pub(crate) struct InnerGlobalType(pub(crate) *mut ffi::WasmEdge_GlobalTypeContext);
+// SAFETY: (assumed, pre-existing) owns a `*mut WasmEdge_GlobalTypeContext` read only
+// through pure `Get*` getters — no interior mutation — so `Send`/`Sync` are sound in
+// practice; the residual "concurrent C reads are safe" guarantee is undocumented, so
+// this stays an assumption inherited from the original bindings.
 unsafe impl Send for InnerGlobalType {}
 unsafe impl Sync for InnerGlobalType {}
 

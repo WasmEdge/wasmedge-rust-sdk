@@ -69,6 +69,10 @@ impl Memory {
     ///
     pub fn get_data(&self, offset: u32, len: u32) -> WasmEdgeResult<Vec<u8>> {
         let mut data = Vec::with_capacity(len as usize);
+        // SAFETY: `data` is reserved with capacity `len`; on success
+        // `WasmEdge_MemoryInstanceGetData` copies exactly `len` bytes into it, and the
+        // `?` on `check(..)` ensures `set_len` runs only after a successful copy, so all
+        // `len` bytes are initialized.
         unsafe {
             check(ffi::WasmEdge_MemoryInstanceGetData(
                 self.inner.0,
@@ -242,6 +246,10 @@ impl Memory {
 
 #[derive(Debug)]
 pub(crate) struct InnerMemory(pub(crate) *mut ffi::WasmEdge_MemoryInstanceContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_MemoryInstanceContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
+// no thread-safety for this context, so it is an unverified, inherited invariant.
 unsafe impl Send for InnerMemory {}
 unsafe impl Sync for InnerMemory {}
 
@@ -337,6 +345,10 @@ impl From<&MemType> for wasmedge_types::MemoryType {
 
 #[derive(Debug)]
 pub(crate) struct InnerMemType(pub(crate) *mut ffi::WasmEdge_MemoryTypeContext);
+// SAFETY: (assumed, pre-existing) owns a `*mut WasmEdge_MemoryTypeContext` read only
+// through pure `Get*` getters — no interior mutation — so `Send`/`Sync` are sound in
+// practice; the residual "concurrent C reads are safe" guarantee is undocumented, so
+// this stays an assumption inherited from the original bindings.
 unsafe impl Send for InnerMemType {}
 unsafe impl Sync for InnerMemType {}
 

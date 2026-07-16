@@ -105,5 +105,9 @@ impl Drop for Statistics {
 
 #[derive(Debug)]
 pub(crate) struct InnerStat(pub(crate) *mut ffi::WasmEdge_StatisticsContext);
+// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_StatisticsContext`.
+// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
+// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
+// no thread-safety for this context, so it is an unverified, inherited invariant.
 unsafe impl Send for InnerStat {}
 unsafe impl Sync for InnerStat {}

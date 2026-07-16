@@ -178,6 +178,11 @@ impl From<ffi::WasmEdge_String> for &std::ffi::CStr {
 
 #[derive(Debug)]
 pub(crate) struct InnerWasmEdgeString(pub(crate) ffi::WasmEdge_String);
+// SAFETY: `InnerWasmEdgeString` owns a `WasmEdge_String` (a length plus a heap
+// buffer allocated by `StringCreate*` and freed in `Drop` via `StringDelete`).
+// The buffer is never mutated after creation and the handle has no thread
+// affinity, so moving it (`Send`) and sharing `&` for read-only calls such as
+// `StringIsEqual` (`Sync`) are both sound.
 unsafe impl Send for InnerWasmEdgeString {}
 unsafe impl Sync for InnerWasmEdgeString {}
 
