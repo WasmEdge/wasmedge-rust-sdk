@@ -52,6 +52,12 @@ deleting them, for historical accuracy.
   mirror (the second-state async-enabled mirror is unchanged); added
   `[package.metadata.docs.rs]` and `keywords` to `wasmedge-types`, `wasmedge-macro`,
   and `async-wasi`.
+- **Breaking (nominal):** `wasmedge_sys::Memory::mut_slice` now takes `&mut self`
+  instead of `&self` (and the `#[allow(clippy::mut_from_ref)]` covering the old
+  signature is gone). Handing out an aliasable `&mut [T]` from a shared `&self`
+  was unsound; the receiver now matches the sibling `get_ref_mut`. No caller in
+  this workspace passed a shared borrow, and no external caller was found. Rides
+  the `wasmedge-sys` 0.21.0 major bump.
 
 ### Deprecated
 

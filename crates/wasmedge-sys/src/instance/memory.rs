@@ -228,8 +228,7 @@ impl Memory {
         }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub fn mut_slice<T: Sized>(&self, offset: usize, len: usize) -> Option<&mut [T]> {
+    pub fn mut_slice<T: Sized>(&mut self, offset: usize, len: usize) -> Option<&mut [T]> {
         unsafe {
             let r = std::mem::size_of::<T>() * len;
             let ptr = self.data_pointer(offset as u32, r as u32).ok()? as *mut T;
