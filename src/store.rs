@@ -116,6 +116,9 @@ impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
         self.instances.contains_key(mod_name) || self.wasm_instance_map.contains_key(mod_name)
     }
 
+    // This helper and `get_named_wasm_and_executor` are published API kept for external
+    // callers; internal `Vm::run_func*` paths use `resolve_func_and_executor` below, which
+    // re-inlines these field borrows so its two lookup branches can share the `'a` return.
     pub fn get_instance_and_executor(
         &mut self,
         mod_name: impl AsRef<str>,
