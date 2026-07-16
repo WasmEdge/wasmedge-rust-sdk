@@ -15,11 +15,11 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 ///   This group of options are used to turn on/off the WebAssembly proposals. They are effective to any WasmEdge
 ///   context created with [Config](crate::Config).
-///     
+///
 ///     - `MultiMemories` enables to use multiple memories within a single Wasm module.
 ///
 ///       Also see [Multiple Memories for Wasm](https://github.com/WebAssembly/multi-memory/blob/main/proposals/multi-memory/Overview.md)
-///     
+///
 ///     - `ImportExportMutGlobals` supports mutable imported and exported globals.
 ///
 ///       Also see [Import/Export Mutable Globals Proposal](https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md#importexport-mutable-globals).
@@ -29,11 +29,11 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///       Also see [Non-trapping Float-to-int Conversions Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/nontrapping-float-to-int-conversion/Overview.md).
 ///
 ///     - `SignExtensionOperators` supports new integer instructions for sign-extending 8-bit, 16-bit, and 32-bit values.
-///     
+///
 ///       Also see [Sign-extension Operators Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/sign-extension-ops/Overview.md).
 ///
 ///     - `MultiValue` supports functions and instructions with multiple return values, and blocks with inputs.
-///     
+///
 ///       Also see [Multi-value Extension](https://github.com/WebAssembly/spec/blob/main/proposals/multi-value/Overview.md).
 ///
 ///     - `BulkMemoryOperations` supports bulk memory operations.
@@ -47,7 +47,7 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///     - `SIMD` supports 128-bit packed SIMD extension to WebAssembly.
 ///
 ///       Also see [SIMD Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md).
-///  
+///
 ///     - `TailCall` supports tail call optimization.
 ///
 ///       Also see [Tail Call Proposal](https://github.com/WebAssembly/tail-call/blob/master/proposals/tail-call/Overview.md).
@@ -65,7 +65,7 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///       Also see [Threading Proposal](https://github.com/WebAssembly/threads/blob/main/proposals/threads/Overview.md).
 ///
 ///     - `ExceptionHandling` supports exception handling.
-///     
+///
 ///       Also see [Exception Handling Proposal](https://github.com/WebAssembly/exception-handling/blob/main/proposals/exception-handling/Exceptions.md).
 ///
 ///     - `FunctionReferences` supports typed function references for WebAssembly.
@@ -76,7 +76,7 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///     - `Wasi` turns on the `WASI` support.
 ///
 ///     - `WasmEdgeProcess` turns on the `wasmedge_process` support.
-///     
+///
 /// - **Memory Management**
 ///     - `maximum_memory_page` limits the page size of [Memory](crate::Memory).
 ///
@@ -87,7 +87,7 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 ///     - Compiler Optimization Levels
 ///         - `O0` performs as many optimizations as possible.
-///         
+///
 ///         - `O1` optimizes quickly without destroying debuggability.
 ///
 ///         - `02` optimizes for fast execution as much as possible without triggering significant incremental
@@ -104,13 +104,13 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///         - `Native` specifies the output format is native dynamic library (`*.wasm.so`).
 ///
 ///         - `Wasm` specifies the output format is WebAssembly with AOT compiled codes in custom section (`*.wasm`).
-///     
+///
 ///     - `dump_ir` determines if AOT compiler generates IR or not.
 ///
 ///     - `generic_binary` determines if AOT compiler generates the generic binary or not.
-///     
+///
 ///     - `interruptible` determines if AOT compiler generates interruptible binary or not.
-///     
+///
 ///     The configuration options above are only effective to [Compiler](crate::Compiler).
 ///
 /// - **Runtime Statistics**
@@ -164,7 +164,7 @@ macro_rules! proposal_config_options {
 }
 
 impl Config {
-    /// Creates a new [Config](crate::Config).
+    /// Creates a new [Config].
     ///
     /// # Error
     ///

@@ -1,8 +1,9 @@
 [package]
 categories = ["wasm"]
 description = "Async WASI for WasmEdge"
-documentation = "https://docs.rs/async-wasi/"
+documentation = "https://docs.rs/async-wasi"
 edition.workspace = true
+keywords = ["wasmedge", "wasm", "webassembly", "wasi", "async"]
 license.workspace = true
 name = "async-wasi"
 readme = "README.md"
@@ -37,6 +38,9 @@ tokio = { workspace = true, features = ["rt", "macros", "test-util"] }
 [features]
 async_tokio = ["tokio"]
 default = ["async_tokio"]
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

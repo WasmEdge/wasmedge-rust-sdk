@@ -15,9 +15,9 @@ pub struct Global {
     pub(crate) inner: InnerGlobal,
 }
 impl Global {
-    /// Creates a new [Global] instance to be associated with the given [GlobalType] and [WasmValue](crate::WasmValue).
+    /// Creates a new [Global] instance to be associated with the given [GlobalType](wasmedge_types::GlobalType) and [WasmValue].
     ///
-    /// The type of the given [WasmValue](crate::WasmValue) must be matched with [GlobalType]; otherwise, it causes a failure. For example, `WasmValue::I32(520)` conflicts with a [GlobalType] with a value type defined as `ValType::F32`.
+    /// The type of the given [WasmValue] must be matched with [GlobalType](wasmedge_types::GlobalType); otherwise, it causes a failure. For example, `WasmValue::I32(520)` conflicts with a [GlobalType](wasmedge_types::GlobalType) with a value type defined as `ValType::F32`.
     ///
     /// # Errors
     ///
@@ -62,7 +62,7 @@ impl Global {
 
     /// Sets the value of the [Global] instance.
     ///
-    /// Notice that only the [Global] instance of [Mutability::Var](wasmedge_types::Mutability::Var) type can be set a new value. Setting a new value for a [Global] of [Mutability::Const](wasmedge_types::Mutability::Const) causes a failure.
+    /// Notice that only the [Global] instance of [Mutability::Var] type can be set a new value. Setting a new value for a [Global] of [Mutability::Const] causes a failure.
     ///
     /// # Argument
     ///

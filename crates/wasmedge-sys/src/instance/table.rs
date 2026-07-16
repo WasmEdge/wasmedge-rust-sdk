@@ -47,7 +47,7 @@ impl Table {
         }
     }
 
-    /// Returns the [TableType] of the [Table].
+    /// Returns the [TableType](wasmedge_types::TableType) of the [Table].
     ///
     /// # Error
     ///
@@ -68,7 +68,7 @@ impl Table {
     ///
     /// # Arguments
     ///
-    /// - `idx` specifies the position in the [Table], at which the [WasmValue](crate::WasmValue) is returned.
+    /// - `idx` specifies the position in the [Table], at which the [WasmValue] is returned.
     ///
     /// # Error
     ///

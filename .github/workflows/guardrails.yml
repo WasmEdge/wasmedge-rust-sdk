@@ -68,11 +68,12 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # TODO(Phase 6): re-add RUSTDOCFLAGS="-D warnings" (and eventually
-      # -D rustdoc::broken_intra_doc_links) once the known-broken intra-doc
-      # links are fixed (P6-1). Enabling it now would fail on pre-existing
-      # links, not on anything this workflow is meant to catch.
+      # Phase 6 (P6-1): all known-broken intra-doc links are fixed, so the docs
+      # job now denies every rustdoc warning (including broken_intra_doc_links)
+      # instead of tolerating pre-existing drift.
       - name: cargo doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --workspace --no-deps --features standalone,aot,ffi
 
   feature-hack:

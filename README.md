@@ -1,5 +1,17 @@
 # WasmEdge Rust SDK
 
+[![CI](https://github.com/WasmEdge/wasmedge-rust-sdk/actions/workflows/guardrails.yml/badge.svg)](https://github.com/WasmEdge/wasmedge-rust-sdk/actions/workflows/guardrails.yml)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](#installation)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/WasmEdge/wasmedge-rust-sdk/blob/main/LICENSE)
+
+| Crate | crates.io | docs.rs |
+| :--- | :--- | :--- |
+| `wasmedge-sdk` | [![crates.io](https://img.shields.io/crates/v/wasmedge-sdk.svg)](https://crates.io/crates/wasmedge-sdk) | [![docs.rs](https://img.shields.io/docsrs/wasmedge-sdk)](https://docs.rs/wasmedge-sdk) |
+| `wasmedge-sys` | [![crates.io](https://img.shields.io/crates/v/wasmedge-sys.svg)](https://crates.io/crates/wasmedge-sys) | [![docs.rs](https://img.shields.io/docsrs/wasmedge-sys)](https://docs.rs/wasmedge-sys) |
+| `wasmedge-types` | [![crates.io](https://img.shields.io/crates/v/wasmedge-types.svg)](https://crates.io/crates/wasmedge-types) | [![docs.rs](https://img.shields.io/docsrs/wasmedge-types)](https://docs.rs/wasmedge-types) |
+| `wasmedge-macro` | [![crates.io](https://img.shields.io/crates/v/wasmedge-macro.svg)](https://crates.io/crates/wasmedge-macro) | [![docs.rs](https://img.shields.io/docsrs/wasmedge-macro)](https://docs.rs/wasmedge-macro) |
+| `async-wasi` | [![crates.io](https://img.shields.io/crates/v/async-wasi.svg)](https://crates.io/crates/async-wasi) | [![docs.rs](https://img.shields.io/docsrs/async-wasi)](https://docs.rs/async-wasi) |
+
 WasmEdge Rust SDK provides idiomatic [Rust](https://www.rust-lang.org/) language bindings for [WasmEdge](https://wasmedge.org/)
 
 **Notice:** This project is still under active development and not guaranteed to have a stable API.
@@ -18,9 +30,10 @@ The easiest way to get started is with the `bundled` feature, which automaticall
 
 Add the following to your `Cargo.toml`:
 
+<!-- TODO(P9-1): bump quick-start snippets on release -->
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["bundled"] }
+wasmedge-sdk = { version = "0.14.0", features = ["bundled"] }
 ```
 
 This creates a fully self-contained executable with no runtime dependencies. Your binary will work on any compatible Linux system without needing WasmEdge installed.
@@ -39,14 +52,16 @@ sudo dnf install -y libzstd-devel fmt-devel
 For dynamic linking with automatic download (all platforms):
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["standalone"] }
+wasmedge-sdk = { version = "0.14.0", features = ["standalone"] }
 ```
 
 For dynamic linking with system-installed WasmEdge:
 ```toml
 [dependencies]
-wasmedge-sdk = "0.16.1"
+wasmedge-sdk = "0.14.0"
 ```
+
+**Note:** `0.14.0` is the latest `wasmedge-sdk` release published to crates.io; `0.17.0` is upcoming — see the [Compatibility Matrix](#compatibility-matrix).
 
 ### Run a WebAssembly Function
 
@@ -140,8 +155,10 @@ The `bundled` feature enables static linking of the WasmEdge library into your a
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["bundled"] }
+wasmedge-sdk = { version = "0.14.0", features = ["bundled"] }
 ```
+
+**Note:** `0.14.0` is the latest `wasmedge-sdk` release published to crates.io; `0.17.0` is upcoming — see the [Compatibility Matrix](#compatibility-matrix).
 
 The `bundled` feature is equivalent to enabling both `standalone` and `static` features together. It downloads the static WasmEdge library at build time and links it directly into your binary.
 
@@ -169,9 +186,9 @@ ldd target/release/your_app | grep wasmedge
 
 **Note:** Static linking is only supported on Linux (glibc and musl). macOS currently only supports dynamic linking.
 
-This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)).
+This crate uses `rust-bindgen` during the build process. If you would like to use an external `rust-bindgen` you can set the `WASMEDGE_RUST_BINDGEN_PATH` environment variable to the `bindgen` executable path. This is particularly useful in systems like Alpine Linux (see [rust-lang/rust-bindgen#2360](https://github.com/rust-lang/rust-bindgen/issues/2360#issuecomment-1595869379), [rust-lang/rust-bindgen#2333](https://github.com/rust-lang/rust-bindgen/issues/2333)). The external `bindgen` executable must be **version 0.71 or newer**, since the build script asks it to emit edition-2024-compatible bindings via `--rust-edition 2024`, a flag older `bindgen-cli` releases don't support.
 
-**Notice:** The minimum supported Rust version is 1.71.
+**Notice:** The minimum supported Rust version (MSRV) is 1.85.
 
 ## Build and Run a Rust WASM Module
 
@@ -273,8 +290,10 @@ Add the WasmEdge SDK to `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["standalone"] }
+wasmedge-sdk = { version = "0.14.0", features = ["standalone"] }
 ```
+
+**Note:** `0.14.0` is the latest `wasmedge-sdk` release published to crates.io; `0.17.0` is upcoming — see the [Compatibility Matrix](#compatibility-matrix).
 
 ### Step 5: Load and Run the WASM Module
 
@@ -468,7 +487,7 @@ Here's an example WASM module that imports and uses host functions:
 
 ## API Reference
 
-- [API Reference](https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sdk/index.html)
+- [API Reference](https://docs.rs/wasmedge-sdk)
 - [Async API Reference](https://second-state.github.io/wasmedge-async-rust-sdk/wasmedge_sdk/index.html)
 
 ## Examples
@@ -481,17 +500,18 @@ Please read the [contribution guidelines](https://github.com/WasmEdge/wasmedge-r
 
 ## License
 
-This project is licensed under the terms of the [Apache 2.0 license](https://github.com/tensorflow/rust/blob/HEAD/LICENSE).
+This project is licensed under the terms of the [Apache 2.0 license](https://github.com/WasmEdge/wasmedge-rust-sdk/blob/main/LICENSE).
 
 ## Compatibility Matrix
 
 The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 
-  | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
-  | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
-  | 0.16.1        | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
-  | 0.14.1        | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
-  | 0.14.0        | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
+  | wasmedge-sdk       | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
+  | :----------------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+  | 0.17.0 (upcoming)  | 0.17.1        | 0.21.0        | 0.7.0         | 0.7.0         | 0.3.0     |
+  | 0.16.1 †           | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
+  | 0.14.1 †           | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
+  | 0.14.0             | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
   | 0.13.5-newapi | 0.13.5        | 0.18.0        | 0.5.0         | 0.6.1         | 0.2.0     |
   | 0.13.2        | 0.13.5        | 0.17.5        | 0.4.4         | 0.6.1         | 0.1.0     |
   | 0.13.1        | 0.13.5        | 0.17.4        | 0.4.4         | 0.6.1         | 0.1.0     |
@@ -514,3 +534,10 @@ The versioning table below shows the version of the WasmEdge library required by
   | 0.4.0         | 0.11.0        | 0.9           | 0.2.1         | -             | -         |
   | 0.3.0         | 0.10.1        | 0.8           | 0.2           | -             | -         |
   | 0.1.0         | 0.10.0        | 0.7           | 0.1           | -             | -         |
+
+† `wasmedge-sdk` **0.16.1** and **0.14.1** are manifest versions that were bumped in this
+repository but never published to crates.io (nor was the `wasmedge-sys` **0.20.0** paired
+with the 0.16.1 row; `wasmedge-sys` **0.19.4**, paired with the 0.14.1 row, *was* published).
+The latest versions actually released are `wasmedge-sdk` **0.14.0** and `wasmedge-sys`
+**0.19.4** — both rows are kept here for historical accuracy rather than deleted. New code
+should depend on `0.14.0` today (or `0.17.0` once it ships).

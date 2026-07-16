@@ -15,7 +15,7 @@ pub struct Loader {
     pub(crate) inner: InnerLoader,
 }
 impl Loader {
-    /// Create a new [Loader](crate::Loader) to be associated with the given global configuration.
+    /// Create a new [Loader] to be associated with the given global configuration.
     ///
     /// # Arguments
     ///

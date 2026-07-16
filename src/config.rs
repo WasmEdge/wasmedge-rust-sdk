@@ -104,8 +104,8 @@ impl ConfigBuilder {
             inner.generic_binary(compiler_config.generic_binary);
             inner.interruptible(compiler_config.interruptible);
         }
-        if let Some(runtim_config) = self.runtime_config {
-            inner.set_max_memory_pages(runtim_config.max_memory_pages);
+        if let Some(runtime_config) = self.runtime_config {
+            inner.set_max_memory_pages(runtime_config.max_memory_pages);
         }
 
         Ok(Config {
@@ -532,6 +532,7 @@ impl Default for CommonConfigOptions {
     /// * simd: true,
     /// * multi_memories: false,
     /// * threads: false,
+    /// * gc: false,
     /// * tail_call: false,
     /// * function_references: false,
     /// * interpreter_mode: false,
@@ -667,8 +668,8 @@ impl Default for CompilerConfigOptions {
 ///
 /// [RuntimeConfigOptions] is used to set the runtime configuration options, which are
 ///
-/// - `maximum_memory_page` limits the page size of [Memory](crate::Memory). This option is only effective to
-///   [Executor](crate::Executor).
+/// - `maximum_memory_page` limits the page size of [Memory](sys::Memory). This option is only effective to
+///   [Executor](sys::Executor).
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeConfigOptions {
     max_memory_pages: u32,

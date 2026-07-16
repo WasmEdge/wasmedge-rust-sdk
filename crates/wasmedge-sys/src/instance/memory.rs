@@ -8,7 +8,7 @@
 use crate::{WasmEdgeResult, ffi, types::WasmEdgeLimit, utils::check};
 use wasmedge_types::error::{MemError, WasmEdgeError};
 
-/// Defines a WebAssembly memory instance, which is a linear memory described by its [type](crate::MemType). Each memory instance consists of a vector of bytes and an optional maximum size, and its size is a multiple of the WebAssembly page size (*64KiB* of each page).
+/// Defines a WebAssembly memory instance, which is a linear memory described by its [type](wasmedge_types::MemoryType). Each memory instance consists of a vector of bytes and an optional maximum size, and its size is a multiple of the WebAssembly page size (*64KiB* of each page).
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) inner: InnerMemory,

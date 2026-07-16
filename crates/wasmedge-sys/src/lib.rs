@@ -57,12 +57,18 @@
 #![deny(rust_2018_idioms, unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-// The bindgen output included below only trips these three naming-convention lints
+// The bindgen output included below only trips these naming-convention lints
 // (empirically collected by compiling with the blanket allow removed, under both the
 // `standalone` and full feature sets). Listed explicitly instead of `#[allow(warnings)]`
 // so any new lint — especially a future-compat or correctness one — is not silently
 // swallowed.
+//
+// `rustdoc::broken_intra_doc_links` is separate: the upstream C headers use Doxygen
+// `\param [out]`/`\param [in]` markers that bindgen carries verbatim into the generated
+// doc comments, and rustdoc misparses `[out]`/`[in]` as (broken) intra-doc link syntax.
+// This is inherent to the generated bindings, not something source edits here can fix.
 #[allow(non_upper_case_globals, non_snake_case, non_camel_case_types)]
+#[allow(rustdoc::broken_intra_doc_links)]
 /// Foreign function interfaces generated from WasmEdge C-API.
 pub mod ffi {
     include!(concat!(env!("OUT_DIR"), "/wasmedge.rs"));

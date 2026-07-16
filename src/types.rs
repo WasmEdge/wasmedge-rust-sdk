@@ -22,7 +22,7 @@ pub enum Val {
     /// The packed data can be interpreted as signed or unsigned integers, single or double precision floating-point
     /// values, or a single 128 bit type. The interpretation is determined by individual operations.
     V128(i128),
-    /// A reference to a [host function](crate::Func).
+    /// A reference to a [host function](wasmedge_sys::Function).
     ///
     /// `FuncRef(None)` is the null function reference, created by `ref.null
     /// func` in Wasm.

@@ -6,7 +6,7 @@ use wasmedge_sys as sys;
 
 /// Defines compiled in-memory representation of an input WASM binary.
 ///
-/// A [Module] is a compiled in-memory representation of an input WebAssembly binary. In the instantiation process, a [Module] is instatiated to a module [instance](crate::Instance), from which the exported [function](crate::Func), [table](crate::Table), [memory](crate::Memory), and [global](crate::Global) instances can be fetched.
+/// A [Module] is a compiled in-memory representation of an input WebAssembly binary. In the instantiation process, a [Module] is instantiated to a module [instance](crate::Instance), from which the exported [function](sys::Function), [table](sys::Table), [memory](sys::Memory), and [global](sys::Global) instances can be fetched.
 #[derive(Debug, Clone)]
 pub struct Module {
     pub(crate) inner: Arc<sys::Module>,
@@ -22,7 +22,7 @@ impl Module {
     ///
     /// # Error
     ///
-    /// If fail to load and valiate a module from a file, returns an error.
+    /// If fail to load and validate a module from a file, returns an error.
     pub fn from_file(config: Option<&Config>, file: impl AsRef<Path>) -> WasmEdgeResult<Self> {
         let inner_config = config.map(|cfg| cfg.inner.as_ref());
 
@@ -47,7 +47,7 @@ impl Module {
     ///
     /// # Error
     ///
-    /// If fail to load and valiate the WebAssembly module from the given in-memory bytes, returns an error.
+    /// If fail to load and validate the WebAssembly module from the given in-memory bytes, returns an error.
     pub fn from_bytes(config: Option<&Config>, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Self> {
         let inner_config = config.map(|cfg| cfg.inner.as_ref());
 

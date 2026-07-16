@@ -16,13 +16,13 @@ impl<Data> ImportObjectBuilder<Data> {
         Ok(Self { import_object })
     }
 
-    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
+    /// Adds a [host function](sys::Function) to the [ImportObject] to create.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
     ///
     /// # Arguments
     ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
+    /// * `name` - The exported name of the [host function](sys::Function) to add.
     ///
     /// * `real_func` - The native function.
     ///
@@ -30,7 +30,7 @@ impl<Data> ImportObjectBuilder<Data> {
     ///
     /// # error
     ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
+    /// If fail to create or add the [host function](sys::Function), then an error is returned.
     pub fn with_func<Args, Rets>(
         &mut self,
         name: impl AsRef<str>,
@@ -51,13 +51,13 @@ impl<Data> ImportObjectBuilder<Data> {
         Ok(self)
     }
 
-    /// Adds a [host function](crate::Func) to the [ImportObject] to create.
+    /// Adds a [host function](sys::Function) to the [ImportObject] to create.
     ///
     /// N.B. that this function can be used in thread-safe scenarios.
     ///
     /// # Arguments
     ///
-    /// * `name` - The exported name of the [host function](crate::Func) to add.
+    /// * `name` - The exported name of the [host function](sys::Function) to add.
     ///
     /// * `ty` - The function type.
     ///
@@ -67,7 +67,7 @@ impl<Data> ImportObjectBuilder<Data> {
     ///
     /// # error
     ///
-    /// If fail to create or add the [host function](crate::Func), then an error is returned.
+    /// If fail to create or add the [host function](sys::Function), then an error is returned.
     pub fn with_func_by_type(
         &mut self,
         name: impl AsRef<str>,
@@ -81,13 +81,13 @@ impl<Data> ImportObjectBuilder<Data> {
         Ok(self)
     }
 
-    /// Adds a [global](crate::Global) to the [ImportObject] to create.
+    /// Adds a [global](sys::Global) to the [ImportObject] to create.
     ///
     /// # Arguments
     ///
-    /// * `name` - The exported name of the [global](crate::Global) to add.
+    /// * `name` - The exported name of the [global](sys::Global) to add.
     ///
-    /// * `global` - The wasm [global instance](crate::Global) to add.
+    /// * `global` - The wasm [global instance](sys::Global) to add.
     ///
     #[must_use]
     pub fn with_global(mut self, name: impl AsRef<str>, global: sys::Global) -> Self {
@@ -95,13 +95,13 @@ impl<Data> ImportObjectBuilder<Data> {
         self
     }
 
-    /// Adds a [memory](crate::Memory) to the [ImportObject] to create.
+    /// Adds a [memory](sys::Memory) to the [ImportObject] to create.
     ///
     /// # Arguments
     ///
-    /// * `name` - The exported name of the [memory](crate::Memory) to add.
+    /// * `name` - The exported name of the [memory](sys::Memory) to add.
     ///
-    /// * `memory` - The wasm [memory instance](crate::Memory) to add.
+    /// * `memory` - The wasm [memory instance](sys::Memory) to add.
     ///
     #[must_use]
     pub fn with_memory(mut self, name: impl AsRef<str>, memory: sys::Memory) -> Self {
@@ -109,13 +109,13 @@ impl<Data> ImportObjectBuilder<Data> {
         self
     }
 
-    /// Adds a [table](crate::Table) to the [ImportObject] to create.
+    /// Adds a [table](sys::Table) to the [ImportObject] to create.
     ///
     /// # Arguments
     ///
-    /// * `name` - The exported name of the [table](crate::Table) to add.
+    /// * `name` - The exported name of the [table](sys::Table) to add.
     ///
-    /// * `table` - The wasm [table instance](crate::Table) to add.
+    /// * `table` - The wasm [table instance](sys::Table) to add.
     ///
     #[must_use]
     pub fn with_table(mut self, name: impl AsRef<str>, table: sys::Table) -> Self {

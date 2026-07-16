@@ -15,7 +15,7 @@ impl PluginManager {
     /// Load plugins from the default path. The default plugin path could be one of the following:
     ///
     /// * The environment variable "WASMEDGE_PLUGIN_PATH".
-    ///   
+    ///
     /// * The `../plugin/` directory related to the WasmEdge installation path.
     ///
     /// * The `wasmedge/` directory under the library path if the WasmEdge is installed under the "/usr".
@@ -35,7 +35,7 @@ impl PluginManager {
     ///
     /// # Error
     ///
-    /// * If the path contains invalid characters, then an [WasmEdgeError::FoundNulByte](wasmedge_types::error::WasmEdgeError::FoundNulByte) error is returned.
+    /// * If the path contains invalid characters, then an [WasmEdgeError::FoundNulByte] error is returned.
     pub fn load_plugins(path: impl AsRef<std::path::Path>) -> WasmEdgeResult<()> {
         let c_path = utils::path_to_cstring(path.as_ref())?;
         unsafe { ffi::WasmEdge_PluginLoadFromPath(c_path.as_ptr()) }
@@ -85,7 +85,7 @@ impl PluginManager {
     ///
     /// # Error
     ///
-    /// If not found the plugin, then return [PluginError::NotFound](wasmedge_types::error::PluginError::NotFound) error.
+    /// If not found the plugin, then return [PluginError::NotFound] error.
     pub fn find(name: impl AsRef<str>) -> WasmEdgeResult<Plugin> {
         let plugin_name: WasmEdgeString = name.as_ref().into();
 
@@ -195,7 +195,7 @@ impl Plugin {
     ///
     /// # Error
     ///
-    /// If failed to return the plugin module instance, then return [PluginError::Create](wasmedge_types::error::PluginError::Create) error.
+    /// If failed to return the plugin module instance, then return [PluginError::Create] error.
     pub fn mod_instance(&self, name: impl AsRef<str>) -> WasmEdgeResult<Instance> {
         let mod_name: WasmEdgeString = name.as_ref().into();
 

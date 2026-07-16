@@ -2,9 +2,10 @@
 build = "build.rs"
 categories = ["api-bindings", "wasm"]
 description = "WasmEdge Runtime is a high-performance, extensible, and hardware optimized WebAssembly Virtual Machine for automotive, cloud, AI, and blockchain applications."
-documentation = "https://wasmedge.github.io/wasmedge-rust-sdk/wasmedge_sys/"
+documentation = "https://docs.rs/wasmedge-sys"
 edition.workspace = true
 exclude = ["tests/", "examples/"]
+keywords = ["wasmedge", "wasm", "webassembly", "ffi"]
 license.workspace = true
 links = "wasmedge"
 name = "wasmedge-sys"

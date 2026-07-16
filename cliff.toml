@@ -53,7 +53,7 @@ filter_unconventional = true
 split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
-  { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/orhun/git-cliff/issues/${2}))" },
+  { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/WasmEdge/wasmedge-rust-sdk/issues/${2}))" },
 ]
 # regex for parsing and grouping commits
 commit_parsers = [
@@ -74,10 +74,16 @@ commit_parsers = [
 protect_breaking_commits = false
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
-# glob pattern for matching git tags
-tag_pattern = "v[0-9]*"
-# regex for skipping tags
-skip_tags = "v0.1.0-beta.1"
+# regex for matching git tags (git-cliff 2.x: this is a regex, not a glob, despite
+# the option's historical name). Matches both this repo's pre-existing tags
+# (bare `X.Y.Z` such as `0.14.0`, and `<crate>/X.Y.Z` such as `sys/0.17.5`,
+# `async-wasi/0.1.0`, `types/0.4.4`, `macro/0.6.1`) and the `vX.Y.Z` / `<crate>-vX.Y.Z`
+# convention documented in CONTRIBUTING.md for future releases (e.g. `v0.17.0`,
+# `wasmedge-sys-v0.21.0`, `async-wasi-v0.3.0`). Verified against `git tag -l`:
+# matches all 34 of the repo's current tags.
+tag_pattern = '^(?:[a-z][a-z0-9-]*[/-])?v?[0-9]+\.[0-9]+\.[0-9]+.*$'
+# regex for skipping tags (none currently)
+skip_tags = ""
 # regex for ignoring tags
 ignore_tags = ""
 # sort the tags topologically

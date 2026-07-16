@@ -1,8 +1,9 @@
 [package]
 categories = ["data-structures"]
 description = "The common data structures for WasmEdge Rust bindings."
-documentation = "https://docs.rs/wasmedge-types/"
+documentation = "https://docs.rs/wasmedge-types"
 edition.workspace = true
+keywords = ["wasmedge", "wasm", "webassembly", "types"]
 license.workspace = true
 name = "wasmedge-types"
 readme = "README.md"
@@ -13,6 +14,9 @@ version = "0.6.0"
 [dependencies]
 thiserror.workspace = true
 wat.workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

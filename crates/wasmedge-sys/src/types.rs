@@ -293,9 +293,9 @@ impl WasmValue {
         unsafe { ffi::WasmEdge_ValueIsNullRef(self.ctx) }
     }
 
-    /// Creates a [WasmValue] from a [FuncRef](crate::FuncRef).
+    /// Creates a [WasmValue] from a [FuncRef].
     ///
-    /// Notice that the [WasmValue]s generated from [FuncRef](crate::FuncRef)s are only meaningful when the `bulk_memory_operations` or `reference_types` option is enabled in the [Config](crate::Config).
+    /// Notice that the [WasmValue]s generated from [FuncRef]s are only meaningful when the `bulk_memory_operations` or `reference_types` option is enabled in the [Config](crate::Config).
     ///
     /// # Argument
     ///

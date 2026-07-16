@@ -2,6 +2,125 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+Targets `wasmedge-sdk` 0.17.0 / `wasmedge-sys` 0.21.0 / `wasmedge-types` 0.7.0 /
+`wasmedge-macro` 0.7.0 / `async-wasi` 0.3.0, all still pinned against WasmEdge C API
+0.17.1. [See the upgrade guide.](docs/Upgrade_to_0.17.0.md)
+
+**A note on the gap since 0.13.5-newapi:** this repository's manifests were bumped
+to `0.14.1` and then `0.16.1` (with matching bumps in `wasmedge-sys` up to `0.20.0`)
+without a corresponding CHANGELOG update, and — as discovered while preparing this
+release — **those versions were never actually published to crates.io**. The real
+latest published versions going into this release are `wasmedge-sdk` 0.14.0 and
+`wasmedge-sys` 0.19.4. Whatever changed between 0.13.5-newapi and 0.14.0, and
+between 0.14.0 and this modernization branch's starting point, has not been
+reconstructed here — it predates this effort and there is no reliable record of it.
+The compatibility matrices in [README.md](README.md#compatibility-matrix) and
+[lib.rs](src/lib.rs) annotate the unpublished `0.16.1`/`0.14.1` rows rather than
+deleting them, for historical accuracy.
+
+### Added
+
+- `wasmedge-sdk`: `vm::SyncInst` (and `vm::AsyncInst` under the `async` feature) are
+  now re-exported at the crate root as `wasmedge_sdk::SyncInst`/`AsyncInst`. Callers
+  needed this trait to name their `HashMap<String, &mut dyn SyncInst>` instance maps
+  but previously had to reach into the `#[doc(hidden)]` `vm` module to name it; the
+  old path still works.
+
+### Changed
+
+- **MSRV is now 1.85** (previously stated as 1.71 in docs but not enforced anywhere)
+  and **all five crates moved to Rust edition 2024** (`wasmedge-sdk`, `wasmedge-sys`,
+  `wasmedge-types`, `wasmedge-macro`, `async-wasi`).
+- Dependency upgrades: `thiserror` 1 -> 2, `socket2` 0.4 -> 0.6, `getrandom` 0.2 -> 0.4,
+  `bindgen` 0.69 -> 0.72 (needed for edition-2024-shaped bindings), `reqwest`
+  (`wasmedge-sys` build-dependency only) 0.11 -> 0.12 with `rustls-tls-webpki-roots`
+  preserved (no change in trusted roots or proxy/`WASMEDGE_STANDALONE_ARCHIVE`
+  behavior). `path-absolutize` was replaced with a small local
+  `std::path`-based normalization helper, removing that dependency entirely.
+- If you set `WASMEDGE_RUST_BINDGEN_PATH` to use an external `bindgen` executable,
+  it must now be **bindgen-cli 0.71 or newer**: the build script passes
+  `--rust-edition 2024`, a flag older releases don't recognize.
+- `Cargo.lock` is now committed to the repository (previously gitignored), and
+  `cargo semver-checks`, `cargo-deny`, a `cargo doc -D warnings` docs gate, and a
+  `cargo hack --each-feature` job were added to CI (`guardrails.yml`).
+- Documentation and crate metadata truth pass: refreshed README/lib.rs badges,
+  compatibility matrices, and MSRV notice; fixed the License link (was pointing at
+  `tensorflow/rust`); pointed every crate's `documentation` manifest field and the
+  README/lib.rs API Reference link at docs.rs instead of a 19-months-stale gh-pages
+  mirror (the second-state async-enabled mirror is unchanged); added
+  `[package.metadata.docs.rs]` and `keywords` to `wasmedge-types`, `wasmedge-macro`,
+  and `async-wasi`.
+
+### Fixed
+
+All of the following are internal correctness fixes with no public API shape
+change (see [the upgrade guide](docs/Upgrade_to_0.17.0.md) for the one exception,
+called out below):
+
+- `async-wasi`:
+  - `fd_prestat_dir_name` could read past the end of its buffer using a
+    guest-controlled length, panicking instead of erroring.
+  - `path_unlink_file` checked the `PATH_REMOVE_DIRECTORY` rights bit instead of
+    `PATH_UNLINK_FILE`.
+  - `path_open` returned `EEXIST` instead of `NOENT` for a missing path when
+    `O_CREAT` was not set.
+  - Socket timeouts (`tv_usec`) were interpreted as nanoseconds instead of
+    microseconds, so any timeout at or above ~1 second would panic constructing
+    the `Duration`.
+  - `sock_getaddrinfo` wrote into `sa_data` without checking its length, a
+    guest-triggerable panic.
+  - Socket registration used `mem::zeroed::<Socket>()` to fake ownership during a
+    swap; replaced with a proper `Option`-based state machine.
+  - `SocketWritable::poll` didn't register a waker on `Pending`, relying entirely
+    on an outer 10s timeout and silently dropping its `Result`; it now uses
+    `tokio::sync::Notify` for real wakeups.
+  - As a side effect of the `socket2` 0.4 -> 0.6 upgrade above, `async-wasi` (and
+    therefore the whole workspace) now **compiles natively on macOS** — it
+    previously failed with an `E0599` from `socket2` 0.4.10's narrower API.
+- `wasmedge-sys` (memory safety, all internal):
+  - `Statistics` double-freed when cloned (`Drop` was implemented on the wrong
+    type) and `Executor::create` could leave a dangling statistics pointer.
+  - `InnerFunc`/`InnerModule` (`Copy`) and `InnerInstance`/`InnerExecutor`
+    (`Clone`) let any internal clone silently double-free the underlying FFI
+    handle; the derives are gone.
+  - `Loader::from_bytes` and `Compiler::compile_from_bytes` leaked their
+    intermediate buffer on the error path and mishandled a `malloc(0)` edge case.
+  - `ImportModule::create` didn't check for a null context pointer.
+  - `ImportModule::from_raw` double-freed a borrowed module name.
+  - `Executor::call_func_ref` panicked via `.unwrap()` on a type mismatch; it now
+    returns `FuncError::Type`.
+  - `box_future` relied on every closure it boxes being zero-sized (via
+    `mem::zeroed::<F>()`) without checking it; it's now guarded by a
+    `const { assert!(size_of::<F>() == 0) }`.
+  - **Observable behavior change:** `Validator::create` returned the wrong error
+    variant (`CompilerCreate`) on failure; it now correctly returns
+    `ValidatorCreate`. This changes the `Err` value callers see (not the function
+    signature), so `cargo semver-checks` does not flag it — see the upgrade guide.
+- `wasmedge-types`: `GlobalError::UnmatchedValType`'s `Display` impl was an empty
+  `#[error("")]`; it now has a real message.
+- ~20 broken rustdoc intra-doc links across `wasmedge-sdk` and `wasmedge-sys`
+  (mostly `crate::Func`/`Table`/`Memory`/`Global`/`Executor`, none of which exist
+  in the sdk's public surface) now resolve to the real `wasmedge-sys` types.
+
+### Removed
+
+- Dead code: `src/dock.rs` and `src/executor.rs` (883 LOC, unreachable, referenced
+  types that no longer exist), `crates/async-wasi/src/snapshots/common/vfs/sync.rs`
+  (1148 LOC, an orphaned module never declared by its parent), 15 bit-rotted
+  `examples/wasmedge-sys/*` files using deleted APIs, and a `#[cfg(not(feature =
+  "async"))]` test module in `src/compiler.rs` that — precisely because `async` is
+  a default feature — never actually compiled under CI/default builds and silently
+  broke `--no-default-features` builds (it referenced the already-removed
+  `VmBuilder`).
+- Unused dependencies: `anyhow`, `num-derive`, `num-traits`, `cfg-if` from
+  `wasmedge-sdk`; `paste` (RUSTSEC-2024-0436, unmaintained), `rand`, `lazy_static`,
+  `parking_lot`, `thiserror`, `cfg-if`, `wasmedge-macro`, the `cmake` build-dependency,
+  and the `anyhow` dev-dependency from `wasmedge-sys`; `serde`, `serde_json`, and
+  `parking_lot` from `async-wasi`; the `extra-traits` feature of `syn` from
+  `wasmedge-macro`.
+
 ## [0.13.5-newapi] - 2024-04-30
 
 [The sdk has changed a lot, please read this document.](docs/Upgrade_to_0.14.0.md)

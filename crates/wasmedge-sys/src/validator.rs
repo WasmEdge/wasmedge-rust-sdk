@@ -32,13 +32,13 @@ impl Validator {
         }
     }
 
-    /// Validates a given WasmEdge [Module](crate::Module).
+    /// Validates a given WasmEdge [Module].
     ///
-    /// [Module](crate::Module)s are valid when all components they contain are valid. Furthermore, most definitions are themselves classified with a suitable type.
+    /// [Module]s are valid when all components they contain are valid. Furthermore, most definitions are themselves classified with a suitable type.
     ///
     /// # Arguments
     ///
-    /// * `module` - The [Module](crate::Module) to be validated.
+    /// * `module` - The [Module] to be validated.
     ///
     /// # Error
     ///
