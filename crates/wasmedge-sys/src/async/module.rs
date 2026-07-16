@@ -502,13 +502,13 @@ wasi_impl_sync_shims! {
 
     fn fd_filestat_set_size(data, mem, [p1, p2]) {
         let fd = p1.to_i32();
-        let buf = p2.to_i32() as usize;
+        let st_size = p2.to_i64() as u64;
 
-        Ok(to_wasm_return(p::fd_filestat_get(
+        Ok(to_wasm_return(p::fd_filestat_set_size(
             data,
             &mut mem as &mut Memory,
             fd,
-            WasmPtr::from(buf),
+            st_size,
         )))
 
     }
@@ -1525,7 +1525,7 @@ fn wasi_impls<'data, 'inst, 'frame, 'fut>() -> Vec<WasiFunc<'data, 'inst, 'frame
         ),
         sync_fn!(
             "fd_filestat_set_size",
-            (vec![ValType::I32, ValType::I32], vec![ValType::I32]),
+            (vec![ValType::I32, ValType::I64], vec![ValType::I32]),
             fd_filestat_set_size
         ),
         sync_fn!(
