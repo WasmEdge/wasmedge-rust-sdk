@@ -10,19 +10,6 @@
 # dependency of a workspace member (not arbitrary transitive dependencies).
 unmaintained = "workspace"
 
-ignore = [
-    # rustls-webpki 0.101.7 (pulled in transitively via wasmedge-sys's
-    # (build)-only dependency on reqwest 0.11's rustls-tls backend, used
-    # solely by build.rs to download the WasmEdge release archive over
-    # HTTPS, which is separately verified via SHA-256 checksum). Fixing
-    # these means bumping reqwest, which is D-13 / Phase 4 scope, not
-    # Phase 0. Revisit and drop these three entries when reqwest is
-    # upgraded off the rustls 0.21 chain.
-    { id = "RUSTSEC-2026-0098", reason = "build-dependency only (reqwest, via build.rs); fixed by the reqwest upgrade tracked in D-13 (Phase 4)" },
-    { id = "RUSTSEC-2026-0099", reason = "build-dependency only (reqwest, via build.rs); fixed by the reqwest upgrade tracked in D-13 (Phase 4)" },
-    { id = "RUSTSEC-2026-0104", reason = "build-dependency only (reqwest, via build.rs); fixed by the reqwest upgrade tracked in D-13 (Phase 4)" },
-]
-
 [licenses]
 allow = [
     "Apache-2.0",
@@ -33,6 +20,11 @@ allow = [
     "Unicode-3.0",
     # Used by fiber-for-wasmedge and its wasmtime-* build helpers.
     "Apache-2.0 WITH LLVM-exception",
-    # Used by webpki-roots (build-only, via reqwest's rustls-tls backend).
-    "MPL-2.0",
+    # Used by webpki-roots (build-only, via reqwest 0.12's
+    # `rustls-tls-webpki-roots` feature -> hyper-rustls's bundled Mozilla CA
+    # roots). webpki-roots relicensed from MPL-2.0 (the 0.25.x series locked
+    # under reqwest 0.11) to CDLA-Permissive-2.0 by 1.x, so this allowance is
+    # still required even though the D-13 revision moved off reqwest 0.13's
+    # aws-lc/webpki-root-certs/rustls-platform-verifier chain entirely.
+    "CDLA-Permissive-2.0",
 ]

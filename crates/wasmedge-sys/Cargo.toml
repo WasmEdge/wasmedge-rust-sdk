@@ -28,14 +28,13 @@ setjmp = "0.1"
 
 [build-dependencies]
 bindgen = { workspace = true, features = ["runtime"] }
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "blocking",
-    "rustls-tls",
+    "rustls-tls-webpki-roots",
 ] }
 flate2 = "1"
 tar = "0.4.46"
 sha256 = "1"
-phf = { version = "0.11", features = ["macros"] }
 
 
 [dev-dependencies]

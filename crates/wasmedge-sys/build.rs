@@ -1,4 +1,3 @@
-use phf::phf_map;
 use std::sync::LazyLock;
 
 mod build_paths;
@@ -10,24 +9,73 @@ use build_standalone::*;
 use crate::build_paths::AsPath;
 
 const WASMEDGE_RELEASE_VERSION: &str = "0.17.1";
-const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = phf_map! {
-    // The key is: {os}/{arch}[/{libc}][/static]
-    //  * The libc abi is only added on linux.
-    //  * "static" is added when the `static` feature is enabled.
-    //
-    // The value is a tuple containing the sha256sum of the archive, and the platform slug as it appears in the archive name:
-    //  * The archive name is WasmEdge-{version}-{slug}.tar.gz
 
-    "macos/aarch64"                => ("7f6810f0676f8405586a3edb350ce9a6eb256ef7118f2e327f131b7833d0033e", "darwin_arm64"),
-    "macos/aarch64/static"         => ("ca319dc10e0aaa70535b5b3023dc74763efe3fbecb37aff609bdb48a4d2653e9", "darwin_arm64_static"),
-    "macos/x86_64"                 => ("e96d10da0dfe560ff17775cf4a205ed43cd855dafbb4056ea908865066666660", "darwin_x86_64"),
-    "linux/aarch64/gnu"            => ("6d7762429083e787ccbddf629868bb59de4325ccdcc31d9f7bd240adcdd9fe9d", "manylinux_2_28_aarch64"),
-    "linux/x86_64/gnu"             => ("27a1abec072ddf45b40e2e81e33c1e5fe9b241f31fd1bbf0182f05097489a07a", "manylinux_2_28_x86_64"),
-    "linux/aarch64/gnu/static"     => ("e3de8926cef486a3af855513239e411db68b8b4f01c4060ee9d5206ca118ca50", "debian11_aarch64_static"),
-    "linux/x86_64/gnu/static"      => ("0d99d3c3d71ec020cfc287215c2234d8be799970d03857f037d7015979f0749d", "debian11_x86_64_static"),
-    "linux/aarch64/musl/static"    => ("c3eced9ecfcedc71725c34b4f85812e67de11cfe4edbf9a923717a2948a28148", "alpine3.23_aarch64_static"),
-    "linux/x86_64/musl/static"     => ("b30a522c886996cbc5eaca1eac7a44c8d457b61507bca449e6b673a5e89df2c7", "alpine3.23_x86_64_static"),
-};
+// All target keys recognized by `lookup_remote_archive`, used to build the
+// "available targets" list in error messages.
+const REMOTE_ARCHIVE_TARGETS: &[&str] = &[
+    "macos/aarch64",
+    "macos/aarch64/static",
+    "macos/x86_64",
+    "linux/aarch64/gnu",
+    "linux/x86_64/gnu",
+    "linux/aarch64/gnu/static",
+    "linux/x86_64/gnu/static",
+    "linux/aarch64/musl/static",
+    "linux/x86_64/musl/static",
+];
+
+/// Looks up the sha256 checksum and archive slug for a given target key:
+/// `{os}/{arch}[/{libc}][/static]`
+///  * The libc abi is only added on linux.
+///  * "static" is added when the `static` feature is enabled.
+///
+/// Returns `(sha256sum of the archive, platform slug as it appears in the
+/// archive name)`. The archive name is `WasmEdge-{version}-{slug}.tar.gz`.
+///
+/// This is a plain `match` rather than a `phf::Map`: with only 9 entries,
+/// perfect hashing buys nothing over a linear scan that the compiler already
+/// lowers efficiently, and it drops a proc-macro build-dependency.
+fn lookup_remote_archive(target: &str) -> Option<(&'static str, &'static str)> {
+    Some(match target {
+        "macos/aarch64" => (
+            "7f6810f0676f8405586a3edb350ce9a6eb256ef7118f2e327f131b7833d0033e",
+            "darwin_arm64",
+        ),
+        "macos/aarch64/static" => (
+            "ca319dc10e0aaa70535b5b3023dc74763efe3fbecb37aff609bdb48a4d2653e9",
+            "darwin_arm64_static",
+        ),
+        "macos/x86_64" => (
+            "e96d10da0dfe560ff17775cf4a205ed43cd855dafbb4056ea908865066666660",
+            "darwin_x86_64",
+        ),
+        "linux/aarch64/gnu" => (
+            "6d7762429083e787ccbddf629868bb59de4325ccdcc31d9f7bd240adcdd9fe9d",
+            "manylinux_2_28_aarch64",
+        ),
+        "linux/x86_64/gnu" => (
+            "27a1abec072ddf45b40e2e81e33c1e5fe9b241f31fd1bbf0182f05097489a07a",
+            "manylinux_2_28_x86_64",
+        ),
+        "linux/aarch64/gnu/static" => (
+            "e3de8926cef486a3af855513239e411db68b8b4f01c4060ee9d5206ca118ca50",
+            "debian11_aarch64_static",
+        ),
+        "linux/x86_64/gnu/static" => (
+            "0d99d3c3d71ec020cfc287215c2234d8be799970d03857f037d7015979f0749d",
+            "debian11_x86_64_static",
+        ),
+        "linux/aarch64/musl/static" => (
+            "c3eced9ecfcedc71725c34b4f85812e67de11cfe4edbf9a923717a2948a28148",
+            "alpine3.23_aarch64_static",
+        ),
+        "linux/x86_64/musl/static" => (
+            "b30a522c886996cbc5eaca1eac7a44c8d457b61507bca449e6b673a5e89df2c7",
+            "alpine3.23_x86_64_static",
+        ),
+        _ => return None,
+    })
+}
 
 static SEARCH_LOCATIONS: LazyLock<[Option<LibWasmEdgePaths>; 11]> = LazyLock::new(|| {
     [

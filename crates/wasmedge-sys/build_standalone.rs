@@ -1,4 +1,6 @@
-use super::{REMOTE_ARCHIVES, STANDALONE_DIR, WASMEDGE_RELEASE_VERSION};
+use super::{
+    REMOTE_ARCHIVE_TARGETS, STANDALONE_DIR, WASMEDGE_RELEASE_VERSION, lookup_remote_archive,
+};
 use crate::{
     build_paths::{AsPath, Env},
     debug,
@@ -125,24 +127,21 @@ fn get_remote_archive() -> Archive {
     }
 
     debug!("building archive url for target {target}");
-    let (sha, slug) = REMOTE_ARCHIVES
-        .get(target.as_str())
-        .unwrap_or_else(|| {
-            let available: Vec<_> = REMOTE_ARCHIVES.keys().collect();
-            if libc == "musl" && !cfg!(feature = "static") {
-                panic!(
-                    "target '{target}' is not supported. musl targets require the `static` feature. \
-                     Enable it with: wasmedge-sys = {{ features = [\"static\"] }}. \
-                     Available targets: {available:?}"
-                );
-            } else {
-                panic!(
-                    "target '{target}' is not supported with the current feature set. \
-                     Available targets: {available:?}"
-                );
-            }
-        })
-        .to_owned();
+    let (sha, slug) = lookup_remote_archive(target.as_str()).unwrap_or_else(|| {
+        let available = REMOTE_ARCHIVE_TARGETS;
+        if libc == "musl" && !cfg!(feature = "static") {
+            panic!(
+                "target '{target}' is not supported. musl targets require the `static` feature. \
+                 Enable it with: wasmedge-sys = {{ features = [\"static\"] }}. \
+                 Available targets: {available:?}"
+            );
+        } else {
+            panic!(
+                "target '{target}' is not supported with the current feature set. \
+                 Available targets: {available:?}"
+            );
+        }
+    });
 
     let asset_name = format!("WasmEdge-{WASMEDGE_RELEASE_VERSION}-{slug}.tar.gz");
     let url = format!(
