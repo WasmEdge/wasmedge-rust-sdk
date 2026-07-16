@@ -32,7 +32,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: cargo update
-        run: cargo update --workspace
+        run: cargo update
 
       # peter-evans/create-pull-request diffs the working tree itself: if
       # `cargo update` made no changes, it skips the commit/branch/PR steps
@@ -47,8 +47,8 @@ jobs:
           delete-branch: true
           title: "chore(deps): monthly lockfile refresh"
           body: |
-            Automated monthly `cargo update --workspace`, keeping Cargo.lock
-            current within the existing semver constraints in Cargo.toml.
+            Automated monthly `cargo update`, keeping Cargo.lock current
+            within the existing semver constraints in Cargo.toml.
 
             Opened automatically by `.github/workflows/lockfile-refresh.yml`.
           labels: dependencies
