@@ -297,18 +297,11 @@ impl WasmVal for ExternRef {
 
 /// Generates arguments of [WasmValue](crate::WasmValue) types.
 ///
-/// Notice that to use the macro, it is required to use `WasmVal` trait.
+/// Each argument is converted via the [WasmVal](crate::WasmVal) trait, fully qualified through
+/// `$crate` so callers do not need to bring `WasmVal` into scope themselves.
 #[macro_export]
 macro_rules! params {
     ( $( $x:expr ),* ) => {
-        #[allow(unused_mut)]
-        {
-            let mut temp_vec = vec![];
-            $(
-                temp_vec.push($x.to_wasm_value());
-
-            )*
-            temp_vec
-        }
+        vec![$($crate::WasmVal::to_wasm_value($x)),*]
     };
 }

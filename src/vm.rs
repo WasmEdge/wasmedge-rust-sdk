@@ -1,8 +1,5 @@
 //! Defines WasmEdge Vm struct.
-use crate::{
-    ImportObject, Instance, Module, Store, WasmEdgeResult, WasmValue,
-    error::{VmError, WasmEdgeError},
-};
+use crate::{ImportObject, Instance, Module, Store, WasmEdgeResult, WasmValue};
 use sys::AsInstance;
 use wasmedge_sys as sys;
 
@@ -18,7 +15,7 @@ impl SyncInst for Instance {}
 ///
 /// ```rust
 /// use std::collections::HashMap;
-/// use wasmedge_sdk::{params, Store, Module, WasmVal, wat2wasm, ValType, NeverType, Vm, vm::SyncInst};
+/// use wasmedge_sdk::{params, Store, Module, wat2wasm, ValType, NeverType, Vm, vm::SyncInst};
 ///
 /// // create a Vm context
 /// let mut vm =
@@ -131,32 +128,11 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
         func_name: impl AsRef<str>,
         args: impl IntoIterator<Item = WasmValue>,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
-        let (mut func, executor) = match mod_name {
-            Some(mod_name) => {
-                if let Some((inst, executor)) = self.store.get_instance_and_executor(mod_name) {
-                    (inst.get_func_mut(func_name.as_ref())?, executor)
-                } else if let Some((wasm_mod, executor)) =
-                    self.store.get_named_wasm_and_executor(mod_name)
-                {
-                    (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
-                } else {
-                    return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                        mod_name.into(),
-                    ))));
-                }
-            }
-            None => {
-                let active_inst = self
-                    .active_instance
-                    .as_mut()
-                    .ok_or(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule)))?;
-
-                (
-                    active_inst.get_func_mut(func_name.as_ref())?,
-                    self.store.executor(),
-                )
-            }
-        };
+        let (mut func, executor) = self.store.resolve_func_and_executor(
+            mod_name,
+            func_name.as_ref(),
+            self.active_instance.as_mut(),
+        )?;
         executor.call_func(&mut func, args)
     }
 
@@ -183,41 +159,22 @@ impl<'inst, T: ?Sized + SyncInst> Vm<'inst, T> {
         args: impl IntoIterator<Item = WasmValue>,
         timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
-        let (mut func, executor) = match mod_name {
-            Some(mod_name) => {
-                if let Some((inst, executor)) = self.store.get_instance_and_executor(mod_name) {
-                    (inst.get_func_mut(func_name.as_ref())?, executor)
-                } else if let Some((wasm_mod, executor)) =
-                    self.store.get_named_wasm_and_executor(mod_name)
-                {
-                    (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
-                } else {
-                    return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                        mod_name.into(),
-                    ))));
-                }
-            }
-            None => {
-                let active_inst = self
-                    .active_instance
-                    .as_mut()
-                    .ok_or(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule)))?;
-
-                (
-                    active_inst.get_func_mut(func_name.as_ref())?,
-                    self.store.executor(),
-                )
-            }
-        };
+        let (mut func, executor) = self.store.resolve_func_and_executor(
+            mod_name,
+            func_name.as_ref(),
+            self.active_instance.as_mut(),
+        )?;
         executor.call_func_with_timeout(&mut func, args, timeout)
     }
 
     /// Returns a reference to the internal [store](crate::Store) from this vm.
+    #[must_use]
     pub fn store(&self) -> &Store<'inst, T> {
         &self.store
     }
 
     /// Returns a mutable reference to the internal [store](crate::Store) from this vm.
+    #[must_use]
     pub fn store_mut(&mut self) -> &mut Store<'inst, T> {
         &mut self.store
     }
@@ -268,7 +225,7 @@ mod tests {
     use wasmedge_types::wat2wasm;
 
     use super::*;
-    use crate::{WasmVal, params};
+    use crate::params;
 
     #[test]
     #[cfg(target_os = "linux")]

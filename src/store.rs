@@ -2,8 +2,12 @@
 
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::{Module, WasmEdgeResult, config::Config};
-use sys::{AsInstance, Instance};
+use crate::{
+    Module, WasmEdgeResult,
+    config::Config,
+    error::{VmError, WasmEdgeError},
+};
+use sys::{AsInstance, FuncRef, Instance};
 use wasmedge_sys as sys;
 
 /// The [Store] is a collection of registered modules and assists wasm modules in finding the import modules they need.
@@ -21,7 +25,7 @@ impl<T: ?Sized> Debug for Store<'_, T> {
             .field("inner", &self.inner)
             .field("instance_map", &self.instances.keys())
             .field("wasm_instance_map", &self.wasm_instance_map.keys())
-            .field("wasm_instance_map", &self.executor)
+            .field("executor", &self.executor)
             .finish()
     }
 }
@@ -108,8 +112,8 @@ impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
     /// * `mod_name` - The name of the named module.
     ///
     pub fn contains(&self, mod_name: impl AsRef<str>) -> bool {
-        let mod_name = mod_name.as_ref().to_string();
-        self.instances.contains_key(&mod_name) || self.wasm_instance_map.contains_key(&mod_name)
+        let mod_name = mod_name.as_ref();
+        self.instances.contains_key(mod_name) || self.wasm_instance_map.contains_key(mod_name)
     }
 
     pub fn get_instance_and_executor(
@@ -134,5 +138,47 @@ impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
 
     pub fn executor(&mut self) -> &mut sys::Executor {
         &mut self.executor
+    }
+
+    /// Resolves the `(function, executor)` pair needed to run an exported wasm function.
+    ///
+    /// If `mod_name` is `Some`, the target module (a named instance registered on this
+    /// [Store], or a named wasm module instance) is looked up by name. If `mod_name` is
+    /// `None`, `active_instance` is used instead (the caller's active module instance, if
+    /// any).
+    ///
+    /// This centralizes the lookup previously duplicated across `Vm::run_func`,
+    /// `Vm::run_func_with_timeout`, and their `r#async` equivalents.
+    pub(crate) fn resolve_func_and_executor<'a>(
+        &'a mut self,
+        mod_name: Option<&str>,
+        func_name: &str,
+        active_instance: Option<&'a mut Instance>,
+    ) -> WasmEdgeResult<(FuncRef<&'a mut Instance>, &'a mut sys::Executor)> {
+        match mod_name {
+            Some(mod_name) => {
+                // NB: this deliberately borrows `self.instances`/`self.wasm_instance_map`
+                // directly (rather than through the `get_instance_and_executor`/
+                // `get_named_wasm_and_executor` helpers) so the borrow checker can see the two
+                // branches touch disjoint fields; going through the helper methods here made
+                // both branches look like they borrow all of `*self`, which conflicts once the
+                // return type ties the borrow to the explicit `'a`.
+                if let Some(inst) = self.instances.get_mut(mod_name).map(|p| *p as &mut T) {
+                    Ok((inst.get_func_mut(func_name)?, &mut self.executor))
+                } else if let Some(wasm_mod) = self.wasm_instance_map.get_mut(mod_name) {
+                    Ok((wasm_mod.get_func_mut(func_name)?, &mut self.executor))
+                } else {
+                    Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
+                        mod_name.into(),
+                    ))))
+                }
+            }
+            None => {
+                let active_inst = active_instance
+                    .ok_or_else(|| Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule)))?;
+
+                Ok((active_inst.get_func_mut(func_name)?, &mut self.executor))
+            }
+        }
     }
 }

@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, path::PathBuf};
 use wasmedge_sdk::{
-    AsInstance, CallingFrame, ImportObjectBuilder, Instance, Module, Store, Vm, WasmVal, WasmValue,
+    AsInstance, CallingFrame, ImportObjectBuilder, Instance, Module, Store, Vm, WasmValue,
     error::CoreError, params, vm::SyncInst, wat2wasm,
 };
 

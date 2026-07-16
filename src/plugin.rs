@@ -314,11 +314,7 @@ impl PluginManager {
     #[cfg(feature = "wasi_nn")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasi_nn")))]
     pub fn nn_preload(preloads: Vec<NNPreload>) {
-        let mut nn_preloads = Vec::new();
-        for preload in preloads {
-            nn_preloads.push(preload.to_string());
-        }
-
+        let nn_preloads: Vec<String> = preloads.into_iter().map(|p| p.to_string()).collect();
         let nn_preloads_str: Vec<&str> = nn_preloads.iter().map(|s| s.as_str()).collect();
 
         sys::plugin::PluginManager::nn_preload(nn_preloads_str);
@@ -380,16 +376,17 @@ impl PluginManager {
     }
 
     pub fn auto_detect_plugins() -> WasmEdgeResult<Vec<Instance>> {
-        let mut plugin_mods = vec![];
-        for plugin_name in PluginManager::names().iter() {
-            if let Ok(plugin) = PluginManager::find(plugin_name) {
-                for mod_name in plugin.mod_names().iter() {
-                    if let Ok(mod_instance) = plugin.mod_instance(mod_name) {
-                        plugin_mods.push(mod_instance)
-                    }
-                }
-            }
-        }
+        let plugin_mods = PluginManager::names()
+            .into_iter()
+            .filter_map(|plugin_name| PluginManager::find(plugin_name).ok())
+            .flat_map(|plugin| {
+                plugin
+                    .mod_names()
+                    .into_iter()
+                    .filter_map(|mod_name| plugin.mod_instance(mod_name).ok())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
         Ok(plugin_mods)
     }
 }

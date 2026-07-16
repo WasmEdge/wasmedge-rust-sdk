@@ -2,7 +2,6 @@
     html_logo_url = "https://github.com/cncf/artwork/blob/master/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.png?raw=true",
     html_favicon_url = "https://raw.githubusercontent.com/cncf/artwork/49169bdbc88a7ce3c4a722c641cc2d548bd5c340/projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.svg"
 )]
-#![allow(clippy::vec_init_then_push)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # Overview
@@ -135,7 +134,11 @@ pub use statistics::Statistics;
 #[doc(inline)]
 pub use store::Store;
 #[doc(inline)]
-pub use vm::Vm;
+pub use vm::{SyncInst, Vm};
+
+#[cfg(all(feature = "async", target_os = "linux"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "async", target_os = "linux"))))]
+pub use r#async::vm::AsyncInst;
 
 pub use wasmedge_types::{
     CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType, FuncType, GlobalType,

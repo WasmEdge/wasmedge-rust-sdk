@@ -12,7 +12,7 @@
 //!   ./target/release/examples/run_wasm test-wasm/target/wasm32-unknown-unknown/release/test_wasm.wasm
 
 use std::{collections::HashMap, env, path::PathBuf};
-use wasmedge_sdk::{Module, Store, Vm, WasmVal, params, vm::SyncInst};
+use wasmedge_sdk::{Module, Store, Vm, params, vm::SyncInst};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();

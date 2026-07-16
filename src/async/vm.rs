@@ -1,9 +1,5 @@
 //! Defines WasmEdge Vm struct.
-use crate::{
-    Instance, Module, Store, WasmEdgeResult, WasmValue,
-    error::{VmError, WasmEdgeError},
-    vm::SyncInst,
-};
+use crate::{Instance, Module, Store, WasmEdgeResult, WasmValue, vm::SyncInst};
 use sys::{AsInstance, r#async::fiber::AsyncState};
 use wasmedge_sys as sys;
 
@@ -142,32 +138,11 @@ impl<'inst, T: ?Sized + Send + AsyncInst> Vm<'inst, T> {
         func_name: impl AsRef<str>,
         args: impl IntoIterator<Item = WasmValue> + Send,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
-        let (mut func, executor) = match mod_name {
-            Some(mod_name) => {
-                if let Some((inst, executor)) = self.store.get_instance_and_executor(mod_name) {
-                    (inst.get_func_mut(func_name.as_ref())?, executor)
-                } else if let Some((wasm_mod, executor)) =
-                    self.store.get_named_wasm_and_executor(mod_name)
-                {
-                    (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
-                } else {
-                    return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                        mod_name.into(),
-                    ))));
-                }
-            }
-            None => {
-                let active_inst = self
-                    .active_instance
-                    .as_mut()
-                    .ok_or(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule)))?;
-
-                (
-                    active_inst.get_func_mut(func_name.as_ref())?,
-                    self.store.executor(),
-                )
-            }
-        };
+        let (mut func, executor) = self.store.resolve_func_and_executor(
+            mod_name,
+            func_name.as_ref(),
+            self.active_instance.as_mut(),
+        )?;
         executor
             .call_func_async(&self.async_state, &mut func, args)
             .await
@@ -196,43 +171,24 @@ impl<'inst, T: ?Sized + Send + AsyncInst> Vm<'inst, T> {
         args: impl IntoIterator<Item = WasmValue> + Send,
         timeout: std::time::Duration,
     ) -> WasmEdgeResult<Vec<WasmValue>> {
-        let (mut func, executor) = match mod_name {
-            Some(mod_name) => {
-                if let Some((inst, executor)) = self.store.get_instance_and_executor(mod_name) {
-                    (inst.get_func_mut(func_name.as_ref())?, executor)
-                } else if let Some((wasm_mod, executor)) =
-                    self.store.get_named_wasm_and_executor(mod_name)
-                {
-                    (wasm_mod.get_func_mut(func_name.as_ref())?, executor)
-                } else {
-                    return Err(Box::new(WasmEdgeError::Vm(VmError::NotFoundModule(
-                        mod_name.into(),
-                    ))));
-                }
-            }
-            None => {
-                let active_inst = self
-                    .active_instance
-                    .as_mut()
-                    .ok_or(Box::new(WasmEdgeError::Vm(VmError::NotFoundActiveModule)))?;
-
-                (
-                    active_inst.get_func_mut(func_name.as_ref())?,
-                    self.store.executor(),
-                )
-            }
-        };
+        let (mut func, executor) = self.store.resolve_func_and_executor(
+            mod_name,
+            func_name.as_ref(),
+            self.active_instance.as_mut(),
+        )?;
         executor
             .call_func_async_with_timeout(&self.async_state, &mut func, args, timeout)
             .await
     }
 
     /// Returns a reference to the internal [store](crate::Store) from this vm.
+    #[must_use]
     pub fn store(&self) -> &Store<'inst, T> {
         &self.store
     }
 
     /// Returns a mutable reference to the internal [store](crate::Store) from this vm.
+    #[must_use]
     pub fn store_mut(&mut self) -> &mut Store<'inst, T> {
         &mut self.store
     }
@@ -283,7 +239,7 @@ mod tests {
     use wasmedge_types::wat2wasm;
 
     use super::*;
-    use crate::{io::WasmVal, params};
+    use crate::params;
 
     #[tokio::test]
     async fn test_vm_run_func_from_file() {

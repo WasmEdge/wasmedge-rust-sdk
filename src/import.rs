@@ -89,6 +89,7 @@ impl<Data> ImportObjectBuilder<Data> {
     ///
     /// * `global` - The wasm [global instance](crate::Global) to add.
     ///
+    #[must_use]
     pub fn with_global(mut self, name: impl AsRef<str>, global: sys::Global) -> Self {
         self.import_object.add_global(name, global);
         self
@@ -102,6 +103,7 @@ impl<Data> ImportObjectBuilder<Data> {
     ///
     /// * `memory` - The wasm [memory instance](crate::Memory) to add.
     ///
+    #[must_use]
     pub fn with_memory(mut self, name: impl AsRef<str>, memory: sys::Memory) -> Self {
         self.import_object.add_memory(name, memory);
         self
@@ -115,6 +117,7 @@ impl<Data> ImportObjectBuilder<Data> {
     ///
     /// * `table` - The wasm [table instance](crate::Table) to add.
     ///
+    #[must_use]
     pub fn with_table(mut self, name: impl AsRef<str>, table: sys::Table) -> Self {
         self.import_object.add_table(name, table);
         self
@@ -131,6 +134,7 @@ impl<Data> ImportObjectBuilder<Data> {
     /// # Error
     ///
     /// If fail to create the [ImportObject], then an error is returned.
+    #[must_use]
     pub fn build(self) -> ImportObject<Data> {
         self.import_object
     }
