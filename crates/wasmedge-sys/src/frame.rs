@@ -1,9 +1,8 @@
 //! Defines WasmEdge CallingFrame.
 
 use crate::{
-    ffi,
-    instance::{memory::InnerMemory, InnerRef},
-    Memory,
+    Memory, ffi,
+    instance::{InnerRef, memory::InnerMemory},
 };
 
 /// Represents a calling frame on top of stack.

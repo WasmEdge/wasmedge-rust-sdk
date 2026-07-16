@@ -1,13 +1,12 @@
 //! Defines WasmEdge Store struct.
 
 use crate::{
-    ffi,
+    WasmEdgeResult, ffi,
     instance::{
-        module::{InnerInstance, Instance},
         InnerRef,
+        module::{InnerInstance, Instance},
     },
     types::WasmEdgeString,
-    WasmEdgeResult,
 };
 
 use wasmedge_types::error::{StoreError, WasmEdgeError};

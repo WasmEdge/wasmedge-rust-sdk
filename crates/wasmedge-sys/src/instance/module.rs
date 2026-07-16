@@ -1,14 +1,14 @@
 //! Defines WasmEdge Instance and other relevant types.
 use crate::{
+    FuncRef, Function, Global, Memory, Table, WasmEdgeResult,
     ffi::{self},
     instance::{global::InnerGlobal, memory::InnerMemory, table::InnerTable},
     types::WasmEdgeString,
-    FuncRef, Function, Global, Memory, Table, WasmEdgeResult,
 };
 
 use wasmedge_types::error::{InstanceError, WasmEdgeError};
 
-use super::{function::AsFunc, InnerRef};
+use super::{InnerRef, function::AsFunc};
 
 /// An [Instance] represents an instantiated module. In the instantiation process, An [Instance] is created from al[Module](crate::Module). From an [Instance] the exported [functions](crate::Function), [tables](crate::Table), [memories](crate::Memory), and [globals](crate::Global) can be fetched.
 #[derive(Debug)]
@@ -721,8 +721,8 @@ mod tests {
     use crate::{CallingFrame, Executor, GlobalType, ImportModule, Store, TableType, WasmValue};
 
     use wasmedge_types::{
-        error::{CoreError, CoreExecutionError},
         FuncType, MemoryType, Mutability, RefType, ValType,
+        error::{CoreError, CoreExecutionError},
     };
 
     #[test]

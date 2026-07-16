@@ -1,4 +1,5 @@
 use super::{
+    WasiCtx,
     common::{
         clock,
         error::Errno,
@@ -6,10 +7,9 @@ use super::{
         types::*,
     },
     env::{
-        vfs::{self, FdFlags, WASIRights},
         AsyncVM,
+        vfs::{self, FdFlags, WASIRights},
     },
-    WasiCtx,
 };
 
 #[cfg(all(unix, feature = "async_tokio"))]

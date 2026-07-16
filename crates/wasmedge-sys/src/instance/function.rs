@@ -1,17 +1,17 @@
 //! Defines WasmEdge Function and FuncType structs.
 
 use crate::{
-    ffi::{self},
     CallingFrame, Instance, WasmEdgeResult, WasmValue,
+    ffi::{self},
 };
 use core::ffi::c_void;
 
 use wasmedge_types::{
-    error::{CoreError, FuncError, WasmEdgeError},
     ValType,
+    error::{CoreError, FuncError, WasmEdgeError},
 };
 
-use super::{module::InnerInstance, InnerRef};
+use super::{InnerRef, module::InnerInstance};
 
 pub type SyncFn<Data> = for<'a, 'b, 'c> fn(
     &'a mut Data,
@@ -77,7 +77,12 @@ unsafe extern "C" fn wrap_fn<Data>(
 
     match real_fn(data, &mut inst, &mut frame, input) {
         Ok(returns) => {
-            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}", return_len, returns.len());
+            assert!(
+                returns.len() == return_len,
+                "[wasmedge-sys] check the number of returns of host function. Expected: {}, actual: {}",
+                return_len,
+                returns.len()
+            );
             for (idx, wasm_value) in returns.into_iter().enumerate() {
                 raw_returns[idx] = wasm_value.as_raw();
             }
@@ -390,9 +395,9 @@ unsafe impl Sync for InnerFuncType {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{types::WasmValue, AsInstance, Executor, ImportModule};
+    use crate::{AsInstance, Executor, ImportModule, types::WasmValue};
 
-    use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
+    use wasmedge_types::{FuncType, ValType, error::CoreExecutionError};
 
     #[test]
     fn test_func_type() {

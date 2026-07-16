@@ -1,6 +1,6 @@
 //! Defines WasmEdge Config struct.
 
-use crate::{ffi, WasmEdgeResult};
+use crate::{WasmEdgeResult, ffi};
 use wasmedge_types::error::WasmEdgeError;
 #[cfg(feature = "aot")]
 use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};

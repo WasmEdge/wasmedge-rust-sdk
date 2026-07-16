@@ -6,15 +6,15 @@
 //! the end resticts the upper bound (inclusive).
 
 use crate::{
+    WasmEdgeResult,
     ffi::{self},
     types::{WasmEdgeLimit, WasmValue},
     utils::check,
-    WasmEdgeResult,
 };
 
 use wasmedge_types::{
-    error::{TableError, WasmEdgeError},
     RefType, ValType,
+    error::{TableError, WasmEdgeError},
 };
 
 /// A WasmEdge [Table] defines a WebAssembly table instance described by its [type](crate::TableType). A table is an array-like structure and stores function references.
@@ -246,11 +246,11 @@ unsafe impl Sync for InnerTableType {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{instance::function::AsFunc, CallingFrame, Function, Instance};
+    use crate::{CallingFrame, Function, Instance, instance::function::AsFunc};
     use std::thread;
     use wasmedge_types::{
-        error::{CoreError, CoreExecutionError},
         RefType, ValType,
+        error::{CoreError, CoreExecutionError},
     };
 
     #[test]

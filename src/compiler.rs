@@ -1,6 +1,6 @@
 //! Defines WasmEdge ahead-of-time compiler.
 
-use crate::{config::Config, WasmEdgeResult};
+use crate::{WasmEdgeResult, config::Config};
 use std::path::{Path, PathBuf};
 use wasmedge_sys as sys;
 

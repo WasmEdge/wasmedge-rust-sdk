@@ -8,7 +8,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, parse_quote, spanned::Spanned, FnArg, Item, Pat, PatType};
+use syn::{FnArg, Item, Pat, PatType, parse_macro_input, parse_quote, spanned::Spanned};
 
 // ================== macros for wasmedge-sdk ==================
 

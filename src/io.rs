@@ -1,4 +1,4 @@
-use crate::{types::ExternRef, ValType, WasmValue};
+use crate::{ValType, WasmValue, types::ExternRef};
 
 /// Describes the mapping of Rust type to Wasm type.
 ///
@@ -135,8 +135,12 @@ impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11);
 impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12);
 impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13);
 impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14);
-impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15);
-impl_wasm_val_type_list!(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16);
+impl_wasm_val_type_list!(
+    A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15
+);
+impl_wasm_val_type_list!(
+    A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16
+);
 impl_wasm_val_type_list!(
     A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17
 );

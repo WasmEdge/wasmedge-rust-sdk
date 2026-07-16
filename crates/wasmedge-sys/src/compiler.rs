@@ -1,6 +1,6 @@
 //! Defines WasmEdge ahead-of-time compiler.
 
-use crate::{ffi, utils, utils::check, Config, WasmEdgeResult};
+use crate::{Config, WasmEdgeResult, ffi, utils, utils::check};
 use std::path::Path;
 use wasmedge_types::error::WasmEdgeError;
 
@@ -157,8 +157,9 @@ mod tests {
         thread,
     };
     use wasmedge_types::{
+        CompilerOptimizationLevel, CompilerOutputFormat,
         error::{CoreError, CoreLoadError},
-        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
+        wat2wasm,
     };
 
     #[test]

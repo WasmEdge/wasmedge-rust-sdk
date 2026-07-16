@@ -8,11 +8,11 @@ use crate::r#async::fiber::{AsyncState, FiberFuture};
 use crate::r#async::fiber::TimeoutFiberFuture;
 
 use crate::{
+    AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
     instance::{function::AsFunc, module::InnerInstance},
     store::Store,
     types::WasmEdgeString,
     utils::check,
-    AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
 };
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 use std::os::raw::c_void;

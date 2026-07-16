@@ -4,8 +4,8 @@
 
 use std::{collections::HashMap, path::PathBuf};
 use wasmedge_sdk::{
-    error::CoreError, params, vm::SyncInst, wat2wasm, AsInstance, CallingFrame,
-    ImportObjectBuilder, Instance, Module, Store, Vm, WasmVal, WasmValue,
+    AsInstance, CallingFrame, ImportObjectBuilder, Instance, Module, Store, Vm, WasmVal, WasmValue,
+    error::CoreError, params, vm::SyncInst, wat2wasm,
 };
 
 /// Get path to the compiled test-wasm module

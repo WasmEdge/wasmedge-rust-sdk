@@ -1,10 +1,10 @@
 use crate::snapshots::{
+    Errno, WasiCtx,
     common::{
         memory::{Memory, WasmPtr},
         net::{self, AddressFamily, SocketType, WasiSocketState},
         types::*,
     },
-    Errno, WasiCtx,
 };
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
@@ -718,9 +718,9 @@ pub async fn sock_lookup_ip<M: Memory>(
 
 pub mod addrinfo {
     use crate::snapshots::{
+        WasiCtx,
         common::memory::{Memory, WasmPtr},
         env::Errno,
-        WasiCtx,
     };
 
     #[allow(dead_code)]

@@ -7,8 +7,8 @@ use std::{
 use crate::snapshots::env::Errno;
 
 use super::{
-    virtual_sys::{WasiVirtualDir, WasiVirtualFile},
     WasiDir, WasiFile, WasiNode,
+    virtual_sys::{WasiVirtualDir, WasiVirtualFile},
 };
 
 #[derive(Debug)]

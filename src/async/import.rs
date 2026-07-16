@@ -1,4 +1,4 @@
-use crate::{io::WasmValTypeList, FuncType, WasmEdgeResult};
+use crate::{FuncType, WasmEdgeResult, io::WasmValTypeList};
 use sys::r#async::{
     function::{AsyncFn, AsyncFunction},
     module::AsyncImportObject,

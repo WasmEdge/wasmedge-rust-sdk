@@ -8,7 +8,7 @@ use futures::future::ok;
 use libc::hostent;
 use slab::Slab;
 
-use crate::snapshots::env::{wasi_types, Errno};
+use crate::snapshots::env::{Errno, wasi_types};
 
 use super::{
     Advice, FdFlags, FdStat, FileType, Filestat, OFlags, SystemTimeSpec, WASIRights, WasiDir,

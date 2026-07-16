@@ -1,7 +1,7 @@
 //! Defines WasmEdge Vm struct.
 use crate::{
-    error::{VmError, WasmEdgeError},
     ImportObject, Instance, Module, Store, WasmEdgeResult, WasmValue,
+    error::{VmError, WasmEdgeError},
 };
 use sys::AsInstance;
 use wasmedge_sys as sys;
@@ -268,7 +268,7 @@ mod tests {
     use wasmedge_types::wat2wasm;
 
     use super::*;
-    use crate::{params, WasmVal};
+    use crate::{WasmVal, params};
 
     #[test]
     #[cfg(target_os = "linux")]

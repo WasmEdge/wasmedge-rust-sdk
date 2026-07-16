@@ -106,12 +106,12 @@ pub use frame::CallingFrame;
 pub use instance::module::WasiModule;
 #[doc(inline)]
 pub use instance::{
+    FuncType, GlobalType, MemoryType, TableType,
     function::{FuncRef, Function, SyncFn},
     global::Global,
     memory::Memory,
     module::{AsInstance, ImportModule, Instance},
     table::Table,
-    FuncType, GlobalType, MemoryType, TableType,
 };
 #[doc(inline)]
 pub use loader::Loader;

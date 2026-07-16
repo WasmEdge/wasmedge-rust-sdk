@@ -2,7 +2,7 @@
 
 use super::ffi;
 use crate::{
-    instance::module::InnerInstance, types::WasmEdgeString, utils, Instance, WasmEdgeResult,
+    Instance, WasmEdgeResult, instance::module::InnerInstance, types::WasmEdgeString, utils,
 };
 
 use std::ffi::CString;
@@ -520,9 +520,11 @@ mod tests {
 
         PluginManager::load_plugins_from_default_paths();
         assert!(PluginManager::count() >= 1);
-        assert!(PluginManager::names()
-            .iter()
-            .any(|x| x == "wasmedge_process"));
+        assert!(
+            PluginManager::names()
+                .iter()
+                .any(|x| x == "wasmedge_process")
+        );
 
         // get `wasmedge_process` plugin
         let result = PluginManager::find("wasmedge_process");

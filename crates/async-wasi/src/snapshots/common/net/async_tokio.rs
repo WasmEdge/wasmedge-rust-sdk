@@ -10,8 +10,8 @@ use std::{
     sync::atomic::{AtomicBool, AtomicI8, AtomicU8},
 };
 use tokio::io::{
-    unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
     AsyncReadExt, AsyncWriteExt, Interest,
+    unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
 };
 
 #[derive(Debug)]
@@ -68,7 +68,7 @@ impl AsyncWasiSocketInner {
                 s.listen(backlog)?;
             }
             AsyncWasiSocketInner::AsyncFd(_) => {
-                return Err(io::Error::from_raw_os_error(libc::EINVAL))
+                return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         }
         self.register()
@@ -95,7 +95,7 @@ impl AsyncWasiSocketInner {
         let r = match self {
             AsyncWasiSocketInner::PreOpen(s) => s.connect(addr),
             AsyncWasiSocketInner::AsyncFd(_) => {
-                return Err(io::Error::from_raw_os_error(libc::EINVAL))
+                return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         };
 

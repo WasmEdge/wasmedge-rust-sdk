@@ -1,4 +1,4 @@
-use crate::{io::WasmValTypeList, FuncType, WasmEdgeResult};
+use crate::{FuncType, WasmEdgeResult, io::WasmValTypeList};
 pub use sys::AsInstance;
 use sys::Function;
 use wasmedge_sys::{self as sys};

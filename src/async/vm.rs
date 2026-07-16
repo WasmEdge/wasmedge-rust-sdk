@@ -1,10 +1,10 @@
 //! Defines WasmEdge Vm struct.
 use crate::{
+    Instance, Module, Store, WasmEdgeResult, WasmValue,
     error::{VmError, WasmEdgeError},
     vm::SyncInst,
-    Instance, Module, Store, WasmEdgeResult, WasmValue,
 };
-use sys::{r#async::fiber::AsyncState, AsInstance};
+use sys::{AsInstance, r#async::fiber::AsyncState};
 use wasmedge_sys as sys;
 
 use super::import::ImportObject;

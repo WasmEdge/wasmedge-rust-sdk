@@ -1,6 +1,6 @@
 //! Defines plugin related structs.
 
-use crate::{instance::Instance, WasmEdgeResult};
+use crate::{WasmEdgeResult, instance::Instance};
 use wasmedge_sys::{self as sys};
 
 #[cfg(feature = "wasi_nn")]

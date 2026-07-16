@@ -1,6 +1,6 @@
 //! Defines the WebAssembly primitive types.
 
-use crate::{ffi, instance::function::AsFunc, FuncRef, Function};
+use crate::{FuncRef, Function, ffi, instance::function::AsFunc};
 use core::ffi::c_void;
 use std::ffi::CString;
 use wasmedge_types::ValType;

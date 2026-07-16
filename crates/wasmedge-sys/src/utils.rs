@@ -1,8 +1,8 @@
 //! Defines the versioning and logging functions.
 
 use crate::{
-    ffi::{self, WasmEdge_Result, WasmEdge_ResultGetCode, WasmEdge_ResultOK},
     WasmEdgeResult,
+    ffi::{self, WasmEdge_Result, WasmEdge_ResultGetCode, WasmEdge_ResultOK},
 };
 use std::{
     ffi::{CStr, CString},

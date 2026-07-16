@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::{config::Config, Module, WasmEdgeResult};
+use crate::{Module, WasmEdgeResult, config::Config};
 use sys::{AsInstance, Instance};
 use wasmedge_sys as sys;
 

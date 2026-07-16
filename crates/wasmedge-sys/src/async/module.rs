@@ -1,22 +1,23 @@
 use crate::{
-    instance::function::SyncFn, AsInstance, CallingFrame, FuncType, Function, ImportModule,
-    Instance, Memory, WasmEdgeResult, WasmValue,
+    AsInstance, CallingFrame, FuncType, Function, ImportModule, Instance, Memory, WasmEdgeResult,
+    WasmValue, instance::function::SyncFn,
 };
 use async_wasi::snapshots::{
+    WasiCtx,
     common::{
         error::Errno,
         memory::WasmPtr,
         types::{__wasi_ciovec_t, __wasi_size_t},
     },
-    preview_1 as p, WasiCtx,
+    preview_1 as p,
 };
 use std::{
     future::Future,
     ops::{Deref, DerefMut},
 };
 use wasmedge_types::{
-    error::{CoreCommonError, CoreError, CoreExecutionError},
     ValType,
+    error::{CoreCommonError, CoreError, CoreExecutionError},
 };
 
 use super::function::{AsyncFn, AsyncFunction};
@@ -2439,7 +2440,7 @@ impl async_wasi::snapshots::common::memory::Memory for Memory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{r#async::fiber::AsyncState, Executor, Loader, Store, Validator};
+    use crate::{Executor, Loader, Store, Validator, r#async::fiber::AsyncState};
 
     #[tokio::test]
     async fn test_async_wasi_module() -> Result<(), Box<dyn std::error::Error>> {

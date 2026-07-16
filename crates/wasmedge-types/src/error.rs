@@ -194,7 +194,9 @@ pub enum InstanceError {
 /// The error types for WasmEdge plugin.
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 pub enum PluginError {
-    #[error("Failed to create a plugin instance named '{0}'. Make sure that the plugin instance name is correct.")]
+    #[error(
+        "Failed to create a plugin instance named '{0}'. Make sure that the plugin instance name is correct."
+    )]
     Create(String),
     #[error("Not found the plugin named '{0}'. Make sure that the plugin name is correct.")]
     NotFound(String),
@@ -238,7 +240,9 @@ pub enum StoreError {
 pub enum VmError {
     #[error("Fail to create Vm context")]
     Create,
-    #[error("Fail to create Vm context. It is required to provide a `WasiContext` instance for creating a Vm when the `wasi` config option is enabled.")]
+    #[error(
+        "Fail to create Vm context. It is required to provide a `WasiContext` instance for creating a Vm when the `wasi` config option is enabled."
+    )]
     CreateWithWasiContext,
     #[error("Fail to get the type of the target function ({0})")]
     NotFoundFuncType(String),

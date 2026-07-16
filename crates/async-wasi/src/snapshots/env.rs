@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use self::vfs::{virtual_sys::StdioSys, WasiDir, WasiFile, WasiFileSys, WasiNode};
+use self::vfs::{WasiDir, WasiFile, WasiFileSys, WasiNode, virtual_sys::StdioSys};
 
 pub use super::common::{error::Errno, types as wasi_types, vfs};
 

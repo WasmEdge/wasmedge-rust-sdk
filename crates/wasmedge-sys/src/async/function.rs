@@ -1,6 +1,6 @@
 use crate::{
-    ffi, instance::module::InnerInstance, r#async::fiber::AsyncCx, CallingFrame, FuncType,
-    Function, Instance, WasmEdgeResult, WasmValue,
+    CallingFrame, FuncType, Function, Instance, WasmEdgeResult, WasmValue, r#async::fiber::AsyncCx,
+    ffi, instance::module::InnerInstance,
 };
 use std::{future::Future, os::raw::c_void};
 use wasmedge_types::error::CoreError;
@@ -79,7 +79,12 @@ unsafe extern "C" fn wrap_async_fn<Data>(
     // parse result
     match result {
         Ok(returns) => {
-            assert!(returns.len() == return_len, "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}", return_len, returns.len());
+            assert!(
+                returns.len() == return_len,
+                "[wasmedge-sys] check the number of returns of async host function. Expected: {}, actual: {}",
+                return_len,
+                returns.len()
+            );
             for (idx, wasm_value) in returns.into_iter().enumerate() {
                 raw_returns[idx] = wasm_value.as_raw();
             }
@@ -148,13 +153,13 @@ impl AsMut<Function> for AsyncFunction {
 mod tests {
     use super::*;
     use crate::{
-        instance::function::AsFunc,
-        r#async::{fiber::AsyncState, module::AsyncImportObject},
-        types::WasmValue,
         AsInstance, Executor,
+        r#async::{fiber::AsyncState, module::AsyncImportObject},
+        instance::function::AsFunc,
+        types::WasmValue,
     };
 
-    use wasmedge_types::{error::CoreExecutionError, FuncType, ValType};
+    use wasmedge_types::{FuncType, ValType, error::CoreExecutionError};
 
     #[tokio::test]
     async fn test_func_basic() {

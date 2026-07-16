@@ -138,9 +138,9 @@ pub use store::Store;
 pub use vm::Vm;
 
 pub use wasmedge_types::{
-    error, wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType,
-    FuncType, GlobalType, HostRegistration, MemoryType, Mutability, RefType, TableType, ValType,
-    WasmEdgeResult,
+    CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType, FuncType, GlobalType,
+    HostRegistration, MemoryType, Mutability, RefType, TableType, ValType, WasmEdgeResult, error,
+    wat2wasm,
 };
 
 #[cfg(all(feature = "async", target_os = "linux"))]
