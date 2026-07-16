@@ -155,7 +155,7 @@ pub fn random_get<M: Memory>(
     log::trace!("random_get");
 
     let u8_buffer = mem.mut_slice(buf, buf_len as usize)?;
-    getrandom::getrandom(u8_buffer).map_err(|_| Errno(__wasi_errno_t::__WASI_ERRNO_IO))
+    getrandom::fill(u8_buffer).map_err(|_| Errno(__wasi_errno_t::__WASI_ERRNO_IO))
 }
 
 pub fn fd_prestat_get<M: Memory>(

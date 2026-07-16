@@ -3,7 +3,7 @@ use crate::snapshots::{
     common::{types as wasi_types, vfs},
     env::Errno,
 };
-use socket2::{SockAddr, Socket};
+use socket2::{MaybeUninitSlice, SockAddr, Socket};
 use std::{
     ops::DerefMut,
     os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
@@ -13,6 +13,61 @@ use tokio::io::{
     AsyncReadExt, AsyncWriteExt, Interest,
     unix::{AsyncFd, AsyncFdReadyGuard, TryIoError},
 };
+
+/// Reinterprets an initialized `IoSliceMut` buffer view as a `MaybeUninitSlice`
+/// for socket2's vectored recv APIs (`recv_vectored_with_flags`,
+/// `recv_from_vectored_with_flags`). `IoSliceMut` and `MaybeUninitSlice` are
+/// both `repr(transparent)` wrappers around a single platform `iovec` (this
+/// module only builds on unix, so `WSABUF` doesn't apply), so reinterpreting
+/// the slice type is layout-safe; this is the same cast socket2 performs
+/// internally in its own `impl Read for Socket::read_vectored`. The recv
+/// calls promise never to write uninitialised bytes into the buffer, which is
+/// what makes it sound to hand back a `&mut [IoSliceMut]` view afterwards.
+fn as_maybe_uninit_slices<'r, 'a>(
+    bufs: &'r mut [io::IoSliceMut<'a>],
+) -> &'r mut [MaybeUninitSlice<'a>] {
+    unsafe { &mut *(bufs as *mut [io::IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>]) }
+}
+
+/// `SO_BINDTODEVICE`-style "bind this socket to a named network interface",
+/// and the matching getter. socket2 only implements these on the Linux
+/// family (they map straight onto the Linux-only `SO_BINDTODEVICE` sockopt);
+/// macOS/BSD expose interface binding via `IP_BOUND_IF`/`bind_device_by_index`
+/// instead, which takes an interface *index*, not a name, so it isn't a
+/// drop-in replacement here. Other Unix targets get an honest `ENOTSUP`
+/// rather than failing to compile.
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+fn socket_bind_device(s: &Socket, interface: Option<&[u8]>) -> io::Result<()> {
+    s.bind_device(interface)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "fuchsia")))]
+fn socket_bind_device(_s: &Socket, _interface: Option<&[u8]>) -> io::Result<()> {
+    Err(io::Error::from_raw_os_error(libc::ENOTSUP))
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+fn socket_device(s: &Socket) -> io::Result<Option<Vec<u8>>> {
+    s.device()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "fuchsia")))]
+fn socket_device(_s: &Socket) -> io::Result<Option<Vec<u8>>> {
+    Err(io::Error::from_raw_os_error(libc::ENOTSUP))
+}
+
+/// `SO_ACCEPTCONN` ("has `listen(2)` been called on this socket") is gated by
+/// socket2 to Linux/Android/FreeBSD/Fuchsia/AIX/Cygwin; macOS is not in that
+/// list. Same honest-`ENOTSUP` fallback as above.
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+fn socket_is_listener(s: &Socket) -> io::Result<bool> {
+    s.is_listener()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "fuchsia")))]
+fn socket_is_listener(_s: &Socket) -> io::Result<bool> {
+    Err(io::Error::from_raw_os_error(libc::ENOTSUP))
+}
 
 #[derive(Debug)]
 pub(crate) enum AsyncWasiSocketInner {
@@ -53,16 +108,16 @@ impl AsyncWasiSocketInner {
 
     fn bind_device(&mut self, interface: Option<&[u8]>) -> io::Result<()> {
         match self {
-            AsyncWasiSocketInner::PreOpen(Some(s)) => s.bind_device(interface),
-            AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().bind_device(interface),
+            AsyncWasiSocketInner::PreOpen(Some(s)) => socket_bind_device(s, interface),
+            AsyncWasiSocketInner::AsyncFd(s) => socket_bind_device(s.get_ref(), interface),
             AsyncWasiSocketInner::PreOpen(None) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
 
     fn device(&self) -> io::Result<Option<Vec<u8>>> {
         match self {
-            AsyncWasiSocketInner::PreOpen(Some(s)) => s.device(),
-            AsyncWasiSocketInner::AsyncFd(s) => s.get_ref().device(),
+            AsyncWasiSocketInner::PreOpen(Some(s)) => socket_device(s),
+            AsyncWasiSocketInner::AsyncFd(s) => socket_device(s.get_ref()),
             AsyncWasiSocketInner::PreOpen(None) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     }
@@ -311,7 +366,7 @@ impl AsyncWasiSocket {
         };
         inner.set_nonblocking(true)?;
         if !state.bind_device.is_empty() {
-            inner.bind_device(Some(&state.bind_device))?;
+            socket_bind_device(&inner, Some(&state.bind_device))?;
         }
         Ok(AsyncWasiSocket {
             inner: AsyncWasiSocketInner::PreOpen(Some(inner)),
@@ -447,19 +502,13 @@ impl AsyncWasiSocket {
         bufs: &mut [io::IoSliceMut<'a>],
         flags: libc::c_int,
     ) -> io::Result<(usize, bool)> {
-        use socket2::MaybeUninitSlice;
-
         let (n, f) = match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
                 let f = self
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_vectored_with_flags(bufs, flags)
+                        s.recv_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(std::time::Duration::from_millis(50), f)
@@ -470,11 +519,7 @@ impl AsyncWasiSocket {
                 self.inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_vectored_with_flags(bufs, flags)
+                        s.recv_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     })
                     .await?
             }
@@ -483,11 +528,7 @@ impl AsyncWasiSocket {
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_vectored_with_flags(bufs, flags)
+                        s.recv_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(timeout, f)
@@ -504,19 +545,13 @@ impl AsyncWasiSocket {
         bufs: &mut [io::IoSliceMut<'a>],
         flags: libc::c_int,
     ) -> io::Result<(usize, bool, Option<net::SocketAddr>)> {
-        use socket2::MaybeUninitSlice;
-
         let (n, f, addr) = match (self.state.nonblocking, self.state.so_recv_timeout) {
             (true, None) => {
                 let f = self
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_from_vectored_with_flags(bufs, flags)
+                        s.recv_from_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(std::time::Duration::from_millis(50), f)
@@ -528,11 +563,7 @@ impl AsyncWasiSocket {
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_from_vectored_with_flags(bufs, flags)
+                        s.recv_from_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 f.await?
@@ -542,11 +573,7 @@ impl AsyncWasiSocket {
                     .inner
                     .get_async_socket()?
                     .async_io(Interest::READABLE, |s| {
-                        let bufs = unsafe {
-                            &mut *(bufs as *mut [io::IoSliceMut<'_>]
-                                as *mut [MaybeUninitSlice<'_>])
-                        };
-                        s.recv_from_vectored_with_flags(bufs, flags)
+                        s.recv_from_vectored_with_flags(as_maybe_uninit_slices(bufs), flags)
                     });
 
                 tokio::time::timeout(timeout, f)
@@ -608,7 +635,7 @@ impl AsyncWasiSocket {
         addr: net::SocketAddr,
         flags: libc::c_int,
     ) -> io::Result<usize> {
-        use socket2::{MaybeUninitSlice, SockAddr};
+        use socket2::SockAddr;
         let address = SockAddr::from(addr);
 
         let n = match (self.state.nonblocking, self.state.so_send_timeout) {
@@ -691,7 +718,7 @@ impl AsyncWasiSocket {
     }
 
     pub fn get_so_accept_conn(&self) -> io::Result<bool> {
-        self.inner.get_ref()?.is_listener()
+        socket_is_listener(self.inner.get_ref()?)
     }
 
     pub fn sync_conn_state(&mut self) {

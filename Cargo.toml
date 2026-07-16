@@ -28,11 +28,11 @@ bindgen = { version = "0.72", default-features = false }
 bitflags = "2.13.0"
 cfg-if = "1.0.0"
 futures = "0.3"
-getrandom = "0.2"
+getrandom = "0.4"
 libc = "0.2.186"
 log = "0.4"
 slab = "0.4.12"
-socket2 = "0.4.9"
+socket2 = "0.6"
 thiserror = "2"
 tokio = "1.43"
 wasmedge-macro = { path = "crates/wasmedge-macro", version = "0.6" }

@@ -1,6 +1,6 @@
 use std::{
     io::{Read, Seek, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     time::Duration,
 };
 
@@ -570,6 +570,41 @@ fn systimespec(
     }
 }
 
+/// Lexically resolves `.` and `..` components without touching the
+/// filesystem: no symlink resolution, no existence check, just component
+/// bookkeeping. This replaces the `path-absolutize` crate's
+/// `absolutize_virtually`, which did the same lexical walk.
+///
+/// `..` past the root is a no-op rather than an error or a literal leading
+/// `..`: `PathBuf::pop` returns `false` and leaves the path unchanged once
+/// nothing is left to pop, so the component stack can't go negative. That
+/// matches POSIX's `/../x == /x` and is what makes the `starts_with` check in
+/// `get_absolutize_path` below a correct sandbox boundary — popping enough
+/// `..` to leave `real_path` lands the result on one of `real_path`'s
+/// ancestors (or root), which then fails `starts_with(real_path)` and is
+/// rejected, exactly as `absolutize_virtually` rejected it.
+///
+/// `std::path::absolute` (stable since 1.79) was considered as a
+/// dependency-free replacement instead of this helper, but it only prepends
+/// the CWD to make a relative path absolute and resolves `.` — it leaves
+/// `..` completely untouched (e.g. `/a/b/../c` comes back as `/a/b/../c`,
+/// verified against this toolchain's stdlib). Since `..`-popping is exactly
+/// the sandbox-relevant behaviour here, `std::path::absolute` alone cannot
+/// replace `absolutize_virtually`.
+fn normalize(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                result.pop();
+            }
+            Component::CurDir => {}
+            other => result.push(other.as_os_str()),
+        }
+    }
+    result
+}
+
 #[derive(Debug)]
 pub struct DiskDir {
     // absolutize
@@ -580,12 +615,18 @@ pub struct DiskDir {
 
 impl DiskDir {
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        use path_absolutize::*;
-        let new_path = self.real_path.join(sub_path);
-        let absolutize = new_path
-            .absolutize_virtually(&self.real_path)
-            .or(Err(Errno::__WASI_ERRNO_NOENT))?;
-        Ok(absolutize.to_path_buf())
+        // `real_path` is always absolute (rooted via `canonicalize` in
+        // `DiskFileSys::new`, or derived from an already-normalized,
+        // already-checked `real_path` in `path_open`), so `join` here is
+        // always absolute too, regardless of whether `sub_path` is relative
+        // or itself absolute (an absolute `sub_path` replaces `real_path`
+        // entirely per `Path::join`'s semantics — `normalize` then rejects it
+        // below unless it happens to already live under `real_path`).
+        let new_path = normalize(&self.real_path.join(sub_path));
+        if !new_path.starts_with(&self.real_path) {
+            return Err(Errno::__WASI_ERRNO_NOENT);
+        }
+        Ok(new_path)
     }
 }
 
@@ -1052,13 +1093,15 @@ impl DiskFileSys {
         })
     }
 
+    /// See `DiskDir::get_absolutize_path` for the sandboxing semantics this
+    /// preserves (lexical `..`/`.` resolution, rejecting anything that
+    /// normalizes outside of `real_path`).
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        use path_absolutize::*;
-        let new_path = self.real_path.join(sub_path);
-        let absolutize = new_path
-            .absolutize_virtually(&self.real_path)
-            .or(Err(Errno::__WASI_ERRNO_NOENT))?;
-        Ok(absolutize.to_path_buf())
+        let new_path = normalize(&self.real_path.join(sub_path));
+        if !new_path.starts_with(&self.real_path) {
+            return Err(Errno::__WASI_ERRNO_NOENT);
+        }
+        Ok(new_path)
     }
 }
 
@@ -1730,5 +1773,66 @@ mod tests {
             Some(Errno::__WASI_ERRNO_NOENT),
             "expected NOENT for a missing file opened without CREATE"
         );
+    }
+
+    // P4-2: `get_absolutize_path` moved off the `path-absolutize` crate onto a
+    // local `normalize` helper (lexical `.`/`..` resolution) plus an explicit
+    // `starts_with` check. These pin the sandbox-boundary behaviour that
+    // motivated keeping `..`-popping instead of switching to
+    // `std::path::absolute` alone (which does not resolve `..` at all — only
+    // `.` and CWD-joining).
+
+    fn sandbox_dir() -> DiskDir {
+        DiskDir {
+            real_path: PathBuf::from("/sandbox/root"),
+            dir_rights: WASIRights::dir_all(),
+            file_rights: WASIRights::fd_all(),
+        }
+    }
+
+    #[test]
+    fn normalize_resolves_dots_lexically() {
+        assert_eq!(
+            normalize(Path::new("/sandbox/root/a/./b/../c")),
+            PathBuf::from("/sandbox/root/a/c")
+        );
+    }
+
+    #[test]
+    fn normalize_clamps_dot_dot_at_root_instead_of_underflowing() {
+        // Four `..` from a two-component path pop past the root; the extra
+        // two must be absorbed at `/` rather than panicking or producing a
+        // literal leading `..` (mirrors POSIX's `/../x == /x`).
+        assert_eq!(
+            normalize(Path::new("/a/b/../../../../c")),
+            PathBuf::from("/c")
+        );
+        assert_eq!(normalize(Path::new("/..")), PathBuf::from("/"));
+    }
+
+    #[test]
+    fn get_absolutize_path_resolves_dot_dot_within_the_sandbox() {
+        let dir = sandbox_dir();
+        let resolved = dir.get_absolutize_path(&"a/../b").unwrap();
+        assert_eq!(resolved, PathBuf::from("/sandbox/root/b"));
+    }
+
+    #[test]
+    fn get_absolutize_path_rejects_dot_dot_escape_from_the_sandbox() {
+        let dir = sandbox_dir();
+        // Enough `..` to pop past `real_path` and land outside it must be
+        // rejected (NOENT), not silently clamped back inside the sandbox and
+        // not allowed to resolve against the real host root.
+        let err = dir
+            .get_absolutize_path(&"../../../../etc/passwd")
+            .unwrap_err();
+        assert_eq!(err, Errno::__WASI_ERRNO_NOENT);
+    }
+
+    #[test]
+    fn get_absolutize_path_rejects_absolute_escape() {
+        let dir = sandbox_dir();
+        let err = dir.get_absolutize_path(&"/etc/passwd").unwrap_err();
+        assert_eq!(err, Errno::__WASI_ERRNO_NOENT);
     }
 }
