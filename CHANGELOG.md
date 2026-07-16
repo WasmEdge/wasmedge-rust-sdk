@@ -29,6 +29,10 @@ deleting them, for historical accuracy.
   needed this trait to name their `HashMap<String, &mut dyn SyncInst>` instance maps
   but previously had to reach into the `#[doc(hidden)]` `vm` module to name it; the
   old path still works.
+- `wasmedge-types`: non-panicking discriminant conversions — `try_from_u32`/
+  `try_from_i32` on `Mutability`, `CompilerOptimizationLevel`, and
+  `CompilerOutputFormat`, returning the new `error::TryFromIntError` where the
+  existing `From<u32>`/`From<i32>` impls panic on unknown values.
 
 ### Changed
 
@@ -59,7 +63,13 @@ deleting them, for historical accuracy.
   signature is gone). Handing out an aliasable `&mut [T]` from a shared `&self`
   was unsound; the receiver now matches the sibling `get_ref_mut`. No caller in
   this workspace passed a shared borrow, and no external caller was found. Rides
-  the `wasmedge-sys` 0.21.0 major bump.
+  the `wasmedge-sys` 0.21.0 major bump. The `Memory` accessors (`get_ref`,
+  `slice`, `get_ref_mut`, `mut_slice`) also now return `None` for offsets or
+  byte sizes that don't fit in `u32` instead of silently truncating them before
+  the bounds check (a >= 4 GiB request could previously pass a 0-byte bounds
+  check yet hand back a slice of the full requested length), and the mutable
+  accessors derive their pointer from the C API's mutable getter instead of the
+  const one.
 - `wasmedge-sys`: the raw bindgen FFI surface under `wasmedge_sys::ffi` tracks the
   WasmEdge C API, which advanced from 0.14.1 (the era of the last published
   `wasmedge-sys` 0.19.4) to 0.17.1 in this release train. Notably
@@ -81,7 +91,9 @@ deleting them, for historical accuracy.
   `wasmedge-sys` >= 0.19, so they have had zero working callers since 0.14.0.
   Write the host function directly and register it with
   `ImportObjectBuilder::with_func` (or, at the `wasmedge-sys` layer,
-  `Function::create_sync_func` + `ImportModule::add_func`).
+  `Function::create_sync_func` + `ImportModule::add_func` for sync host
+  functions, `AsyncFunction::create_async_func` + `AsyncImportObject::add_async_func`
+  for async ones).
 
 ### Fixed
 
@@ -97,8 +109,11 @@ called out below):
   - `path_open` returned `EEXIST` instead of `NOENT` for a missing path when
     `O_CREAT` was not set.
   - Socket timeouts (`tv_usec`) were interpreted as nanoseconds instead of
-    microseconds, so any timeout at or above ~1 second would panic constructing
-    the `Duration`.
+    microseconds, silently shrinking the sub-second part of a timeout ~1000x
+    (e.g. 1.5s became 1.0005s; a panic was only reachable via a negative
+    `tv_sec`). Timeouts are now built from microseconds, and a negative
+    `tv_sec`/`tv_usec` is rejected with `EINVAL` instead of being
+    sign-extended into an effectively infinite timeout.
   - `sock_getaddrinfo` wrote into `sa_data` without checking its length, a
     guest-triggerable panic.
   - Socket registration used `mem::zeroed::<Socket>()` to fake ownership during a
@@ -109,6 +124,14 @@ called out below):
   - As a side effect of the `socket2` 0.4 -> 0.6 upgrade above, `async-wasi` (and
     therefore the whole workspace) now **compiles natively on macOS** — it
     previously failed with an `E0599` from `socket2` 0.4.10's narrower API.
+- `wasmedge-sys` (async WASI shims, guest-visible): the `fd_filestat_set_size`
+  shim delegated to `fd_filestat_get`, writing a filestat struct into guest
+  memory at the address given by the requested size's low 32 bits and never
+  resizing the file; it now forwards to the real implementation. Its import
+  signature is also now the canonical `(i32, i64)` — the previous `(i32, i32)`
+  registration made guests importing the standard signature (e.g. anything using
+  wasi-libc's `ftruncate`) fail at instantiation with an incompatible-import
+  error.
 - `wasmedge-sys` (memory safety, all internal):
   - `Statistics` double-freed when cloned (`Drop` was implemented on the wrong
     type) and `Executor::create` could leave a dangling statistics pointer.

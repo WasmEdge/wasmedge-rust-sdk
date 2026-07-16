@@ -118,7 +118,8 @@ before the things that depend on them:
 3. `async-wasi` (no workspace-internal dependencies; only linux-gated consumers
    depend on it)
 4. `wasmedge-sys` (depends on `wasmedge-types`; optionally `async-wasi`)
-5. `wasmedge-sdk` (depends on all four of the above)
+5. `wasmedge-sdk` (depends on `wasmedge-sys` and `wasmedge-types`; on Linux
+   with the `async` feature, also `async-wasi`)
 
 For each crate, in order:
 

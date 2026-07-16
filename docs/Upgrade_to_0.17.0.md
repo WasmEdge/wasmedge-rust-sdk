@@ -58,8 +58,11 @@ externally visible effect (or the SDK never hit the code path); one changes an
 - `path_open` returned `EEXIST` instead of `NOENT` for a missing path when
   `O_CREAT` was not set.
 - Socket timeouts (`tv_usec`) were interpreted as nanoseconds instead of
-  microseconds, so any timeout at or above roughly one second would panic
-  while constructing the `Duration`.
+  microseconds, silently shrinking the sub-second part of a timeout ~1000x
+  (e.g. 1.5s became 1.0005s; a panic was only reachable via a negative
+  `tv_sec`). Timeouts are now built from microseconds, and a negative
+  `tv_sec`/`tv_usec` is rejected with `EINVAL` instead of being sign-extended
+  into an effectively infinite timeout.
 - `sock_getaddrinfo` wrote into a fixed-size `sa_data` buffer without checking
   its length — a guest-triggerable panic.
 - Socket registration briefly faked ownership of a `Socket` via
@@ -94,6 +97,13 @@ externally visible effect (or the SDK never hit the code path); one changes an
   zero-sized (via `mem::zeroed::<F>()`) without verifying it; it's now guarded
   by a `const { assert!(size_of::<F>() == 0) }` that fails to compile instead
   of silently miscompiling if that assumption is ever violated.
+- The async WASI `fd_filestat_set_size` shim delegated to `fd_filestat_get`,
+  writing a filestat struct into guest memory at the address given by the
+  requested size's low 32 bits and never resizing the file; it now forwards to
+  the real implementation. Its wasm import signature is also now the canonical
+  `(i32, i64)` — the previous `(i32, i32)` registration made guests importing
+  the standard signature (e.g. anything using wasi-libc's `ftruncate`) fail at
+  instantiation with an incompatible-import error.
 
 ### `wasmedge-types`
 
@@ -156,7 +166,12 @@ against the last published release depends on the removed or changed item.
   `wasmedge-sdk` does not call this method, no in-workspace caller passed a shared
   borrow, and a crates.io-wide search found no external callers. This is the one
   change `cargo-semver-checks` does flag — a `method_receiver_ref_became_mut`
-  finding against the `wasmedge-sys` 0.19.4 baseline.
+  finding against the `wasmedge-sys` 0.19.4 baseline. Relatedly, the `Memory`
+  accessors (`get_ref`, `slice`, `get_ref_mut`, `mut_slice`) now return `None`
+  for offsets or byte sizes that don't fit in `u32` instead of silently
+  truncating them before the bounds check — previously a >= 4 GiB request could
+  pass a 0-byte bounds check yet hand back a slice of the full requested
+  length.
 
 ## The FFI surface tracks the WasmEdge C API
 
