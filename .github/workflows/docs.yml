@@ -15,9 +15,10 @@ permissions:
 
 jobs:
   # The "stable" docset: whole-workspace docs built with the same feature
-  # set and toolchain as guardrails.yml's `docs` lint job. `standalone`
-  # makes wasmedge-sys download a prebuilt libwasmedge archive in build.rs,
-  # so no WasmEdge install step is needed here.
+  # set, toolchain, and rustdoc flags as guardrails.yml's `docs` lint job,
+  # so a deploy never publishes docs that the lint gate would reject.
+  # `standalone` makes wasmedge-sys download a prebuilt libwasmedge archive
+  # in build.rs, so no WasmEdge install step is needed here.
   build-stable-docs:
     name: Build stable docs
     runs-on: ubuntu-24.04
@@ -35,6 +36,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: cargo doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --workspace --no-deps --features standalone,aot,ffi
 
       - name: Upload stable docs
