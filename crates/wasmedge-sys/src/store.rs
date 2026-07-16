@@ -43,10 +43,7 @@ impl Store {
         let len_mod_names = self.module_len();
         if len_mod_names > 0 {
             let mut mod_names = Vec::with_capacity(len_mod_names as usize);
-            // SAFETY: `mod_names` is reserved with capacity `len_mod_names` — the exact
-            // count just queried via `module_len` (`WasmEdge_StoreListModuleLength`) — and
-            // `WasmEdge_StoreListModule` fills that many POD `WasmEdge_String`s, so all
-            // `len_mod_names` slots are initialized before `set_len`.
+            // SAFETY: `WasmEdge_StoreListModule` fills exactly `len_mod_names` elements before `set_len`.
             unsafe {
                 ffi::WasmEdge_StoreListModule(self.inner.0, mod_names.as_mut_ptr(), len_mod_names);
                 mod_names.set_len(len_mod_names as usize);
@@ -116,13 +113,6 @@ impl Drop for Store {
 
 #[derive(Debug)]
 pub(crate) struct InnerStore(pub(crate) *mut ffi::WasmEdge_StoreContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_StoreContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half — wasmedge_execution.h documents
-// `WasmEdge_StoreFindModule`, `WasmEdge_StoreListModuleLength`, and
-// `WasmEdge_StoreListModule` (this crate's only `&self` C calls) as
-// thread-safe, but mutation only happens through `&mut Store` via the
-// `WasmEdge_ExecutorRegister*` family, which carries no such annotation —
-// so `Sync` remains an unverified, inherited invariant for that path.
+// SAFETY: &self reads are documented thread-safe (wasmedge_execution.h); the &mut-only mutation path has no such annotation — Sync there is assumed, pre-existing.
 unsafe impl Send for InnerStore {}
 unsafe impl Sync for InnerStore {}

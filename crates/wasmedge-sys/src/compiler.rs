@@ -106,13 +106,8 @@ impl Compiler {
         let wasm_bytes = wasm_bytes.as_ref();
         let out_path = utils::path_to_cstring(aot_file.as_ref())?;
 
-        // SAFETY: `WasmEdge_CompilerCompileFromBuffer` reads `wasm_bytes.len()` bytes
-        // from the supplied `const uint8_t *` buffer without taking ownership; passing
-        // the caller's slice pointer directly is sound and avoids the intermediate
-        // `malloc`/copy that leaked the buffer on the `?` error path (and formed a
-        // `malloc(0)` + `from_raw_parts_mut` UB edge for empty input). `wasm_bytes`
-        // stays borrowed for the whole call, and an empty slice yields a valid,
-        // non-null, aligned pointer with length 0.
+        // SAFETY: `WasmEdge_CompilerCompileFromBuffer` borrows `wasm_bytes` for the call and takes
+        // no ownership; an empty slice is a valid non-null, aligned, len-0 pointer.
         unsafe {
             check(ffi::WasmEdge_CompilerCompileFromBuffer(
                 self.inner.0,
@@ -133,10 +128,7 @@ impl Compiler {
 
 #[derive(Debug)]
 pub(crate) struct InnerCompiler(pub(crate) *mut ffi::WasmEdge_CompilerContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_CompilerContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
-// no thread-safety for this context, so it is an unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerCompiler {}
 unsafe impl Sync for InnerCompiler {}
 
@@ -158,9 +150,7 @@ mod tests {
         wat2wasm,
     };
 
-    // Empty input exercises the direct-slice-pointer `compile_from_bytes` path
-    // (length 0, non-null aligned pointer). It must return Err sanely rather than
-    // hitting the old `malloc(0)` UB edge or leaking the buffer on the error path.
+    // Empty input must return Err without hitting a malloc(0)/UB edge or leaking.
     #[test]
     #[allow(clippy::assertions_on_result_states)]
     fn test_compile_from_bytes_empty_is_err_no_ub() {

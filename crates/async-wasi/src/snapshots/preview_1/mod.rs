@@ -679,10 +679,7 @@ mod tests {
         ctx
     }
 
-    // P5b-1: `fd_prestat_dir_name` used to copy the preopen name using the
-    // guest-controlled `path_max_len`. When `path_max_len > name.len()` the slice
-    // `path_bytes[0..path_max_len]` read out of bounds and panicked. The copy must
-    // be clamped to the name length.
+    // Clamp the copy to the name length; a `path_max_len` larger than the name would read out of bounds.
     #[test]
     fn fd_prestat_dir_name_no_oob_when_buffer_larger_than_name() {
         let guest_path = "/preopen"; // 8 bytes

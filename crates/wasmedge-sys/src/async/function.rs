@@ -31,16 +31,12 @@ unsafe extern "C" fn wrap_async_fn<Data>(
 ) -> ffi::WasmEdge_Result {
     let mut frame = CallingFrame::create(call_frame_ctx);
     // let executor_ctx = ffi::WasmEdge_CallingFrameGetExecutor(call_frame_ctx);
-    // SAFETY: `call_frame_ctx` is the calling-frame handle the WasmEdge runtime
-    // passes into this async host-function trampoline; it stays valid for the
-    // duration of the call, so reading the module instance from it is sound.
+    // SAFETY: the runtime keeps `call_frame_ctx` valid for the call's duration.
     let inst_ctx = unsafe { ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx) };
     let mut inst = std::mem::ManuallyDrop::new(AsyncInstance(Instance {
         inner: InnerInstance(inst_ctx as _),
     }));
-    // SAFETY: `data` is the `*mut Data` host-context pointer registered with this
-    // function via `create_with_custom_wrapper`; the runtime hands it back
-    // unchanged and guarantees it outlives and is uniquely borrowed for the call.
+    // SAFETY: the runtime hands back the registered `data` pointer, uniquely borrowed for the call.
     let data = unsafe { &mut *(data as *mut Data) };
 
     // arguments
@@ -61,9 +57,7 @@ unsafe extern "C" fn wrap_async_fn<Data>(
     };
 
     // get and call host function
-    // SAFETY: `key_ptr` was produced by casting an `AsyncFn` to a raw pointer at
-    // registration time; transmuting it back to the same type recovers the
-    // original, still-valid function pointer.
+    // SAFETY: `key_ptr` round-trips the `AsyncFn` cast made at registration.
     let real_fn: AsyncFn<'_, '_, '_, '_, Data> = unsafe { std::mem::transmute(key_ptr) };
 
     let async_cx = AsyncCx::new();

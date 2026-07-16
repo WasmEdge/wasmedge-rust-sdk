@@ -67,10 +67,7 @@ impl Drop for Validator {
 
 #[derive(Debug)]
 pub(crate) struct InnerValidator(pub(crate) *mut ffi::WasmEdge_ValidatorContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_ValidatorContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
-// no thread-safety for this context, so it is an unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerValidator {}
 unsafe impl Sync for InnerValidator {}
 

@@ -797,9 +797,7 @@ pub mod addrinfo {
             wasi_addr.family = AddressFamily::Inet4;
             let sa_data_ptr: WasmPtr<u8> = (wasi_addr.sa_data as usize).into();
             let sa_data_len = wasi_addr.sa_data_len;
-            // The IPv4 result writes a 2-byte port and a 4-byte address into
-            // sa_data[0..6]; reject a too-small guest buffer instead of panicking
-            // on the out-of-range slice writes below.
+            // The IPv4 result writes port+address into sa_data[0..6]; reject a too-small guest buffer instead of panicking.
             if (sa_data_len as usize) < 6 {
                 return Err(Errno::__WASI_ERRNO_INVAL);
             }
@@ -832,9 +830,7 @@ mod tests {
         net::async_tokio::AsyncWasiSocket::open(state).unwrap()
     }
 
-    // P5b-4 (get side): sock_getsockopt wrote `Duration::subsec_nanos()` into the
-    // microseconds field `tv_usec`. A 1.5s timeout must be reported as
-    // tv_sec=1, tv_usec=500_000 (microseconds), not tv_usec=500_000_000 (nanos).
+    // tv_usec is microseconds: a 1.5s timeout is tv_sec=1, tv_usec=500_000 (not 500_000_000 nanos).
     #[test]
     fn sock_getsockopt_rcvtimeo_reports_microseconds() {
         let mut ctx = WasiCtx::new();
@@ -870,9 +866,7 @@ mod tests {
         assert_eq!(i64::from_le(tv.tv_usec), 500_000);
     }
 
-    // P5b-4 (set side): sock_setsockopt fed `tv_usec` (microseconds) into
-    // `Duration::new()`'s nanoseconds argument. tv_sec=1, tv_usec=500_000 must
-    // yield a 1.5s timeout, not 1.0005s.
+    // tv_usec (microseconds) into `Duration`: tv_sec=1, tv_usec=500_000 must yield 1.5s, not 1.0005s.
     #[test]
     fn sock_setsockopt_rcvtimeo_interprets_microseconds() {
         let mut ctx = WasiCtx::new();
@@ -904,9 +898,7 @@ mod tests {
         assert_eq!(stored, Some(Duration::from_micros(1_500_000)));
     }
 
-    // P5b-3: sock_getaddrinfo writes a 2-byte port + 4-byte IPv4 address into
-    // sa_data[0..6] without validating the guest-controlled sa_data_len, so
-    // sa_data_len < 6 panicked on the out-of-range slice. It must return INVAL.
+    // sock_getaddrinfo writes port+IPv4 into sa_data[0..6]; an unvalidated sa_data_len < 6 must return INVAL, not panic.
     #[test]
     fn sock_getaddrinfo_rejects_short_sa_data() {
         use addrinfo::{AddressFamily as AddrFamily, WasiAddrinfo, WasiSockaddr, sock_getaddrinfo};

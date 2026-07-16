@@ -77,14 +77,6 @@ pub(crate) enum AsyncWasiSocketInner {
 
 impl AsyncWasiSocketInner {
     fn register(&mut self) -> io::Result<()> {
-        // Take the socket out of the `PreOpen` slot (leaving `None`) and move it
-        // into an `AsyncFd`. Using an `Option` slot replaces the previous
-        // `mem::zeroed::<Socket>()` + double `mem::swap` + `mem::forget` dance,
-        // which fabricated an all-zero `Socket` (undefined behaviour once
-        // `Socket` wraps an `OwnedFd`). Timing and error behaviour are preserved:
-        // the state becomes `AsyncFd` only after `AsyncFd::new` succeeds; on
-        // failure the same error propagates and the slot is left `None` instead
-        // of holding a zeroed socket. An already-registered socket is a no-op.
         let socket = match self {
             AsyncWasiSocketInner::PreOpen(slot) => match slot.take() {
                 Some(socket) => socket,
@@ -216,19 +208,14 @@ pub(crate) struct SocketWritable {
 }
 impl SocketWritable {
     pub(crate) async fn writable(&self) {
-        // Consume one unit of the small write budget; while budget remains
-        // (pre-decrement value >= 0) the caller proceeds immediately.
+        // Consume one write-budget unit; proceed while the pre-decrement value stays >= 0.
         let b = self
             .count
             .fetch_sub(1, std::sync::atomic::Ordering::Acquire);
         if b >= 0 {
             return;
         }
-        // Budget exhausted: wait for set_writable() to signal writability, capped
-        // at 10s as a safety net. The previous SocketWritableFuture registered no
-        // waker and could only be released by the (discarded) timeout, so this
-        // path stalled for the full 10s. Notify delivers a real wakeup, and the
-        // timeout result is inspected instead of discarded.
+        // Budget exhausted: wait for `set_writable()` (10s cap) — `Notify` delivers a real wakeup, and the timeout result is inspected.
         if tokio::time::timeout(Duration::from_secs(10), self.notify.notified())
             .await
             .is_err()
@@ -793,11 +780,7 @@ mod tests {
         AsyncWasiSocket::open(state).unwrap()
     }
 
-    // P5b-6: `AsyncWasiSocketInner::register()` used to move the socket out with
-    // `mem::zeroed::<Socket>()` + double `mem::swap` + `mem::forget`. This drives
-    // the rewritten `Option`-based state machine end to end: `listen` (server)
-    // and `connect` (client) both call register(), moving PreOpen -> AsyncFd, and
-    // the resulting loopback connection must carry data.
+    // Drive the `Option`-based register() state machine end to end: `listen` and `connect` both move PreOpen -> AsyncFd, and the loopback must carry data.
     #[tokio::test]
     async fn register_tcp_loopback_roundtrip() {
         let loopback = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
@@ -805,8 +788,7 @@ mod tests {
         let mut server = tcp_socket();
         server.bind(loopback).unwrap();
         server.listen(128).unwrap(); // register() on the server side
-        // bind() caches the requested addr (port 0), so read the real
-        // OS-assigned port from the now-registered socket.
+        // `bind()` cached port 0, so read the real OS-assigned port from the registered socket.
         let addr = server
             .inner
             .get_ref()
@@ -819,7 +801,7 @@ mod tests {
 
         let mut client = tcp_socket();
         let (accepted, connected) = tokio::join!(server.accept(), client.connect(addr));
-        let accepted = accepted.unwrap(); // server-side accepted socket
+        let accepted = accepted.unwrap();
         connected.unwrap(); // register() on the client side
 
         client
@@ -835,18 +817,13 @@ mod tests {
         assert_eq!(&buf[..n], b"ping");
     }
 
-    // P5b-7: once the write budget is exhausted, SocketWritable::writable()
-    // parked on a future that registered no waker, so set_writable() could not
-    // release it and the caller stalled until the discarded 10s timeout. With
-    // tokio::sync::Notify the wakeup is real. Virtual time makes this
-    // deterministic: if set_writable() failed to wake the waiter, the only escape
-    // would be the 10s timeout, so the 1s bound below would elapse first.
+    // Virtual time makes this deterministic: if `set_writable()` failed to wake the waiter, only the 10s timeout would release it, so the 1s bound below would elapse first.
     #[tokio::test(start_paused = true)]
     async fn set_writable_wakes_blocked_writable() {
         use std::sync::Arc;
 
         let sw = Arc::new(SocketWritable::default());
-        // Drain the initial budget of 5 (pre-decrement values 5,4,3,2,1,0).
+        // Drain the initial write budget of 5.
         for _ in 0..6 {
             sw.writable().await;
         }

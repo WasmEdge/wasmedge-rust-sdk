@@ -125,14 +125,8 @@ impl Loader {
         let bytes = bytes.as_ref();
         let mut mod_ctx: *mut ffi::WasmEdge_ASTModuleContext = std::ptr::null_mut();
 
-        // SAFETY: `WasmEdge_LoaderParseFromBuffer` reads `bytes.len()` bytes from the
-        // supplied `const uint8_t *` buffer and does not take ownership of it — the
-        // resulting AST module is a fresh allocation the caller owns. Passing the
-        // caller's slice pointer directly is therefore sound and needs no intermediate
-        // `malloc`/copy (which leaked the buffer on the `?` error path and formed a
-        // `malloc(0)` + `from_raw_parts_mut` UB edge for empty input). `bytes` stays
-        // borrowed for the whole call, and an empty slice yields a valid, non-null,
-        // aligned pointer with length 0.
+        // SAFETY: `WasmEdge_LoaderParseFromBuffer` borrows `bytes` for the call and takes no
+        // ownership; an empty slice is a valid non-null, aligned, len-0 pointer.
         unsafe {
             check(ffi::WasmEdge_LoaderParseFromBuffer(
                 self.inner.0,
@@ -160,10 +154,7 @@ impl Drop for Loader {
 
 #[derive(Debug)]
 pub(crate) struct InnerLoader(pub(crate) *mut ffi::WasmEdge_LoaderContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_LoaderContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
-// no thread-safety for this context, so it is an unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerLoader {}
 unsafe impl Sync for InnerLoader {}
 
@@ -177,20 +168,15 @@ mod tests {
     };
     use wasmedge_types::error::{CoreError, CoreLoadError, WasmEdgeError};
 
-    // Regression guard for the direct-slice-pointer `from_bytes`: empty input must
-    // not hit the old `malloc(0)` + `from_raw_parts_mut` UB edge, and the malformed
-    // path must return Err without the old buffer leak (the `?` used to skip
-    // `libc::free`). Both cases must return Err sanely without crashing.
+    // Empty input must not hit a malloc(0)/UB edge; malformed input must return Err without leaking.
     #[test]
     #[allow(clippy::assertions_on_result_states)]
     fn test_from_bytes_empty_and_error_paths_no_ub() {
         let loader = Loader::create(None).unwrap();
 
-        // Empty slice: valid non-null aligned pointer, length 0.
         let result = loader.from_bytes([]);
         assert!(result.is_err());
 
-        // Malformed wasm exercises the error path (previously leaked the buffer).
         let result = loader.from_bytes(b"(module)");
         assert!(result.is_err());
     }

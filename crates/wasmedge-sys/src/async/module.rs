@@ -74,8 +74,7 @@ impl<T: Send> AsMut<ImportModule<T>> for AsyncImportObject<T> {
 
 impl<T: Send> AsInstance for AsyncImportObject<T> {
     unsafe fn as_ptr(&self) -> *const crate::ffi::WasmEdge_ModuleInstanceContext {
-        // SAFETY: delegates to the inner instance's `as_ptr`; the same contract
-        // (returned pointer must not outlive `self`) is propagated unchanged.
+        // SAFETY: delegates to the inner instance's `as_ptr`; returned pointer must not outlive `self`.
         unsafe { self.0.as_ptr() }
     }
 }
@@ -134,7 +133,7 @@ impl AsyncWasiModule {
     ///
     /// # Arguments
     ///
-    /// * `wasi_ctx` - The [WasiCtx](async_wasi::snapshots::WasiCtx) instance.
+    /// * `wasi_ctx` - The [WasiCtx] instance.
     ///
     /// # Error
     ///
@@ -195,13 +194,8 @@ impl AsyncWasiModule {
 
 // ============== wasi host functions ==============
 
-// Generates the boilerplate for the textually-uniform synchronous WASI shims:
-// grab linear memory 0, destructure the expected argument count, and forward to
-// the matching `async_wasi::snapshots::preview_1` implementation via
-// `to_wasm_return`. Each entry supplies only the per-shim body (argument
-// decoding + the call); the surrounding skeleton is identical for all of them.
-// The irregular shims (async ones, `poll_oneoff`, `sock_getaddrinfo`,
-// `proc_exit`, the NOSYS stubs, ...) stay hand-written below.
+// Generates the uniform synchronous WASI shims (grab memory 0, decode args, forward to
+// `async_wasi::snapshots::preview_1`). Irregular shims stay hand-written below.
 macro_rules! wasi_impl_sync_shims {
     ($(
         fn $name:ident($data:ident, $mem:ident, [$($arg:ident),+ $(,)?], $n:literal) $body:block
@@ -1359,14 +1353,9 @@ where
     'inst: 'fut,
     'frame: 'fut,
 {
-    // `F` is only ever a bare `async fn` item type here: `wrap_future` (this
-    // function's sole producer) is always handed a plain `async fn`, whose type is
-    // zero-sized and captures no state. Assert that statically so that a future
-    // non-ZST `F` fails to compile instead of silently fabricating an invalid value.
+    // `wrap_future` only ever gets a bare `async fn` (a ZST); assert that so a non-ZST `F` fails to compile instead of fabricating an invalid value.
     const { assert!(std::mem::size_of::<F>() == 0) };
-    // SAFETY: `F` is asserted zero-sized above, so it has exactly one inhabitant and
-    // an all-zero bit pattern is that valid value. Reconstructing it therefore yields
-    // the same stateless callable the caller of `wrap_future` handed over.
+    // SAFETY: `F` is asserted zero-sized above, so its all-zero bit pattern is its one valid value.
     let f: F = unsafe { std::mem::zeroed() };
     Box::new(f(data, inst, frame, args))
 }

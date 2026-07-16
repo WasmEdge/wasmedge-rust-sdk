@@ -14,22 +14,6 @@
 // of them does not compile against current crates. See each macro's doc
 // comment for the modern replacement. They are marked `#[deprecated]` as of
 // `wasmedge-macro` 0.7.0.
-//
-// Deprecation mechanics verified: rustc emits deprecated-attribute warnings
-// at attribute use sites.
-//
-// Verified empirically (rustc/cargo 1.97.0) with a throwaway two-crate probe:
-// a proc-macro crate exporting `#[deprecated] #[proc_macro_attribute] fn`,
-// consumed via `#[that_attr]` on an item in a separate downstream crate.
-// `cargo build` on the consumer emitted
-// `warning: use of deprecated macro '<name>': <note>` pointing at the
-// attribute's use site in the *consumer's* source — not just inside the
-// macro-defining crate. This held with `#[deprecated]` placed both before
-// and after `#[proc_macro_attribute]` on the function. A non-deprecated
-// control macro produced no warning, isolating the effect to `#[deprecated]`
-// itself. Conclusion: the standard `#[deprecated]` mechanism works as
-// expected for `#[proc_macro_attribute]` fns — no ui-test fallback is
-// needed.
 // -----------------------------------------------------------------------
 
 use proc_macro::TokenStream;

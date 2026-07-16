@@ -34,10 +34,7 @@ impl Module {
     pub fn imports(&self) -> Vec<ImportType<'_>> {
         let size = self.count_of_imports();
         let mut returns = Vec::with_capacity(size as usize);
-        // SAFETY: `returns` is reserved with capacity `size` — the exact count just
-        // queried via `count_of_imports` (`WasmEdge_ASTModuleListImportsLength`) — and
-        // `WasmEdge_ASTModuleListImports` fills that many POD import-type pointers, so
-        // all `size` slots are initialized before `set_len(size)`.
+        // SAFETY: `WasmEdge_ASTModuleListImports` fills exactly `size` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_ASTModuleListImports(self.inner.0, returns.as_mut_ptr(), size);
             returns.set_len(size as usize);
@@ -61,10 +58,7 @@ impl Module {
     pub fn export(&self) -> Vec<ExportType<'_>> {
         let size = self.count_of_exports();
         let mut returns = Vec::with_capacity(size as usize);
-        // SAFETY: `returns` is reserved with capacity `size` — the exact count just
-        // queried via `count_of_exports` (`WasmEdge_ASTModuleListExportsLength`) — and
-        // `WasmEdge_ASTModuleListExports` fills that many POD export-type pointers, so
-        // all `size` slots are initialized before `set_len(size)`.
+        // SAFETY: `WasmEdge_ASTModuleListExports` fills exactly `size` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_ASTModuleListExports(self.inner.0, returns.as_mut_ptr(), size);
             returns.set_len(size as usize);
@@ -88,11 +82,7 @@ impl Module {
 
 #[derive(Debug)]
 pub(crate) struct InnerModule(pub(crate) *mut ffi::WasmEdge_ASTModuleContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_ASTModuleContext`, a
-// compiled module that is only read after loading. `Send` is sound: a move transfers
-// sole ownership of a thread-agnostic handle. `Sync` is the assumed half (concurrent
-// `&self` C calls) — WasmEdge documents no thread-safety for this context, so it is an
-// unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerModule {}
 unsafe impl Sync for InnerModule {}
 
@@ -127,11 +117,7 @@ impl ImportType<'_> {
                         "Fail to get the function type".into(),
                     ))))
                 } else {
-                    // SAFETY (both `set_len`s below): each `Vec` is reserved with the
-                    // exact length just queried (`WasmEdge_FunctionTypeGetParametersLength`
-                    // / `...GetReturnsLength`); the paired `GetParameters`/`GetReturns` call
-                    // fills exactly that many POD `WasmEdge_ValType`s, so every slot is
-                    // initialized before `set_len`.
+                    // SAFETY: `GetParameters`/`GetReturns` fill exactly `len` elements before `set_len`.
                     // get types of the arguments
                     let args_len = unsafe {
                         ffi::WasmEdge_FunctionTypeGetParametersLength(ctx_func_ty) as usize
@@ -260,10 +246,7 @@ impl ImportType<'_> {
 
 #[derive(Debug)]
 pub(crate) struct InnerImportType(pub(crate) *const ffi::WasmEdge_ImportTypeContext);
-// SAFETY: (assumed, pre-existing) borrows an immutable `*const WasmEdge_ImportTypeContext`
-// owned by a parent `Module` and read only through `Get*` getters — no interior mutation —
-// so `Send`/`Sync` are sound in practice; the residual "concurrent C reads are safe"
-// guarantee is undocumented, so this stays an assumption inherited from the original bindings.
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerImportType {}
 unsafe impl Sync for InnerImportType {}
 
@@ -289,11 +272,7 @@ impl ExportType<'_> {
                         "Fail to get the function type".into(),
                     ))))
                 } else {
-                    // SAFETY (both `set_len`s below): each `Vec` is reserved with the
-                    // exact length just queried (`WasmEdge_FunctionTypeGetParametersLength`
-                    // / `...GetReturnsLength`); the paired `GetParameters`/`GetReturns` call
-                    // fills exactly that many POD `WasmEdge_ValType`s, so every slot is
-                    // initialized before `set_len`.
+                    // SAFETY: `GetParameters`/`GetReturns` fill exactly `len` elements before `set_len`.
                     // get types of the arguments
                     let args_len = unsafe {
                         ffi::WasmEdge_FunctionTypeGetParametersLength(ctx_func_ty) as usize
@@ -406,10 +385,7 @@ impl ExportType<'_> {
 
 #[derive(Debug)]
 pub(crate) struct InnerExportType(pub(crate) *const ffi::WasmEdge_ExportTypeContext);
-// SAFETY: (assumed, pre-existing) borrows an immutable `*const WasmEdge_ExportTypeContext`
-// owned by a parent `Module` and read only through `Get*` getters — no interior mutation —
-// so `Send`/`Sync` are sound in practice; the residual "concurrent C reads are safe"
-// guarantee is undocumented, so this stays an assumption inherited from the original bindings.
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerExportType {}
 unsafe impl Sync for InnerExportType {}
 

@@ -30,16 +30,9 @@ scoped_tls::scoped_thread_local!(pub(crate) static JMP_BUF: JmpState);
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
-    // SAFETY: this is the POSIX signal handler installed for `timeout_signo()`.
-    // `info` is the `siginfo_t*` the kernel passes in; dereferencing it and
-    // reading `si_value()` is valid inside the handler, and `*value` reads back
-    // the `pthread_t` the timer was armed with (stored in `sival_ptr`).
-    // `pthread_self`, `siglongjmp` (into the `JMP_BUF` set by
-    // `TimeoutFiberFuture::poll`) and `pthread_sigqueue` are the primitives this
-    // timeout mechanism relies on from within a signal handler. Caveat:
-    // `pthread_sigqueue` is a GNU (glibc) extension, not POSIX — POSIX lists only
-    // `sigqueue` as async-signal-safe, so calling it here relies on glibc
-    // implementing it as signal-safe by analogy, not on a standard guarantee.
+    // SAFETY: POSIX signal handler for `timeout_signo()`; reads `si_value()` (the armed `pthread_t`) and calls
+    // `pthread_self`/`siglongjmp`/`pthread_sigqueue`. Caveat: `pthread_sigqueue` is a glibc extension, not
+    // POSIX-guaranteed async-signal-safe.
     unsafe {
         if let Some(info) = info.as_mut() {
             let si_value = info.si_value();
@@ -61,9 +54,7 @@ unsafe extern "C" fn sync_timeout(sig: i32, info: *mut libc::siginfo_t) {
 unsafe extern "C" fn pre_host_func(_: *mut c_void) {
     use libc::SIG_BLOCK;
 
-    // SAFETY: registered as WasmEdge's pre-host-function hook. Zero-initializes a
-    // `sigset_t`, adds the timeout signal to it and blocks that signal on the
-    // current thread. All are standard libc calls on the locally owned `set`.
+    // SAFETY: pre-host-function hook; blocks the timeout signal on the current thread via standard libc on a local `set`.
     unsafe {
         let mut set = std::mem::zeroed();
         libc::sigemptyset(&mut set);
@@ -75,9 +66,7 @@ unsafe extern "C" fn pre_host_func(_: *mut c_void) {
 unsafe extern "C" fn post_host_func(_: *mut c_void) {
     use libc::SIG_UNBLOCK;
 
-    // SAFETY: mirror of `pre_host_func`, registered as the post-host-function
-    // hook; unblocks the timeout signal on the current thread. Standard libc
-    // calls on the locally owned `set`.
+    // SAFETY: post-host-function hook; unblocks the timeout signal on the current thread via standard libc on a local `set`.
     unsafe {
         let mut set = std::mem::zeroed();
         libc::sigemptyset(&mut set);
@@ -102,11 +91,8 @@ static INIT_SIGNAL_LISTEN: std::sync::Once = std::sync::Once::new();
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 pub(crate) unsafe fn init_signal_listen() {
     INIT_SIGNAL_LISTEN.call_once(|| {
-        // SAFETY: runs once via `Once`. Installs `sync_timeout` as the handler for
-        // `timeout_signo()`: `new_act` is a zero-initialized `sigaction` populated
-        // with the handler pointer and flags before `sigaction` registers it.
-        // Standard libc usage on locally owned data. (The enclosing fn is `unsafe`,
-        // but this closure is a separate context and needs its own block.)
+        // SAFETY: runs once via `Once`; installs `sync_timeout` as `timeout_signo()`'s handler via standard libc on local data.
+        // closures do not inherit the enclosing unsafe fn's context
         unsafe {
             let mut new_act: libc::sigaction = std::mem::zeroed();
             new_act.sa_sigaction = sync_timeout as *const () as usize;
@@ -120,14 +106,8 @@ pub(crate) unsafe fn init_signal_listen() {
 #[derive(Debug)]
 pub struct Executor {
     pub(crate) inner: InnerExecutor,
-    // Keeps the shared statistics context alive for as long as this executor may
-    // reference it. `WasmEdge_ExecutorCreate` stores the raw stat pointer but does
-    // not take ownership, so without holding this `Arc` the executor would be left
-    // with a dangling stat pointer once the passed `Statistics` is dropped.
-    // The executor is guaranteed to be torn down before this field's `Arc` is
-    // dropped because the explicit `Drop for Executor` impl below runs
-    // `WasmEdge_ExecutorDelete` first — before the compiler's field drops run, not
-    // because of field declaration order.
+    // `WasmEdge_ExecutorCreate` stores the raw stat pointer without taking ownership, so hold this `Arc` to keep it
+    // alive; `Drop for Executor` runs `WasmEdge_ExecutorDelete` before this field drops (not by declaration order).
     _stat: Option<Arc<InnerStat>>,
 }
 
@@ -153,10 +133,7 @@ impl Executor {
         let conf_ctx = config
             .map(|cfg| cfg.inner.0)
             .unwrap_or(std::ptr::null_mut());
-        // Retain the shared statistics handle: `WasmEdge_ExecutorCreate` stores the
-        // raw pointer without taking ownership, so keep the `Arc<InnerStat>` for the
-        // executor's lifetime instead of letting the `Statistics` drop here (which
-        // would leave the executor with a dangling stat pointer).
+        // Keep the `Arc<InnerStat>` alive: `WasmEdge_ExecutorCreate` stored the raw pointer without owning it.
         let stat = stat.map(|stat| stat.inner);
         let stat_ctx = stat
             .as_ref()
@@ -216,10 +193,7 @@ impl Executor {
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
-        // SAFETY: `returns` is reserved with capacity `returns_len` (the callee's return
-        // arity). On success `WasmEdge_ExecutorInvoke` writes exactly that many
-        // `WasmEdge_Value`s; the `?` on `check(..)` ensures `set_len` runs only after a
-        // successful invoke, so every slot is initialized.
+        // SAFETY: `WasmEdge_ExecutorInvoke` writes exactly `returns_len` values before `set_len` (only after a successful `?`).
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
@@ -313,10 +287,7 @@ impl Executor {
                 }
             })?;
 
-            // SAFETY: `returns` is reserved with capacity `returns_len` (the callee's
-            // return arity). The `?` above only falls through here after
-            // `WasmEdge_ExecutorInvoke` (in the `sigsetjmp` fast path) returned success,
-            // writing exactly `returns_len` `WasmEdge_Value`s, so every slot is initialized.
+            // SAFETY: `WasmEdge_ExecutorInvoke` (sigsetjmp fast path) wrote exactly `returns_len` values before `set_len`.
             returns.set_len(returns_len);
             Ok(returns.into_iter().map(Into::into).collect::<Vec<_>>())
         }
@@ -407,10 +378,7 @@ impl Executor {
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
-        // SAFETY: `returns` is reserved with capacity `returns_len` (the callee's return
-        // arity). On success `WasmEdge_ExecutorInvoke` writes exactly that many
-        // `WasmEdge_Value`s; the `?` on `check(..)` ensures `set_len` runs only after a
-        // successful invoke, so every slot is initialized.
+        // SAFETY: `WasmEdge_ExecutorInvoke` writes exactly `returns_len` values before `set_len` (only after a successful `?`).
         unsafe {
             check(ffi::WasmEdge_ExecutorInvoke(
                 self.inner.0,
@@ -560,10 +528,6 @@ impl Executor {
 
 #[derive(Debug)]
 pub(crate) struct InnerExecutor(pub(crate) *mut ffi::WasmEdge_ExecutorContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_ExecutorContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half (concurrent `&self` C calls, e.g. `call_func_with_timeout`
-// invokes through `&self`) — WasmEdge documents no thread-safety for this context, so
-// it is an unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerExecutor {}
 unsafe impl Sync for InnerExecutor {}

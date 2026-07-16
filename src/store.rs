@@ -157,12 +157,8 @@ impl<'inst, T: AsInstance + ?Sized> Store<'inst, T> {
     ) -> WasmEdgeResult<(FuncRef<&'a mut Instance>, &'a mut sys::Executor)> {
         match mod_name {
             Some(mod_name) => {
-                // NB: this deliberately borrows `self.instances`/`self.wasm_instance_map`
-                // directly (rather than through the `get_instance_and_executor`/
-                // `get_named_wasm_and_executor` helpers) so the borrow checker can see the two
-                // branches touch disjoint fields; going through the helper methods here made
-                // both branches look like they borrow all of `*self`, which conflicts once the
-                // return type ties the borrow to the explicit `'a`.
+                // Borrow the fields directly (not via the helper methods) so the borrow checker sees the two
+                // branches touch disjoint fields; the helpers borrow all of `*self`, which conflicts with the `'a` return.
                 if let Some(inst) = self.instances.get_mut(mod_name).map(|p| *p as &mut T) {
                     Ok((inst.get_func_mut(func_name)?, &mut self.executor))
                 } else if let Some(wasm_mod) = self.wasm_instance_map.get_mut(mod_name) {

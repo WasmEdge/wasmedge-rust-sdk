@@ -637,14 +637,12 @@ mod tests {
 
     #[test]
     fn wasmedge_error_core_from_variant_display() {
-        // WasmEdgeError::Core(#[from] CoreError) forwards Display via "{0}".
         let err: WasmEdgeError = CoreError::UnknownError(7).into();
         assert_eq!(err.to_string(), "unknown error code 7");
     }
 
     #[test]
     fn wasmedge_error_vm_nested_payload_display() {
-        // WasmEdgeError::Vm(#[from] VmError) forwards the nested VmError's Display.
         let err = WasmEdgeError::Vm(VmError::Create);
         assert_eq!(err.to_string(), "Fail to create Vm context");
     }
@@ -701,9 +699,6 @@ mod tests {
 
     #[test]
     fn global_error_unmatched_val_type_display() {
-        // Was `#[error("")]` (empty Display) prior to the P5a-6 idiom sweep; now carries a
-        // real message. See `global_error_unmatched_val_type_display_is_currently_empty` in
-        // git history (commit da63ae0) for the characterization test this replaces.
         assert_eq!(
             GlobalError::UnmatchedValType.to_string(),
             "unmatched value type"

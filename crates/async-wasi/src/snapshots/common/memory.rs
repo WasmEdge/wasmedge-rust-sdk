@@ -110,8 +110,7 @@ impl Memory for TestMemory {
         let (start, end) = self.byte_range(offset, len)?;
         let bytes = &self.data[start..end];
         debug_assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
-        // SAFETY: length checked by `byte_range`, alignment asserted above,
-        // and the borrow is tied to `&self`.
+        // SAFETY: length checked by `byte_range`, alignment asserted above; borrow tied to `&self`.
         Ok(unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<T>(), len) })
     }
 
@@ -132,8 +131,7 @@ impl Memory for TestMemory {
         let (start, end) = self.byte_range(offset, len)?;
         let bytes = &mut self.data[start..end];
         debug_assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
-        // SAFETY: length checked by `byte_range`, alignment asserted above,
-        // and the borrow is tied to `&mut self`.
+        // SAFETY: length checked by `byte_range`, alignment asserted above; borrow tied to `&mut self`.
         Ok(unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr().cast::<T>(), len) })
     }
 

@@ -65,15 +65,9 @@ pub(crate) fn check(result: WasmEdge_Result) -> WasmEdgeResult<()> {
     }
 }
 
-// The single source of truth mapping [`CoreError`] variants to WasmEdge C-API
-// error codes. `core_error_codes!` expands the table below into BOTH directions
-// -- `gen_runtime_error` (code -> variant) and `impl From<CoreError> for
-// WasmEdge_Result` (variant -> code) -- so the two can never drift. The
-// `error_code_table_round_trips` test walks every listed pair as a guard.
-//
-// bindgen maps C enums to i32 on MSVC but u32 on unix, so the numeric casts the
-// macro emits are load-bearing on Windows; the generated items therefore carry
-// `#[allow(trivial_numeric_casts)]`.
+// `core_error_codes!` expands this table in BOTH directions (code->variant and variant->code),
+// so they cannot drift; `error_code_table_round_trips` guards it. bindgen maps the C enum to
+// i32 on MSVC but u32 on unix, so the emitted casts are load-bearing on Windows.
 macro_rules! core_error_codes {
     (
         $(
@@ -341,32 +335,25 @@ where
 
 #[cfg(test)]
 mod tests {
-    // bindgen maps the C `WasmEdge_ErrCode` enum to i32 on MSVC but u32 on unix,
-    // so the numeric casts below are load-bearing on Windows even where they look
-    // trivial on unix.
+    // bindgen maps `WasmEdge_ErrCode` to i32 on MSVC but u32 on unix, so these casts are load-bearing on Windows.
     #![allow(trivial_numeric_casts)]
 
     use super::*;
 
-    // Reads the raw error code stored in a `WasmEdge_Result`. Unlike `check`,
-    // this does not fold `Terminated` into success via `WasmEdge_ResultOK`; it
-    // returns the exact code so the round-trip can be verified for every variant.
+    // Returns the exact code without folding `Terminated` into success (unlike `check`), for round-trip verification.
     fn result_code(result: WasmEdge_Result) -> ffi::WasmEdge_ErrCode {
         unsafe { WasmEdge_ResultGetCode(result) as ffi::WasmEdge_ErrCode }
     }
 
-    // Drift guard for `core_error_codes!`: every listed (variant, code) pair must
-    // map identically in both directions.
+    // Every `core_error_codes!` pair must map identically in both directions.
     #[test]
     fn error_code_table_round_trips() {
         for (variant, code) in CORE_ERROR_CODE_TABLE {
-            // variant -> code
             let produced = result_code(WasmEdge_Result::from(variant.clone()));
             assert_eq!(
                 produced, *code,
                 "variant {variant:?} encoded as code {produced}, table says {code}"
             );
-            // code -> variant
             match gen_runtime_error(*code) {
                 Err(err) => assert_eq!(
                     *err,
@@ -384,7 +371,7 @@ mod tests {
         assert!(gen_runtime_error(ffi::WasmEdge_ErrCode_Success).is_ok());
 
         // A code outside the table round-trips through `UnknownError`.
-        let synthetic: ffi::WasmEdge_ErrCode = 0x00FF_FFFF; // 24-bit max, unused
+        let synthetic: ffi::WasmEdge_ErrCode = 0x00FF_FFFF;
         assert!(
             !CORE_ERROR_CODE_TABLE.iter().any(|(_, c)| *c == synthetic),
             "synthetic code collides with a real mapping"

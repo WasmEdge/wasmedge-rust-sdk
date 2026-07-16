@@ -251,8 +251,7 @@ mod int_enum_conversions_tests {
     #[test]
     #[should_panic(expected = "[wasmedge-types] Invalid WasmEdge_Mutability: 0x2A")]
     fn mutability_from_u32_panics_on_invalid_value() {
-        // Preserves the exact pre-existing panic message (hex, uppercase) of the hand-written
-        // `From<u32> for Mutability` impl this macro replaced.
+        // Preserves the exact panic message (hex, uppercase) of the hand-written `From<u32>` impl this replaced.
         let _ = Mutability::from(42u32);
     }
 
@@ -622,9 +621,7 @@ mod never_type_tests {
 
     #[test]
     fn never_type_is_auto_send_sync() {
-        // Compile-time proof (this line simply must compile) that removing the redundant
-        // `unsafe impl Send/Sync for NeverType` did not change auto-trait behavior: an
-        // uninhabited enum is automatically `Send + Sync` without any `unsafe impl`.
+        // Compile-time proof that `NeverType` is auto `Send + Sync` (uninhabited enum), so no `unsafe impl` is needed.
         assert_send_sync::<NeverType>();
     }
 }

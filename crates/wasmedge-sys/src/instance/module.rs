@@ -33,21 +33,14 @@ where
     Inst: AsMut<Instance> + AsRef<Instance>,
 {
     unsafe fn as_ptr(&self) -> *const ffi::WasmEdge_ModuleInstanceContext {
-        // SAFETY: delegates to the underlying `Instance`'s `as_ptr`; the same
-        // contract (returned pointer must not outlive `self`) is propagated.
+        // SAFETY: delegates to inner `Instance::as_ptr`; returned pointer must not outlive `self`.
         unsafe { self.as_ref().as_ptr() }
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct InnerInstance(pub(crate) *mut ffi::WasmEdge_ModuleInstanceContext);
-// SAFETY: (verified) owns an opaque `*mut WasmEdge_ModuleInstanceContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is verified: wasmedge_instance.h documents "This function is
-// thread-safe." on every ModuleInstance Find/List/Add accessor, including the
-// mutating `WasmEdge_ModuleInstanceAddFunction`, `WasmEdge_ModuleInstanceAddTable`,
-// `WasmEdge_ModuleInstanceAddMemory`, and `WasmEdge_ModuleInstanceAddGlobal`, so
-// upstream documents internal synchronization for concurrent `&self` calls.
+// SAFETY: opaque owned handle; wasmedge_instance.h documents its accessors (incl. mutators) thread-safe.
 unsafe impl Send for InnerInstance {}
 unsafe impl Sync for InnerInstance {}
 
@@ -217,10 +210,7 @@ pub trait AsInstance {
         let len_func_names = self.func_len();
         if len_func_names > 0 {
             let mut func_names = Vec::with_capacity(len_func_names as usize);
-            // SAFETY: `func_names` is reserved with capacity `len_func_names` — the exact
-            // count just queried via `func_len` (`WasmEdge_ModuleInstanceListFunctionLength`)
-            // — and `WasmEdge_ModuleInstanceListFunction` fills that many POD
-            // `WasmEdge_String`s, so all slots are initialized before `set_len`.
+            // SAFETY: `WasmEdge_ModuleInstanceListFunction` fills exactly `len_func_names` elements before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListFunction(
                     self.as_ptr(),
@@ -302,10 +292,7 @@ pub trait AsInstance {
         let len_table_names = self.table_len();
         if len_table_names > 0 {
             let mut table_names = Vec::with_capacity(len_table_names as usize);
-            // SAFETY: `table_names` is reserved with capacity `len_table_names` — the exact
-            // count just queried via `table_len` (`WasmEdge_ModuleInstanceListTableLength`)
-            // — and `WasmEdge_ModuleInstanceListTable` fills that many POD
-            // `WasmEdge_String`s, so all slots are initialized before `set_len`.
+            // SAFETY: `WasmEdge_ModuleInstanceListTable` fills exactly `len_table_names` elements before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListTable(
                     self.as_ptr(),
@@ -335,10 +322,7 @@ pub trait AsInstance {
         let len_mem_names = self.mem_len();
         if len_mem_names > 0 {
             let mut mem_names = Vec::with_capacity(len_mem_names as usize);
-            // SAFETY: `mem_names` is reserved with capacity `len_mem_names` — the exact
-            // count just queried via `mem_len` (`WasmEdge_ModuleInstanceListMemoryLength`)
-            // — and `WasmEdge_ModuleInstanceListMemory` fills that many POD
-            // `WasmEdge_String`s, so all slots are initialized before `set_len`.
+            // SAFETY: `WasmEdge_ModuleInstanceListMemory` fills exactly `len_mem_names` elements before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListMemory(
                     self.as_ptr(),
@@ -368,11 +352,7 @@ pub trait AsInstance {
         let len_global_names = self.global_len();
         if len_global_names > 0 {
             let mut global_names = Vec::with_capacity(len_global_names as usize);
-            // SAFETY: `global_names` is reserved with capacity `len_global_names` — the
-            // exact count just queried via `global_len`
-            // (`WasmEdge_ModuleInstanceListGlobalLength`) — and
-            // `WasmEdge_ModuleInstanceListGlobal` fills that many POD `WasmEdge_String`s,
-            // so all slots are initialized before `set_len`.
+            // SAFETY: `WasmEdge_ModuleInstanceListGlobal` fills exactly `len_global_names` elements before `set_len`.
             unsafe {
                 ffi::WasmEdge_ModuleInstanceListGlobal(
                     self.as_ptr(),
@@ -415,9 +395,7 @@ impl<T: ?Sized> Drop for ImportModule<T> {
 }
 
 unsafe extern "C" fn import_data_finalizer<T>(ptr: *mut core::ffi::c_void) {
-    // SAFETY: `ptr` is the pointer WasmEdge stored via `Box::leak(data)` in
-    // `ImportModule::create` and hands back exactly once at finalization;
-    // reconstructing the `Box<T>` re-takes ownership so it can be dropped.
+    // SAFETY: `ptr` is the `Box::leak(data)` pointer WasmEdge hands back once at finalization; reconstruct the `Box<T>` to drop it.
     let box_data: Box<T> = unsafe { Box::from_raw(ptr as _) };
     std::mem::drop(box_data)
 }
@@ -437,8 +415,7 @@ impl<T: Sized> ImportModule<T> {
     pub fn create(name: impl AsRef<str>, data: Box<T>) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
-        // Hand ownership of the host data to WasmEdge; it is returned to us through
-        // `import_data_finalizer` only when the created module instance is destroyed.
+        // WasmEdge takes ownership of the host data, returned via `import_data_finalizer` only when the instance is destroyed.
         let host_data = Box::into_raw(data);
         let ctx = unsafe {
             ffi::WasmEdge_ModuleInstanceCreateWithData(
@@ -449,13 +426,8 @@ impl<T: Sized> ImportModule<T> {
         };
 
         if ctx.is_null() {
-            // Creation failed: WasmEdge never took ownership of `host_data`, so the
-            // finalizer will never run. Reclaim the Box to avoid leaking it and
-            // return an error, rather than storing a null context that would be
-            // dereferenced later (in `Drop`, `add_func`, `as_ptr`, ...).
-            // SAFETY: `host_data` came from `Box::into_raw` just above and was not
-            // consumed by the failed call, so it is still a valid, uniquely-owned
-            // allocation.
+            // Creation failed: the finalizer will never run, so reclaim the `Box` instead of leaking it or storing a null context.
+            // SAFETY: `host_data` is the still-owned `Box::into_raw` allocation the failed call did not consume.
             drop(unsafe { Box::from_raw(host_data) });
             return Err(Box::new(WasmEdgeError::ImportObjCreate));
         }
@@ -481,15 +453,8 @@ impl<T: Sized> ImportModule<T> {
     ///
     /// This function will take over the lifetime management of `ctx`, so do not call `ffi::WasmEdge_ModuleInstanceDelete` on `ctx` after this.
     pub unsafe fn from_raw(ctx: *mut ffi::WasmEdge_ModuleInstanceContext) -> Self {
-        // SAFETY: `ctx` is a valid module-instance context per this function's
-        // contract. `WasmEdge_ModuleInstanceGetModuleName` returns a *borrowed*
-        // `WasmEdge_String` whose buffer is owned by the module instance; the C API
-        // documents that the caller must NOT call `WasmEdge_StringDelete` on it
-        // ("The returned string object is linked to the module name of the module
-        // instance"). Read it into an owned `String` directly, mirroring the
-        // borrowing read in `AsInstance::name`, instead of wrapping it in the owning
-        // `WasmEdgeString` whose Drop would `WasmEdge_StringDelete` the instance's
-        // borrowed buffer — a latent double-free.
+        // SAFETY: `WasmEdge_ModuleInstanceGetModuleName` returns a *borrowed* string the C API says must NOT be
+        // `WasmEdge_StringDelete`d; read it into an owned `String` rather than an owning `WasmEdgeString` (whose Drop would double-free it).
         let raw_name = unsafe { ffi::WasmEdge_ModuleInstanceGetModuleName(ctx) };
         let name = String::from(&raw_name);
         Self {
@@ -761,25 +726,19 @@ mod tests {
         error::{CoreError, CoreExecutionError},
     };
 
-    // `ImportModule::from_raw` must read the module name that
-    // `WasmEdge_ModuleInstanceGetModuleName` returns *without* taking ownership of
-    // it: that string is borrowed from the instance and must not be deleted. Wrapping
-    // it in an owning `WasmEdgeString` (the old behavior) made the resulting import's
-    // Drop free the instance's borrowed name buffer — a double-free.
+    // `WasmEdge_ModuleInstanceGetModuleName` returns a borrowed name that must NOT be deleted;
+    // wrapping it in an owning `WasmEdgeString` would make Drop double-free the instance's buffer.
     #[test]
     fn test_from_raw_does_not_double_free_module_name() {
-        // Build an owning import module, then hand its raw context to `from_raw`.
         let import = ImportModule::create("extern_from_raw", Box::new(())).unwrap();
         let ctx = unsafe { import.as_raw() };
-        // Prevent the original from deleting the context; `from_raw` takes over its
-        // lifetime management (so the context is deleted exactly once, below).
+        // `from_raw` takes over the context's lifetime, so prevent the original from deleting it too.
         std::mem::forget(import);
 
         let rebuilt: ImportModule<()> = unsafe { ImportModule::from_raw(ctx) };
         assert_eq!(rebuilt.name().as_deref(), Some("extern_from_raw"));
 
-        // Dropping `rebuilt` deletes the instance exactly once and must NOT call
-        // WasmEdge_StringDelete on the borrowed name (the fixed double-free path).
+        // Dropping `rebuilt` must delete the instance exactly once without freeing the borrowed name.
         drop(rebuilt);
     }
 

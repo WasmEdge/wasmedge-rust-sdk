@@ -152,10 +152,7 @@ impl Drop for Table {
 
 #[derive(Debug)]
 pub(crate) struct InnerTable(pub(crate) *mut ffi::WasmEdge_TableInstanceContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_TableInstanceContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
-// no thread-safety for this context, so it is an unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerTable {}
 unsafe impl Sync for InnerTable {}
 
@@ -244,10 +241,7 @@ impl From<&TableType> for wasmedge_types::TableType {
 
 #[derive(Debug)]
 pub(crate) struct InnerTableType(pub(crate) *mut ffi::WasmEdge_TableTypeContext);
-// SAFETY: (assumed, pre-existing) owns a `*mut WasmEdge_TableTypeContext` read only
-// through pure `Get*` getters — no interior mutation — so `Send`/`Sync` are sound in
-// practice; the residual "concurrent C reads are safe" guarantee is undocumented, so
-// this stays an assumption inherited from the original bindings.
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerTableType {}
 unsafe impl Sync for InnerTableType {}
 

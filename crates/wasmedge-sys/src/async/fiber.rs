@@ -75,11 +75,8 @@ impl Future for FiberFuture<'_> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
-            // SAFETY: erase the `Context` lifetime to `'static` behind a raw pointer. The
-            // pointer is stored only for the duration of this `poll` — the `Reset` guard
-            // above restores the previous value on scope exit — and is dereferenced only by
-            // `block_on` while `cx` is live on this thread, so it never outlives the real
-            // `Context`.
+            // SAFETY: erase the `Context` lifetime to `'static`; the pointer lives only for this
+            // `poll` (restored by the `Reset` guard) and is dereferenced only by `block_on` on this thread.
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
@@ -90,12 +87,9 @@ impl Future for FiberFuture<'_> {
         }
     }
 }
-// SAFETY: the raw pointers borrow into the owning `AsyncState` and are only
-// dereferenced during an active `poll`/`resume` on the current thread. `Send` is
-// load-bearing: it lets the future be driven across executor worker threads (the
-// standard async-fiber pattern). `Sync` is NOT load-bearing — a `FiberFuture` is only
-// ever driven through `&mut` (`poll`), never shared by `&`; it is kept only for API
-// stability.
+// SAFETY: raw pointers borrow into the owning `AsyncState`, dereferenced only during an active
+// `poll` on this thread. `Send` is load-bearing (drives across worker threads); `Sync` is not
+// (only driven by `&mut`), kept for API stability.
 unsafe impl Send for FiberFuture<'_> {}
 unsafe impl Sync for FiberFuture<'_> {}
 
@@ -189,11 +183,8 @@ impl Future for TimeoutFiberFuture<'_> {
             crate::executor::init_signal_listen();
 
             let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
-            // SAFETY: erase the `Context` lifetime to `'static` behind a raw pointer. The
-            // pointer is stored only for the duration of this `poll` — the `Reset` guard
-            // above restores the previous value on scope exit — and is dereferenced only by
-            // `block_on` while `cx` is live on this thread, so it never outlives the real
-            // `Context`.
+            // SAFETY: erase the `Context` lifetime to `'static`; the pointer lives only for this
+            // `poll` (restored by the `Reset` guard) and is dereferenced only by `block_on` on this thread.
             *self.current_poll_cx =
                 std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
             let async_cx = AsyncCx {
@@ -248,11 +239,8 @@ impl Future for TimeoutFiberFuture<'_> {
         }
     }
 }
-// SAFETY: same argument as `FiberFuture` — the raw pointers borrow into the owning
-// `AsyncState` and are only dereferenced during an active `poll`/`resume` on the current
-// thread. `Send` is load-bearing (drives the future across executor worker threads);
-// `Sync` is NOT load-bearing (only ever driven through `&mut` (`poll`), never shared by
-// `&`) and is kept only for API stability.
+// SAFETY: as `FiberFuture` — `Send` is load-bearing (drives across worker threads); `Sync` is not
+// (only driven by `&mut`), kept for API stability.
 #[cfg(not(target_env = "musl"))]
 unsafe impl Send for TimeoutFiberFuture<'_> {}
 #[cfg(not(target_env = "musl"))]
@@ -317,10 +305,8 @@ impl AsyncState {
         })
     }
 }
-// SAFETY: (assumed, pre-existing) the two `UnsafeCell`s hold raw pointers that are only
-// written/read during an active `poll` on the thread currently driving the fiber. The
-// single-driver invariant (no concurrent poll of the same state) is upheld by the async
-// executor, not by the compiler; carried over from the original bindings.
+// SAFETY: the `UnsafeCell` raw pointers are read/written only during an active `poll` on the
+// driving thread; the single-driver invariant is upheld by the executor, not the compiler.
 unsafe impl Send for AsyncState {}
 unsafe impl Sync for AsyncState {}
 
@@ -354,16 +340,9 @@ impl AsyncCx {
         &self,
         mut future: Pin<&mut (dyn Future<Output = U> + Send)>,
     ) -> Result<U, ()> {
-        // SAFETY: `self.current_suspend` and `self.current_poll_cx` are raw
-        // pointers captured from a live `AsyncState` when this `AsyncCx` was set
-        // up for the running fiber (see `FiberFuture::poll` / `AsyncCx::new`).
-        // Per the fiber protocol `block_on` only runs while that state is alive
-        // on the polling task's stack, so these two outer pointers are valid to
-        // dereference — their non-null-ness is a protocol precondition, not
-        // checked here. The `assert!`s below instead guard the inner values read
-        // back out (the suspend and poll-context pointers), which must be non-null
-        // before they are used. Each `Reset` guard restores the previous value
-        // when its scope ends.
+        // SAFETY: `current_suspend`/`current_poll_cx` are raw pointers into a live `AsyncState`; per the
+        // fiber protocol `block_on` runs only while it is alive on this thread. The `assert!`s guard the
+        // inner pointers read back out.
         unsafe {
             let suspend = *self.current_suspend;
             let _reset = Reset(self.current_suspend, suspend);

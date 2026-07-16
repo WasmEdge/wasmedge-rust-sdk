@@ -5,7 +5,7 @@ use sys::r#async::{
 };
 use wasmedge_sys::{self as sys};
 
-/// Creates a [async import object](sys::r#async::module::AsyncImportObject).
+/// Creates a [async import object](AsyncImportObject).
 ///
 #[derive(Debug)]
 pub struct ImportObjectBuilder<Data: Send> {

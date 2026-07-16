@@ -80,9 +80,6 @@ impl CallingFrame {
 
 #[derive(Debug)]
 pub(crate) struct InnerCallingFrame(pub(crate) *const ffi::WasmEdge_CallingFrameContext);
-// SAFETY: (assumed, pre-existing) wraps a borrowed, transient
-// `*const WasmEdge_CallingFrameContext` handed to host functions by the runtime.
-// `Send`/`Sync` are inherited from the original bindings; WasmEdge documents no
-// thread-safety for this context, so they remain an unverified assumption.
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerCallingFrame {}
 unsafe impl Sync for InnerCallingFrame {}

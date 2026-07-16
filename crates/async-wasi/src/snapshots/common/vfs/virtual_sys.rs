@@ -615,13 +615,9 @@ pub struct DiskDir {
 
 impl DiskDir {
     pub fn get_absolutize_path<P: AsRef<Path>>(&self, sub_path: &P) -> Result<PathBuf, Errno> {
-        // `real_path` is always absolute (rooted via `canonicalize` in
-        // `DiskFileSys::new`, or derived from an already-normalized,
-        // already-checked `real_path` in `path_open`), so `join` here is
-        // always absolute too, regardless of whether `sub_path` is relative
-        // or itself absolute (an absolute `sub_path` replaces `real_path`
-        // entirely per `Path::join`'s semantics — `normalize` then rejects it
-        // below unless it happens to already live under `real_path`).
+        // `real_path` is always absolute (canonicalized in `DiskFileSys::new` or already-checked in
+        // `path_open`), so `join` is too; an absolute `sub_path` replaces it, which `normalize` rejects
+        // below unless it already lives under `real_path`.
         let new_path = normalize(&self.real_path.join(sub_path));
         if !new_path.starts_with(&self.real_path) {
             return Err(Errno::__WASI_ERRNO_NOENT);
@@ -1733,9 +1729,7 @@ mod tests {
         dir
     }
 
-    // P5b-2: `DiskFileSys::path_unlink_file` checked `PATH_REMOVE_DIRECTORY`
-    // instead of `PATH_UNLINK_FILE`, so a preopen granted unlink rights (but not
-    // remove-directory rights) wrongly failed with NOTCAPABLE.
+    // Unlink must check `PATH_UNLINK_FILE`, not `PATH_REMOVE_DIRECTORY` (else a preopen with unlink-only rights wrongly fails NOTCAPABLE).
     #[test]
     fn disk_path_unlink_file_uses_unlink_right() {
         let dir = temp_dir("p5b2");
@@ -1753,8 +1747,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // P5b-5: opening a missing path without O_CREAT returned EEXIST ("file
-    // exists") instead of NOENT ("no such file"). It must report NOENT.
+    // Opening a missing path without O_CREAT must return NOENT ("no such file"), not EEXIST.
     #[test]
     fn virtual_path_open_missing_without_create_returns_noent() {
         use crate::snapshots::common::vfs::impls::{MemoryDir, MemoryFile};
@@ -1775,12 +1768,7 @@ mod tests {
         );
     }
 
-    // P4-2: `get_absolutize_path` moved off the `path-absolutize` crate onto a
-    // local `normalize` helper (lexical `.`/`..` resolution) plus an explicit
-    // `starts_with` check. These pin the sandbox-boundary behaviour that
-    // motivated keeping `..`-popping instead of switching to
-    // `std::path::absolute` alone (which does not resolve `..` at all — only
-    // `.` and CWD-joining).
+    // The local `normalize` helper resolves `.`/`..` lexically (plus a `starts_with` sandbox check); `std::path::absolute` alone does not pop `..`.
 
     fn sandbox_dir() -> DiskDir {
         DiskDir {
@@ -1800,9 +1788,7 @@ mod tests {
 
     #[test]
     fn normalize_clamps_dot_dot_at_root_instead_of_underflowing() {
-        // Four `..` from a two-component path pop past the root; the extra
-        // two must be absorbed at `/` rather than panicking or producing a
-        // literal leading `..` (mirrors POSIX's `/../x == /x`).
+        // Four `..` from a two-component path pop past the root; the extra two must be absorbed at `/` (POSIX `/../x == /x`), not panic or leak a leading `..`.
         assert_eq!(
             normalize(Path::new("/a/b/../../../../c")),
             PathBuf::from("/c")
@@ -1820,9 +1806,7 @@ mod tests {
     #[test]
     fn get_absolutize_path_rejects_dot_dot_escape_from_the_sandbox() {
         let dir = sandbox_dir();
-        // Enough `..` to pop past `real_path` and land outside it must be
-        // rejected (NOENT), not silently clamped back inside the sandbox and
-        // not allowed to resolve against the real host root.
+        // Enough `..` to escape `real_path` must be rejected (NOENT), not clamped back inside nor resolved against the host root.
         let err = dir
             .get_absolutize_path(&"../../../../etc/passwd")
             .unwrap_err();

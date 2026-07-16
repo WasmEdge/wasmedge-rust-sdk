@@ -42,16 +42,12 @@ unsafe extern "C" fn wrap_fn<Data>(
 ) -> ffi::WasmEdge_Result {
     let mut frame = CallingFrame::create(call_frame_ctx);
     // let executor_ctx = ffi::WasmEdge_CallingFrameGetExecutor(call_frame_ctx);
-    // SAFETY: `call_frame_ctx` is the calling-frame handle the WasmEdge runtime
-    // passes into this host-function trampoline; it stays valid for the duration
-    // of the call, so reading the module instance from it is sound.
+    // SAFETY: the runtime keeps `call_frame_ctx` valid for the call's duration.
     let inst_ctx = unsafe { ffi::WasmEdge_CallingFrameGetModuleInstance(call_frame_ctx) };
     let mut inst = std::mem::ManuallyDrop::new(Instance {
         inner: InnerInstance(inst_ctx as _),
     });
-    // SAFETY: `data` is the `*mut Data` host-context pointer registered with this
-    // function via `create_with_custom_wrapper`; the runtime hands it back
-    // unchanged and guarantees it outlives and is uniquely borrowed for the call.
+    // SAFETY: the runtime hands back the registered `data` pointer, uniquely borrowed for the call.
     let data = unsafe { &mut *(data as *mut Data) };
 
     let input = if params.is_null() || param_len == 0 {
@@ -70,9 +66,7 @@ unsafe extern "C" fn wrap_fn<Data>(
         unsafe { std::slice::from_raw_parts_mut(returns, return_len) }
     };
 
-    // SAFETY: `key_ptr` was produced by casting a `SyncFn<Data>` to a raw pointer
-    // at registration time; transmuting it back to the same type recovers the
-    // original, still-valid function pointer.
+    // SAFETY: `key_ptr` round-trips the `SyncFn<Data>` cast made at registration.
     let real_fn: SyncFn<Data> = unsafe { std::mem::transmute(key_ptr) };
 
     match real_fn(data, &mut inst, &mut frame, input) {
@@ -155,9 +149,7 @@ impl Function {
         data: *mut T,
         cost: u64,
     ) -> WasmEdgeResult<Self> {
-        // SAFETY: forwards to `create_with_custom_wrapper` using this function's
-        // own `wrap_fn` trampoline; the caller's guarantee that `real_fn` and
-        // `data` outlive the returned `Function` satisfies that function's contract.
+        // SAFETY: caller guarantees `real_fn`/`data` outlive the returned `Function`.
         unsafe { Self::create_with_custom_wrapper(ty, wrap_fn::<T>, real_fn as _, data as _, cost) }
     }
 
@@ -191,10 +183,7 @@ impl Function {
         cost: u64,
     ) -> WasmEdgeResult<Self> {
         let ty: FuncTypeOwn = ty.into();
-        // SAFETY: `ty.inner.0` is the valid function-type handle owned by the local
-        // `ty`; `fn_wrapper` is a valid `extern "C"` trampoline and `real_fn`/`data`
-        // are the caller-provided pointers whose lifetimes the caller guarantees.
-        // The binding copies the type and stores the pointers.
+        // SAFETY: `ty.inner.0` is a valid function-type handle; caller guarantees `real_fn`/`data` lifetimes.
         let ctx = unsafe {
             ffi::WasmEdge_FunctionInstanceCreateBinding(
                 ty.inner.0,
@@ -268,18 +257,14 @@ impl AsFunc for Function {
 }
 impl<F: AsRef<Function>> AsFunc for F {
     unsafe fn get_func_raw(&self) -> *mut ffi::WasmEdge_FunctionInstanceContext {
-        // SAFETY: delegates to the inner `Function`'s `get_func_raw`; its contract
-        // (the returned pointer must not outlive `self`) is propagated unchanged.
+        // SAFETY: delegates to inner `Function::get_func_raw`; returned pointer must not outlive `self`.
         unsafe { self.as_ref().get_func_raw() }
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct InnerFunc(pub(crate) *mut ffi::WasmEdge_FunctionInstanceContext);
-// SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_FunctionInstanceContext`.
-// `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
-// `Sync` is the assumed half (concurrent `&self` C calls) — WasmEdge documents
-// no thread-safety for this context, so it is an unverified, inherited invariant.
+// SAFETY: opaque owned handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerFunc {}
 unsafe impl Sync for InnerFunc {}
 
@@ -345,10 +330,7 @@ impl FuncTypeOwn {
     pub(crate) fn params_type_iter(&self) -> impl Iterator<Item = ValType> {
         let len = self.params_len();
         let mut types = Vec::with_capacity(len as usize);
-        // SAFETY: `types` is reserved with capacity `len` — the exact count just queried
-        // via `params_len` (`WasmEdge_FunctionTypeGetParametersLength`) — and
-        // `WasmEdge_FunctionTypeGetParameters` fills that many POD `WasmEdge_ValType`s, so
-        // all `len` slots are initialized before `set_len`.
+        // SAFETY: `WasmEdge_FunctionTypeGetParameters` fills exactly `len` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_FunctionTypeGetParameters(self.inner.0, types.as_mut_ptr(), len);
             types.set_len(len as usize);
@@ -366,10 +348,7 @@ impl FuncTypeOwn {
     pub(crate) fn returns_type_iter(&self) -> impl Iterator<Item = ValType> {
         let len = self.returns_len();
         let mut types = Vec::with_capacity(len as usize);
-        // SAFETY: `types` is reserved with capacity `len` — the exact count just queried
-        // via `returns_len` (`WasmEdge_FunctionTypeGetReturnsLength`) — and
-        // `WasmEdge_FunctionTypeGetReturns` fills that many POD `WasmEdge_ValType`s, so
-        // all `len` slots are initialized before `set_len`.
+        // SAFETY: `WasmEdge_FunctionTypeGetReturns` fills exactly `len` elements before `set_len`.
         unsafe {
             ffi::WasmEdge_FunctionTypeGetReturns(self.inner.0, types.as_mut_ptr(), len);
             types.set_len(len as usize);
@@ -402,10 +381,7 @@ impl From<&FuncTypeOwn> for wasmedge_types::FuncType {
 
 #[derive(Debug)]
 pub(crate) struct InnerFuncType(pub(crate) *const ffi::WasmEdge_FunctionTypeContext);
-// SAFETY: (assumed, pre-existing) wraps an immutable `*const WasmEdge_FunctionTypeContext`
-// read only through pure `Get*` getters — no interior mutation — so `Send`/`Sync` are
-// sound in practice; the residual "concurrent C reads are safe" guarantee is undocumented,
-// so this stays an assumption inherited from the original bindings.
+// SAFETY: borrowed read-only handle; upstream C API leaves thread affinity undocumented (assumed, pre-existing).
 unsafe impl Send for InnerFuncType {}
 unsafe impl Sync for InnerFuncType {}
 
