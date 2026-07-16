@@ -88,8 +88,6 @@ pub mod executor;
 pub mod frame;
 pub mod instance;
 #[doc(hidden)]
-pub mod io;
-#[doc(hidden)]
 pub mod loader;
 pub mod plugin;
 #[doc(hidden)]

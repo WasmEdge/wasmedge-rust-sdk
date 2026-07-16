@@ -127,6 +127,12 @@ called out below):
   while riding the 0.17.0 major-version bump so it is not a surprise on a
   patch/minor release. Import from `wasmedge_macro` directly if you still need
   the (deprecated) names.
+- **Breaking (nominal):** the `wasmedge_sys::io` module is gone — the `WasmFnIO`
+  trait and the `I1`..`I32` marker types (~170 LOC). They had zero references
+  anywhere in this workspace and no discoverable public users; a crates.io scan
+  found only `wasmedge-bindgen-host`, pinned to `^0.7.0` of `wasmedge-sys` and so
+  unaffected by anything past that range. Rides the `wasmedge-sys` 0.21.0 major
+  bump.
 - Dead code: `src/dock.rs` and `src/executor.rs` (883 LOC, unreachable, referenced
   types that no longer exist), `crates/async-wasi/src/snapshots/common/vfs/sync.rs`
   (1148 LOC, an orphaned module never declared by its parent), 15 bit-rotted
