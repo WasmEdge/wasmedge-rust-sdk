@@ -581,3 +581,248 @@ pub enum HostFuncError {
     #[error("Runtime error: {0}")]
     Runtime(u32),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---- WasmEdgeError ----
+
+    #[test]
+    fn wasmedge_error_operation_display() {
+        let err = WasmEdgeError::Operation("boom".to_string());
+        assert_eq!(err.to_string(), "boom");
+    }
+
+    #[test]
+    fn wasmedge_error_user_display() {
+        let err = WasmEdgeError::User(42);
+        assert_eq!(err.to_string(), "42");
+    }
+
+    #[test]
+    fn wasmedge_error_import_obj_create_display() {
+        let err = WasmEdgeError::ImportObjCreate;
+        assert_eq!(err.to_string(), "Fail to create ImportObj module");
+    }
+
+    #[test]
+    fn wasmedge_error_windows_path_conversion_display() {
+        let err = WasmEdgeError::WindowsPathConversion("C:\\weird\\path".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Fail to convert path on Windows: C:\\weird\\path"
+        );
+    }
+
+    #[test]
+    fn wasmedge_error_core_from_variant_display() {
+        // WasmEdgeError::Core(#[from] CoreError) forwards Display via "{0}".
+        let err: WasmEdgeError = CoreError::UnknownError(7).into();
+        assert_eq!(err.to_string(), "unknown error code 7");
+    }
+
+    #[test]
+    fn wasmedge_error_vm_nested_payload_display() {
+        // WasmEdgeError::Vm(#[from] VmError) forwards the nested VmError's Display.
+        let err = WasmEdgeError::Vm(VmError::Create);
+        assert_eq!(err.to_string(), "Fail to create Vm context");
+    }
+
+    #[test]
+    fn wasmedge_error_found_nul_byte_display() {
+        let nul_err = std::ffi::CString::new(b"a\0b".to_vec()).unwrap_err();
+        let err: WasmEdgeError = nul_err.into();
+        assert!(matches!(err, WasmEdgeError::FoundNulByte(_)));
+        assert_eq!(err.to_string(), "Found an internal 0 byte");
+    }
+
+    #[test]
+    fn wasmedge_error_source_chain_through_from_variant() {
+        use std::error::Error;
+
+        let nul_err = std::ffi::CString::new(b"a\0b".to_vec()).unwrap_err();
+        let expected_source = nul_err.to_string();
+        let err: WasmEdgeError = nul_err.into();
+
+        let source = err.source().expect("FoundNulByte should carry a source");
+        assert_eq!(source.to_string(), expected_source);
+    }
+
+    // ---- FuncError ----
+
+    #[test]
+    fn func_error_create_display() {
+        assert_eq!(
+            FuncError::Create.to_string(),
+            "Fail to create Function instance"
+        );
+    }
+
+    // ---- MemError ----
+
+    #[test]
+    fn mem_error_create_shared_type_display() {
+        assert_eq!(
+            MemError::CreateSharedType.to_string(),
+            "Fail to create shared memory type. The 'max' field must not be None."
+        );
+    }
+
+    // ---- GlobalError ----
+
+    #[test]
+    fn global_error_create_display() {
+        assert_eq!(
+            GlobalError::Create.to_string(),
+            "Fail to create Global instance"
+        );
+    }
+
+    #[test]
+    fn global_error_unmatched_val_type_display_is_currently_empty() {
+        // Known defect: this variant carries no message (`#[error("")]`).
+        // Captured as-is here; fixed in a later modernization phase, not this one.
+        assert_eq!(GlobalError::UnmatchedValType.to_string(), "");
+    }
+
+    // ---- TableError ----
+
+    #[test]
+    fn table_error_create_display() {
+        assert_eq!(
+            TableError::Create.to_string(),
+            "Fail to create Table instance"
+        );
+    }
+
+    // ---- ImportError ----
+
+    #[test]
+    fn import_error_func_type_display() {
+        let err = ImportError::FuncType("expected a function type".to_string());
+        assert_eq!(err.to_string(), "expected a function type");
+    }
+
+    // ---- ExportError ----
+
+    #[test]
+    fn export_error_mem_type_display() {
+        let err = ExportError::MemType("expected a memory type".to_string());
+        assert_eq!(err.to_string(), "expected a memory type");
+    }
+
+    // ---- InstanceError ----
+
+    #[test]
+    fn instance_error_not_found_func_display() {
+        let err = InstanceError::NotFoundFunc("hello".to_string());
+        assert_eq!(err.to_string(), "Not found the target function (hello)");
+    }
+
+    // ---- PluginError ----
+
+    #[test]
+    fn plugin_error_create_display() {
+        let err = PluginError::Create("myplugin".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Failed to create a plugin instance named 'myplugin'. Make sure that the plugin instance name is correct."
+        );
+    }
+
+    // ---- StoreError ----
+
+    #[test]
+    fn store_error_not_found_func_registered_display() {
+        let err = StoreError::NotFoundFuncRegistered {
+            func_name: "f".to_string(),
+            mod_name: "m".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Fail to find the target function (f) in the module (m)"
+        );
+    }
+
+    // ---- VmError ----
+
+    #[test]
+    fn vm_error_create_display() {
+        assert_eq!(VmError::Create.to_string(), "Fail to create Vm context");
+    }
+
+    // ---- CoreError ----
+
+    #[test]
+    fn core_error_unknown_error_display() {
+        assert_eq!(
+            CoreError::UnknownError(7).to_string(),
+            "unknown error code 7"
+        );
+    }
+
+    // ---- CoreCommonError ----
+
+    #[test]
+    fn core_common_error_terminated_display() {
+        assert_eq!(
+            CoreCommonError::Terminated.to_string(),
+            "process terminated"
+        );
+    }
+
+    // ---- CoreLoadError ----
+
+    #[test]
+    fn core_load_error_illegal_path_display() {
+        assert_eq!(CoreLoadError::IllegalPath.to_string(), "Invalid file path");
+    }
+
+    // ---- CoreValidationError ----
+
+    #[test]
+    fn core_validation_error_invalid_alignment_display() {
+        assert_eq!(
+            CoreValidationError::InvalidAlignment.to_string(),
+            "alignment must not be larger than natural"
+        );
+    }
+
+    // ---- CoreInstantiationError ----
+
+    #[test]
+    fn core_instantiation_error_module_name_conflict_display() {
+        assert_eq!(
+            CoreInstantiationError::ModuleNameConflict.to_string(),
+            "module name conflict"
+        );
+    }
+
+    // ---- CoreExecutionError ----
+
+    #[test]
+    fn core_execution_error_wrong_instance_address_display() {
+        assert_eq!(
+            CoreExecutionError::WrongInstanceAddress.to_string(),
+            "wrong instance address"
+        );
+    }
+
+    // ---- CoreComponentError ----
+
+    #[test]
+    fn core_component_error_malformed_sort_display() {
+        assert_eq!(
+            CoreComponentError::MalformedSort.to_string(),
+            "malformed sort"
+        );
+    }
+
+    // ---- HostFuncError ----
+
+    #[test]
+    fn host_func_error_user_display() {
+        assert_eq!(HostFuncError::User(42).to_string(), "User error: 42");
+    }
+}
