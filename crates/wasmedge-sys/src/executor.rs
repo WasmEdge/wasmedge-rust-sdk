@@ -124,7 +124,10 @@ pub struct Executor {
     // reference it. `WasmEdge_ExecutorCreate` stores the raw stat pointer but does
     // not take ownership, so without holding this `Arc` the executor would be left
     // with a dangling stat pointer once the passed `Statistics` is dropped.
-    // Declared after `inner` so the executor is torn down before the stat context.
+    // The executor is guaranteed to be torn down before this field's `Arc` is
+    // dropped because the explicit `Drop for Executor` impl below runs
+    // `WasmEdge_ExecutorDelete` first — before the compiler's field drops run, not
+    // because of field declaration order.
     _stat: Option<Arc<InnerStat>>,
 }
 

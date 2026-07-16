@@ -582,14 +582,14 @@ pub enum HostFuncError {
     Runtime(u32),
 }
 
-/// The error returned by the `TryFrom<u32>`/`TryFrom<i32>` conversions for the small
+/// The error returned by the `try_from_u32`/`try_from_i32` methods for the small
 /// C-enum-like WasmEdge types (for example [Mutability](crate::Mutability),
 /// [CompilerOptimizationLevel](crate::CompilerOptimizationLevel), and
 /// [CompilerOutputFormat](crate::CompilerOutputFormat)) when the integer does not correspond to
 /// any known variant.
 ///
 /// Unlike the corresponding `From<u32>`/`From<i32>` implementations, converting through
-/// `TryFrom` never panics.
+/// `try_from_u32`/`try_from_i32` never panics.
 #[derive(Error, Clone, Copy, Debug, PartialEq, Eq)]
 #[error("Unknown {type_name} value: {value}")]
 pub struct TryFromIntError {

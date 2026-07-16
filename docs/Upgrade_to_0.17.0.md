@@ -9,13 +9,17 @@ document summarizes.
 
 **Unlike the 0.13.x → 0.14.0 upgrade** (see
 [Upgrade_to_0.14.0.md](Upgrade_to_0.14.0.md), which changed several function
-signatures), **this release has no public API shape changes.** If your code
-compiles against `wasmedge-sdk` 0.14.0, it compiles against 0.17.0 without
-modification. This was machine-checked throughout development with
-`cargo semver-checks` against every crate's last-published baseline — see
-"Verification" below. The two things worth reading before upgrading are the
-MSRV/edition bump and the one observable (but non-breaking-in-shape) error
-value change, both below.
+signatures), **this release keeps the public API essentially stable.** It makes
+only a small, well-scoped set of nominally-breaking changes — see [Breaking
+changes in 0.17.0](#breaking-changes-in-0170) below — none of which affect code
+that compiles against `wasmedge-sdk` 0.14.0 today, because each targets an item
+that was already dead, `#[doc(hidden)]`, non-compiling, or, in the case of
+`Memory::mut_slice`, an unsound signature with no discovered callers. Everything
+else is source-compatible. The public surface was tracked throughout development with
+`cargo semver-checks` against every crate's last-published crates.io baseline —
+see "Verification" below. Beyond the breaking set, the two things worth reading
+before upgrading are the MSRV/edition bump and the one observable (but
+non-breaking-in-shape) error value change, both below.
 
 ## MSRV and edition
 
@@ -121,49 +125,83 @@ which actually describes the failure.
   unlikely, given it was always the wrong variant) would need to update that
   match arm.
 
-## Coming in a future release (not in 0.17.0)
+## Breaking changes in 0.17.0
 
-The following nominally-breaking cleanups are **planned for a future 0.21.0
-(`wasmedge-sys`) / 0.7.0 (`wasmedge-macro`) release**, not this one. They're
-listed here so downstream users can see them coming; none of them are in
-0.17.0/0.21.0 as shipped by this upgrade guide's own release.
+This release rolls three long-planned, nominally-breaking cleanups into the
+major-version bump (`wasmedge-sys` 0.21.0 / `wasmedge-macro` 0.7.0 /
+`wasmedge-sdk` 0.17.0). Each is "nominal" because no code that actually compiles
+against the last published release depends on the removed or changed item.
 
-- **`wasmedge-sys::io` removal.** The `WasmFnIO` trait and `I1`..`I32` marker
-  types in `wasmedge_sys::io` (170 lines) have zero references anywhere in
-  this workspace. A crates.io-wide search found exactly one real dependent
-  (`wasmedge-bindgen-host`, pinned to `^0.7.0` of `wasmedge-sys`, so
-  unaffected by a change past that range) and no other public usage. Planned
-  for removal alongside the `wasmedge-sys` 0.21.0 release.
-- **`Memory::mut_slice` receiver change.** `wasmedge_sys::Memory::mut_slice`
-  currently has the signature `fn mut_slice<T>(&self) -> Option<&mut [T]>` —
-  a safe function hand-out of an aliasable `&mut` from a shared `&self`,
-  which is unsound. Planned fix: change the receiver to `&mut self` (matching
-  the sibling `get_ref_mut`), which is a receiver-only change with no
-  behavior difference for any caller that already needs mutable access.
-  `wasmedge-sdk` doesn't call this method, and a crates.io-wide search found
-  no external callers either.
-- **`host_function`/`async_host_function` macro deprecation.** These six
-  procedural macros currently expand to a pre-0.14 function shape
-  (referencing a `Caller` type that hasn't existed in this crate since the
-  0.14.0 API redesign), so **any use of them today already fails to
-  compile** — they have had zero working callers since 0.14.0 shipped.
-  Planned: mark them `#[deprecated]` and remove `wasmedge-sdk`'s re-export of
-  `host_function`/`async_host_function`, once the version bump that makes
-  removing that re-export non-breaking-in-practice lands.
+- **`host_function` / `async_host_function` macro deprecation + re-export
+  removal.** All six procedural macros in `wasmedge-macro` — the public
+  `host_function`/`async_host_function` and the four `#[doc(hidden)]` `sys_*`
+  variants — are now `#[deprecated(since = "0.7.0")]`, and `wasmedge-sdk` no
+  longer re-exports `host_function`/`async_host_function`. They expand to the
+  pre-0.14 function shape (referencing a `Caller` type that hasn't existed since
+  the 0.14.0 API redesign), so **any use of them already failed to compile** —
+  zero working callers since 0.14.0. Write the host function directly with
+  today's signature and register it with `ImportObjectBuilder::with_func` (or, at
+  the `wasmedge-sys` layer, `Function::create_sync_func` + `ImportModule::add_func`).
+  `cargo-semver-checks` cannot analyze proc-macros, so this produces no automated
+  finding; it is called out here instead.
+- **`wasmedge_sys::io` removal.** The `WasmFnIO` trait and the `I1`..`I32` marker
+  types (~170 LOC) are gone. The module was `#[doc(hidden)]` and had zero
+  references anywhere in this workspace; a crates.io-wide search found exactly one
+  real dependent (`wasmedge-bindgen-host`, pinned to `^0.7.0` of `wasmedge-sys`,
+  so unaffected past that range). Being `#[doc(hidden)]`, its removal likewise
+  produces no `cargo-semver-checks` finding.
+- **`Memory::mut_slice` receiver change.** `wasmedge_sys::Memory::mut_slice` now
+  takes `&mut self` instead of `&self` (matching the sibling `get_ref_mut`).
+  Handing out an aliasable `&mut [T]` from a shared `&self` was unsound.
+  `wasmedge-sdk` does not call this method, no in-workspace caller passed a shared
+  borrow, and a crates.io-wide search found no external callers. This is the one
+  change `cargo-semver-checks` does flag — a `method_receiver_ref_became_mut`
+  finding against the `wasmedge-sys` 0.19.4 baseline.
+
+## The FFI surface tracks the WasmEdge C API
+
+Between the last published `wasmedge-sys` (0.19.4, built against WasmEdge C API
+0.14.1) and this release (0.21.0, built against WasmEdge C API 0.17.1), the raw
+bindgen-generated symbols under `wasmedge_sys::ffi` changed to match the newer C
+API. `cargo-semver-checks` reports three such deltas against the 0.19.4 baseline
+— none introduced by this release's own Rust code, all a consequence of the
+runtime upgrade already shipped in this train:
+
+- `WasmEdge_ErrCode_InvalidStoreAlignment` was renamed to
+  `WasmEdge_ErrCode_InvalidAlignment`.
+- `WasmEdge_TypeCode_String` was removed when the type-code set was reworked for
+  the 0.17 type system.
+- the `WasmEdge_Limit` struct became an opaque `WasmEdge_LimitContext` with
+  accessor functions (`WasmEdge_LimitCreate`, `WasmEdge_LimitGetMin`, ...).
+
+Users of the safe wrappers are unaffected — most code goes through those. If you
+use `wasmedge_sys::ffi` symbols directly, check them against the WasmEdge 0.17.1
+C API headers.
 
 ## Verification
 
-Every commit that landed the changes summarized above was gated on, in
-addition to the normal build/test/clippy/fmt suite:
+Throughout development each crate's public surface was tracked with
+`cargo-semver-checks` against its last-published-to-crates.io baseline
+(`wasmedge-sdk` 0.14.0 / `wasmedge-sys` 0.19.4 / `wasmedge-types` 0.6.0 /
+`async-wasi` 0.2.1):
 
 ```bash
-cargo semver-checks check-release -p <crate> --baseline-version <last-published-version>
-# wasmedge-sys / wasmedge-sdk additionally need:
-cargo semver-checks check-release -p wasmedge-sys --baseline-version 0.19.4 --features standalone
-cargo semver-checks check-release -p wasmedge-sdk --baseline-version 0.14.0 --features standalone
+cargo semver-checks check-release -p wasmedge-types --baseline-version 0.6.0
+cargo semver-checks check-release -p async-wasi     --baseline-version 0.2.1
+# wasmedge-sys / wasmedge-sdk link against libwasmedge, so add the standalone
+# feature. On a host whose target the 0.19.4 / 0.14.0 baseline build script does
+# not support under the full feature union (e.g. macOS arm64, which those old
+# releases can't build with static), isolate the feature with
+# --only-explicit-features:
+cargo semver-checks check-release -p wasmedge-sys --baseline-version 0.19.4 --only-explicit-features --features standalone
+cargo semver-checks check-release -p wasmedge-sdk --baseline-version 0.14.0 --only-explicit-features --features standalone
 ```
 
-run against each crate's last-published-to-crates.io baseline
-(`wasmedge-sdk` 0.14.0 / `wasmedge-sys` 0.19.4 / `wasmedge-types` 0.6.0 /
-`async-wasi` 0.2.1). `wasmedge-macro` is a proc-macro crate, which
-`cargo-semver-checks` cannot analyze by nature.
+Because the version bumps are 0.x-major (0.6→0.7, 0.19→0.21, 0.14→0.17),
+`cargo-semver-checks` runs in breaking-allowed mode and only reports.
+`wasmedge-types`, `async-wasi`, and `wasmedge-sdk` report **no** breaking
+findings against their baselines; `wasmedge-sys` reports exactly the intentional
+`Memory::mut_slice` receiver change plus the three `wasmedge_sys::ffi` C-API
+symbol deltas noted above, and nothing else. `wasmedge-macro` is a proc-macro
+crate, which `cargo-semver-checks` cannot analyze, so its macro deprecation and
+the `wasmedge-sdk` re-export removal are verified by inspection.

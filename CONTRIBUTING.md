@@ -145,3 +145,15 @@ If a mid-sequence step fails, later crates in the order haven't been touched
 yet, and earlier ones are already published — recover with a patch release of
 the failed crate rather than trying to unpublish anything (crates.io publishes
 are permanent).
+
+### One-time `gh-pages` cleanup (do this once, after the first `docs.yml` run)
+
+API docs are now published by `.github/workflows/docs.yml` into two
+subdirectories of the `gh-pages` branch — `/stable` (the docs.rs-style build)
+and `/async` (the second-state async-enabled build) — instead of the branch
+root. The root of `gh-pages` still holds ~1489 stale files from the old
+`force_orphan` per-release deploys. After the first `docs.yml` deployment lands,
+do a **one-time** manual cleanup: either delete everything at the branch root
+except the `stable/` and `async/` directories, or add a root `index.html` that
+redirects to `/stable/`. This only needs to happen once — the new workflow
+scopes each deploy to its own `destination_dir` and never rewrites the root.

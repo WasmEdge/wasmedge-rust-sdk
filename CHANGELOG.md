@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-16
+
 Targets `wasmedge-sdk` 0.17.0 / `wasmedge-sys` 0.21.0 / `wasmedge-types` 0.7.0 /
 `wasmedge-macro` 0.7.0 / `async-wasi` 0.3.0, all still pinned against WasmEdge C API
 0.17.1. [See the upgrade guide.](docs/Upgrade_to_0.17.0.md)
@@ -58,6 +60,15 @@ deleting them, for historical accuracy.
   was unsound; the receiver now matches the sibling `get_ref_mut`. No caller in
   this workspace passed a shared borrow, and no external caller was found. Rides
   the `wasmedge-sys` 0.21.0 major bump.
+- `wasmedge-sys`: the raw bindgen FFI surface under `wasmedge_sys::ffi` tracks the
+  WasmEdge C API, which advanced from 0.14.1 (the era of the last published
+  `wasmedge-sys` 0.19.4) to 0.17.1 in this release train. Notably
+  `WasmEdge_ErrCode_InvalidStoreAlignment` was renamed to
+  `WasmEdge_ErrCode_InvalidAlignment`, `WasmEdge_TypeCode_String` was removed when
+  the type-code set was reworked, and the `WasmEdge_Limit` struct became an opaque
+  `WasmEdge_LimitContext` with accessor functions. Users of the safe wrappers are
+  unaffected; code touching `wasmedge_sys::ffi` symbols directly should check
+  against the WasmEdge 0.17.1 C API headers.
 
 ### Deprecated
 
@@ -141,13 +152,13 @@ called out below):
   bump.
 - Dead code: `src/dock.rs` and `src/executor.rs` (883 LOC, unreachable, referenced
   types that no longer exist), `crates/async-wasi/src/snapshots/common/vfs/sync.rs`
-  (1148 LOC, an orphaned module never declared by its parent), 15 bit-rotted
+  (1148 LOC, an orphaned module never declared by its parent), 14 bit-rotted
   `examples/wasmedge-sys/*` files using deleted APIs, and a `#[cfg(not(feature =
   "async"))]` test module in `src/compiler.rs` that — precisely because `async` is
   a default feature — never actually compiled under CI/default builds and silently
   broke `--no-default-features` builds (it referenced the already-removed
   `VmBuilder`).
-- Unused dependencies: `anyhow`, `num-derive`, `num-traits`, `cfg-if` from
+- Unused dependencies: `anyhow`, `cfg-if`, `num-derive`, `num-traits`, `thiserror` from
   `wasmedge-sdk`; `paste` (RUSTSEC-2024-0436, unmaintained), `rand`, `lazy_static`,
   `parking_lot`, `thiserror`, `cfg-if`, `wasmedge-macro`, the `cmake` build-dependency,
   and the `anyhow` dev-dependency from `wasmedge-sys`; `serde`, `serde_json`, and

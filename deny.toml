@@ -1,4 +1,4 @@
-# cargo-deny configuration (Phase 0 guardrail).
+# cargo-deny configuration guardrail.
 #
 # Scope for now is intentionally limited to `advisories` + `licenses` (see
 # .github/workflows/guardrails.yml). `bans`/`sources` cleanup (duplicate crate

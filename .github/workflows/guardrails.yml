@@ -22,7 +22,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # wasmedge-macro is a proc-macro crate: cargo-semver-checks cannot scan it (covered by macro ui-tests instead). exclude-only selection picks nothing in a root-package workspace (first-run failure), so packages are listed explicitly.
+      # wasmedge-macro is a proc-macro crate: cargo-semver-checks cannot scan it (verified by inspection; see CONTRIBUTING.md). exclude-only selection picks nothing in a root-package workspace (first-run failure), so packages are listed explicitly.
       - name: semver-checks (wasmedge-types, async-wasi)
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
@@ -68,9 +68,9 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # Phase 6 (P6-1): all known-broken intra-doc links are fixed, so the docs
-      # job now denies every rustdoc warning (including broken_intra_doc_links)
-      # instead of tolerating pre-existing drift.
+      # All known-broken intra-doc links are fixed, so the docs job now denies
+      # every rustdoc warning (including broken_intra_doc_links) instead of
+      # tolerating pre-existing drift.
       - name: cargo doc
         env:
           RUSTDOCFLAGS: "-D warnings"
