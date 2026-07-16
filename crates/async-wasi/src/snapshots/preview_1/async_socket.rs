@@ -611,6 +611,10 @@ pub fn sock_setsockopt<M: Memory>(
             let offset = WasmPtr::<__wasi_timeval>::from(flag.0);
             let timeval = *(mem.get_data(offset)?);
             let (tv_sec, tv_usec) = (i64::from_le(timeval.tv_sec), i64::from_le(timeval.tv_usec));
+            // A negative field would sign-extend below into a ~584942-year timeout.
+            if tv_sec < 0 || tv_usec < 0 {
+                return Err(Errno::__WASI_ERRNO_INVAL);
+            }
 
             let timeout = if tv_sec == 0 && tv_usec == 0 {
                 None
@@ -630,6 +634,10 @@ pub fn sock_setsockopt<M: Memory>(
             let offset = WasmPtr::<__wasi_timeval>::from(flag.0);
             let timeval = *(mem.get_data(offset)?);
             let (tv_sec, tv_usec) = (i64::from_le(timeval.tv_sec), i64::from_le(timeval.tv_usec));
+            // A negative field would sign-extend below into a ~584942-year timeout.
+            if tv_sec < 0 || tv_usec < 0 {
+                return Err(Errno::__WASI_ERRNO_INVAL);
+            }
 
             let timeout = if tv_sec == 0 && tv_usec == 0 {
                 None
