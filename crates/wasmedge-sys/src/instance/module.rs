@@ -39,7 +39,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct InnerInstance(pub(crate) *mut ffi::WasmEdge_ModuleInstanceContext);
 // SAFETY: (verified) owns an opaque `*mut WasmEdge_ModuleInstanceContext`.
 // `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
@@ -437,15 +437,28 @@ impl<T: Sized> ImportModule<T> {
     pub fn create(name: impl AsRef<str>, data: Box<T>) -> WasmEdgeResult<Self> {
         let raw_name = WasmEdgeString::from(name.as_ref());
 
-        // ffi::WasmEdge_ModuleInstanceGetModuleName(Cxt)
-
+        // Hand ownership of the host data to WasmEdge; it is returned to us through
+        // `import_data_finalizer` only when the created module instance is destroyed.
+        let host_data = Box::into_raw(data);
         let ctx = unsafe {
             ffi::WasmEdge_ModuleInstanceCreateWithData(
                 raw_name.as_raw(),
-                Box::leak(data) as *mut _ as *mut std::ffi::c_void,
+                host_data as *mut std::ffi::c_void,
                 Some(import_data_finalizer::<T>),
             )
         };
+
+        if ctx.is_null() {
+            // Creation failed: WasmEdge never took ownership of `host_data`, so the
+            // finalizer will never run. Reclaim the Box to avoid leaking it and
+            // return an error, rather than storing a null context that would be
+            // dereferenced later (in `Drop`, `add_func`, `as_ptr`, ...).
+            // SAFETY: `host_data` came from `Box::into_raw` just above and was not
+            // consumed by the failed call, so it is still a valid, uniquely-owned
+            // allocation.
+            drop(unsafe { Box::from_raw(host_data) });
+            return Err(Box::new(WasmEdgeError::ImportObjCreate));
+        }
 
         let import = Self {
             inner: InnerInstance(ctx),
@@ -469,11 +482,16 @@ impl<T: Sized> ImportModule<T> {
     /// This function will take over the lifetime management of `ctx`, so do not call `ffi::WasmEdge_ModuleInstanceDelete` on `ctx` after this.
     pub unsafe fn from_raw(ctx: *mut ffi::WasmEdge_ModuleInstanceContext) -> Self {
         // SAFETY: `ctx` is a valid module-instance context per this function's
-        // contract; `WasmEdge_ModuleInstanceGetModuleName` reads its name and
-        // `WasmEdgeString::from_raw` wraps the returned `WasmEdge_String`.
-        let wasmedge_s =
-            unsafe { WasmEdgeString::from_raw(ffi::WasmEdge_ModuleInstanceGetModuleName(ctx)) };
-        let name = (&wasmedge_s).into();
+        // contract. `WasmEdge_ModuleInstanceGetModuleName` returns a *borrowed*
+        // `WasmEdge_String` whose buffer is owned by the module instance; the C API
+        // documents that the caller must NOT call `WasmEdge_StringDelete` on it
+        // ("The returned string object is linked to the module name of the module
+        // instance"). Read it into an owned `String` directly, mirroring the
+        // borrowing read in `AsInstance::name`, instead of wrapping it in the owning
+        // `WasmEdgeString` whose Drop would `WasmEdge_StringDelete` the instance's
+        // borrowed buffer — a latent double-free.
+        let raw_name = unsafe { ffi::WasmEdge_ModuleInstanceGetModuleName(ctx) };
+        let name = String::from(&raw_name);
         Self {
             inner: InnerInstance(ctx),
             name,
@@ -742,6 +760,28 @@ mod tests {
         FuncType, MemoryType, Mutability, RefType, ValType,
         error::{CoreError, CoreExecutionError},
     };
+
+    // `ImportModule::from_raw` must read the module name that
+    // `WasmEdge_ModuleInstanceGetModuleName` returns *without* taking ownership of
+    // it: that string is borrowed from the instance and must not be deleted. Wrapping
+    // it in an owning `WasmEdgeString` (the old behavior) made the resulting import's
+    // Drop free the instance's borrowed name buffer — a double-free.
+    #[test]
+    fn test_from_raw_does_not_double_free_module_name() {
+        // Build an owning import module, then hand its raw context to `from_raw`.
+        let import = ImportModule::create("extern_from_raw", Box::new(())).unwrap();
+        let ctx = unsafe { import.as_raw() };
+        // Prevent the original from deleting the context; `from_raw` takes over its
+        // lifetime management (so the context is deleted exactly once, below).
+        std::mem::forget(import);
+
+        let rebuilt: ImportModule<()> = unsafe { ImportModule::from_raw(ctx) };
+        assert_eq!(rebuilt.name().as_deref(), Some("extern_from_raw"));
+
+        // Dropping `rebuilt` deletes the instance exactly once and must NOT call
+        // WasmEdge_StringDelete on the borrowed name (the fixed double-free path).
+        drop(rebuilt);
+    }
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]

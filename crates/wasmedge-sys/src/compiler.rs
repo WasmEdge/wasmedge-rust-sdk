@@ -103,33 +103,24 @@ impl Compiler {
         wasm_bytes: impl AsRef<[u8]>,
         aot_file: impl AsRef<Path>,
     ) -> WasmEdgeResult<()> {
+        let wasm_bytes = wasm_bytes.as_ref();
         let out_path = utils::path_to_cstring(aot_file.as_ref())?;
-        unsafe {
-            let ptr = libc::malloc(wasm_bytes.as_ref().len());
-            let dst = ::core::slice::from_raw_parts_mut(
-                ptr.cast::<std::mem::MaybeUninit<u8>>(),
-                wasm_bytes.as_ref().len(),
-            );
-            let src = ::core::slice::from_raw_parts(
-                wasm_bytes
-                    .as_ref()
-                    .as_ptr()
-                    .cast::<std::mem::MaybeUninit<u8>>(),
-                wasm_bytes.as_ref().len(),
-            );
-            dst.copy_from_slice(src);
 
+        // SAFETY: `WasmEdge_CompilerCompileFromBuffer` reads `wasm_bytes.len()` bytes
+        // from the supplied `const uint8_t *` buffer without taking ownership; passing
+        // the caller's slice pointer directly is sound and avoids the intermediate
+        // `malloc`/copy that leaked the buffer on the `?` error path (and formed a
+        // `malloc(0)` + `from_raw_parts_mut` UB edge for empty input). `wasm_bytes`
+        // stays borrowed for the whole call, and an empty slice yields a valid,
+        // non-null, aligned pointer with length 0.
+        unsafe {
             check(ffi::WasmEdge_CompilerCompileFromBuffer(
                 self.inner.0,
-                ptr as *const u8,
-                wasm_bytes.as_ref().len() as u64,
+                wasm_bytes.as_ptr(),
+                wasm_bytes.len() as u64,
                 out_path.as_ptr(),
-            ))?;
-
-            libc::free(ptr);
+            ))
         }
-
-        Ok(())
     }
 
     /// Provides a raw pointer to the inner Compiler context.
@@ -166,6 +157,19 @@ mod tests {
         error::{CoreError, CoreLoadError},
         wat2wasm,
     };
+
+    // Empty input exercises the direct-slice-pointer `compile_from_bytes` path
+    // (length 0, non-null aligned pointer). It must return Err sanely rather than
+    // hitting the old `malloc(0)` UB edge or leaking the buffer on the error path.
+    #[test]
+    #[allow(clippy::assertions_on_result_states)]
+    fn test_compile_from_bytes_empty_is_err_no_ub() {
+        let compiler = Compiler::create(None).unwrap();
+        let out_path = std::path::PathBuf::from("empty_input_compile_should_error.tmp");
+        let result = compiler.compile_from_bytes([], &out_path);
+        assert!(result.is_err());
+        let _ = std::fs::remove_file(&out_path);
+    }
 
     #[test]
     #[allow(clippy::assertions_on_result_states)]

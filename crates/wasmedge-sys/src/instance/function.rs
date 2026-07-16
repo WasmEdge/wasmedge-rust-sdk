@@ -274,7 +274,7 @@ impl<F: AsRef<Function>> AsFunc for F {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct InnerFunc(pub(crate) *mut ffi::WasmEdge_FunctionInstanceContext);
 // SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_FunctionInstanceContext`.
 // `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.

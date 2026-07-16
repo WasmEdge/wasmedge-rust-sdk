@@ -1359,6 +1359,14 @@ where
     'inst: 'fut,
     'frame: 'fut,
 {
+    // `F` is only ever a bare `async fn` item type here: `wrap_future` (this
+    // function's sole producer) is always handed a plain `async fn`, whose type is
+    // zero-sized and captures no state. Assert that statically so that a future
+    // non-ZST `F` fails to compile instead of silently fabricating an invalid value.
+    const { assert!(std::mem::size_of::<F>() == 0) };
+    // SAFETY: `F` is asserted zero-sized above, so it has exactly one inhabitant and
+    // an all-zero bit pattern is that valid value. Reconstructing it therefore yields
+    // the same stateless callable the caller of `wrap_future` handed over.
     let f: F = unsafe { std::mem::zeroed() };
     Box::new(f(data, inst, frame, args))
 }

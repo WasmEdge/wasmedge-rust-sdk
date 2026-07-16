@@ -86,7 +86,7 @@ impl Module {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct InnerModule(pub(crate) *mut ffi::WasmEdge_ASTModuleContext);
 // SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_ASTModuleContext`, a
 // compiled module that is only read after loading. `Send` is sound: a move transfers

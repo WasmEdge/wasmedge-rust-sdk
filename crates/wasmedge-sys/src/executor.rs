@@ -10,12 +10,14 @@ use crate::r#async::fiber::TimeoutFiberFuture;
 use crate::{
     AsInstance, Config, Function, Instance, Module, Statistics, WasmEdgeResult, WasmValue,
     instance::{function::AsFunc, module::InnerInstance},
+    statistics::InnerStat,
     store::Store,
     types::WasmEdgeString,
     utils::check,
 };
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 use core::ffi::c_void;
+use std::sync::Arc;
 use wasmedge_types::error::WasmEdgeError;
 
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
@@ -118,6 +120,12 @@ pub(crate) unsafe fn init_signal_listen() {
 #[derive(Debug)]
 pub struct Executor {
     pub(crate) inner: InnerExecutor,
+    // Keeps the shared statistics context alive for as long as this executor may
+    // reference it. `WasmEdge_ExecutorCreate` stores the raw stat pointer but does
+    // not take ownership, so without holding this `Arc` the executor would be left
+    // with a dangling stat pointer once the passed `Statistics` is dropped.
+    // Declared after `inner` so the executor is torn down before the stat context.
+    _stat: Option<Arc<InnerStat>>,
 }
 
 impl Drop for Executor {
@@ -142,8 +150,14 @@ impl Executor {
         let conf_ctx = config
             .map(|cfg| cfg.inner.0)
             .unwrap_or(std::ptr::null_mut());
+        // Retain the shared statistics handle: `WasmEdge_ExecutorCreate` stores the
+        // raw pointer without taking ownership, so keep the `Arc<InnerStat>` for the
+        // executor's lifetime instead of letting the `Statistics` drop here (which
+        // would leave the executor with a dangling stat pointer).
+        let stat = stat.map(|stat| stat.inner);
         let stat_ctx = stat
-            .map(|stat| stat.inner.0)
+            .as_ref()
+            .map(|inner| inner.0)
             .unwrap_or(std::ptr::null_mut());
 
         let ctx = unsafe { ffi::WasmEdge_ExecutorCreate(conf_ctx, stat_ctx) };
@@ -167,6 +181,7 @@ impl Executor {
 
             Ok(Executor {
                 inner: InnerExecutor(ctx),
+                _stat: stat,
             })
         }
     }
@@ -383,7 +398,9 @@ impl Executor {
         let raw_params = params.into_iter().map(|x| x.as_raw()).collect::<Vec<_>>();
 
         // get the length of the function's returns
-        let func_ty = func_ref.ty().unwrap();
+        let func_ty = func_ref
+            .ty()
+            .ok_or(WasmEdgeError::Func(wasmedge_types::error::FuncError::Type))?;
         let returns_len = func_ty.returns_len();
         let mut returns = Vec::with_capacity(returns_len);
 
@@ -538,7 +555,7 @@ impl Executor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct InnerExecutor(pub(crate) *mut ffi::WasmEdge_ExecutorContext);
 // SAFETY: (assumed, pre-existing) owns an opaque `*mut WasmEdge_ExecutorContext`.
 // `Send` is sound: a move transfers sole ownership of a thread-agnostic handle.
