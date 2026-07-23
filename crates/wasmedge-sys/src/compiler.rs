@@ -158,7 +158,7 @@ mod tests {
     };
     use wasmedge_types::{
         error::{CoreError, CoreLoadError},
-        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat,
+        wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, RunMode,
     };
 
     #[test]
@@ -422,6 +422,9 @@ mod tests {
         config.set_aot_optimization_level(CompilerOptimizationLevel::O0);
         config.set_aot_compiler_output_format(CompilerOutputFormat::Native);
         config.interruptible(true);
+        // run the compiled module in AOT mode (since WasmEdge 0.17.0, the
+        // default mode is interpreter, which ignores the AOT-compiled code)
+        config.set_run_mode(RunMode::Aot);
 
         // create an executor
         let mut executor = Executor::create(Some(&config), None)?;

@@ -6,6 +6,7 @@ use crate::WasmEdgeResult;
 #[cfg(feature = "aot")]
 use crate::{CompilerOptimizationLevel, CompilerOutputFormat};
 use wasmedge_sys as sys;
+use wasmedge_types::RunMode;
 
 /// Defines a builder for creating a [Config].
 #[derive(Debug, Default)]
@@ -85,7 +86,7 @@ impl ConfigBuilder {
         inner.gc(self.common_config.gc);
         inner.tail_call(self.common_config.tail_call);
         inner.function_references(self.common_config.function_references);
-        inner.interpreter_mode(self.common_config.interpreter_mode);
+        inner.set_run_mode(self.common_config.run_mode);
 
         if let Some(stat_config) = self.stat_config {
             inner.count_instructions(stat_config.count_instructions);
@@ -211,8 +212,15 @@ impl Config {
     }
 
     /// Checks if the `ForceInterpreter` option turns on or not.
+    #[deprecated(note = "use `run_mode` instead")]
     pub fn interpreter_mode_enabled(&self) -> bool {
+        #[allow(deprecated)]
         self.inner.interpreter_mode_enabled()
+    }
+
+    /// Returns the execution mode.
+    pub fn run_mode(&self) -> RunMode {
+        self.inner.get_run_mode()
     }
 
     /// Returns the optimization level of AOT compiler.
@@ -311,7 +319,7 @@ pub struct CommonConfigOptions {
     gc: bool,
     tail_call: bool,
     function_references: bool,
-    interpreter_mode: bool,
+    run_mode: RunMode,
 }
 impl CommonConfigOptions {
     /// Creates a new instance of [CommonConfigOptions].
@@ -329,7 +337,7 @@ impl CommonConfigOptions {
     /// * gc: false,
     /// * tail_call: false,
     /// * function_references: false,
-    /// * interpreter_mode: false,
+    /// * run_mode: RunMode::Interpreter,
     pub fn new() -> Self {
         Self {
             mutable_globals: true,
@@ -344,7 +352,7 @@ impl CommonConfigOptions {
             gc: false,
             tail_call: false,
             function_references: false,
-            interpreter_mode: false,
+            run_mode: RunMode::Interpreter,
         }
     }
 
@@ -494,9 +502,32 @@ impl CommonConfigOptions {
     /// # Argument
     ///
     /// * `enable` - Whether the option turns on or not.
+    #[deprecated(
+        note = "use `run_mode` instead; since WasmEdge 0.17.0, passing `false` is a no-op"
+    )]
     pub fn interpreter_mode(self, enable: bool) -> Self {
+        // Keep the historical "don't force" semantic: only `true` selects the
+        // interpreter; `false` leaves the current mode untouched.
+        if enable {
+            self.run_mode(RunMode::Interpreter)
+        } else {
+            self
+        }
+    }
+
+    /// Sets the execution mode: interpreter, JIT, or AOT. By default, the mode is
+    /// [RunMode::Interpreter].
+    ///
+    /// Since WasmEdge 0.17.0, only [RunMode::Aot] loads the AOT custom sections from a universal
+    /// WASM file or `dlopen`s a shared-library WASM artifact; in the other modes, the AOT data is
+    /// ignored and the WASM runs in the selected engine.
+    ///
+    /// # Argument
+    ///
+    /// * `mode` - The execution mode to set.
+    pub fn run_mode(self, mode: RunMode) -> Self {
         Self {
-            interpreter_mode: enable,
+            run_mode: mode,
             ..self
         }
     }
@@ -516,7 +547,7 @@ impl Default for CommonConfigOptions {
     /// * threads: false,
     /// * tail_call: false,
     /// * function_references: false,
-    /// * interpreter_mode: false,
+    /// * run_mode: RunMode::Interpreter,
     fn default() -> Self {
         Self::new()
     }
@@ -748,7 +779,7 @@ mod tests {
             .sign_extension_operators(true)
             .simd(true)
             .multi_memories(true)
-            .interpreter_mode(true);
+            .run_mode(RunMode::Aot);
 
         let compiler_options = CompilerConfigOptions::default()
             .dump_ir(true)
@@ -781,7 +812,7 @@ mod tests {
         assert!(config.sign_extension_operators_enabled());
         assert!(config.simd_enabled());
         assert!(config.multi_memories_enabled());
-        assert!(config.interpreter_mode_enabled());
+        assert_eq!(config.run_mode(), RunMode::Aot);
 
         // check compiler config options
         assert!(config.dump_ir_enabled());

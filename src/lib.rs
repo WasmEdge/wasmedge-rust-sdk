@@ -144,8 +144,8 @@ pub use vm::Vm;
 
 pub use wasmedge_types::{
     error, wat2wasm, CompilerOptimizationLevel, CompilerOutputFormat, ExternalInstanceType,
-    FuncType, GlobalType, HostRegistration, MemoryType, Mutability, RefType, TableType, ValType,
-    WasmEdgeResult,
+    FuncType, GlobalType, HostRegistration, MemoryType, Mutability, RefType, RunMode, TableType,
+    ValType, WasmEdgeResult,
 };
 
 #[cfg(all(feature = "async", target_os = "linux"))]
