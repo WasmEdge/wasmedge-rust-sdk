@@ -69,7 +69,7 @@ fn find_libwasmedge<'a, L: IntoIterator<Item = &'a Option<LibWasmEdgePaths>>>(
 fn main() {
     // rerun if the other build sources change
     println!("cargo:rerun-if-changed=build_paths.rs");
-    println!("cargo:rerun-if-changed=build_install.rs");
+    println!("cargo:rerun-if-changed=build_standalone.rs");
 
     // find the location of the libwasmedge
     let paths = if cfg!(feature = "standalone") {
