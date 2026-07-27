@@ -4,6 +4,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+env:
+  # .rustfmt.toml relies on nightly-only options (imports_granularity,
+  # group_imports, ...) that stable rustfmt silently ignores.
+  RUSTFMT_TOOLCHAIN: "nightly-2026-07-16"
+
 on:
   push:
     branches:
@@ -59,7 +64,9 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Rustfmt
-        run: cargo fmt --all -- --check
+        run: |
+          rustup toolchain install ${{ env.RUSTFMT_TOOLCHAIN }} --profile minimal --component rustfmt
+          cargo +${{ env.RUSTFMT_TOOLCHAIN }} fmt --all -- --check
 
       - name: Clippy check
         run: |
@@ -127,7 +134,9 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Run cargo fmt
-        run: cargo fmt --all -- --check
+        run: |
+          rustup toolchain install ${{ env.RUSTFMT_TOOLCHAIN }} --profile minimal --component rustfmt
+          cargo +${{ env.RUSTFMT_TOOLCHAIN }} fmt --all -- --check
 
       - name: Clippy
         run: |
@@ -188,7 +197,9 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Rustfmt
-        run: cargo fmt --all -- --check
+        run: |
+          rustup toolchain install ${{ env.RUSTFMT_TOOLCHAIN }} --profile minimal --component rustfmt
+          cargo +${{ env.RUSTFMT_TOOLCHAIN }} fmt --all -- --check
 
       - name: Clippy
         run: |

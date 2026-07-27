@@ -1,7 +1,7 @@
 //! Defines WasmEdge Config struct.
 
 use crate::{ffi, WasmEdgeResult};
-use wasmedge_types::error::WasmEdgeError;
+use wasmedge_types::{error::WasmEdgeError, RunMode};
 #[cfg(feature = "aot")]
 use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 
@@ -119,6 +119,12 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///     - `cost_measuring` determines if measuring the instruction costs when running a compiled or pure WASM.
 ///
 ///     - `time_measuring` determines if measuring the running time when running a compiled or pure WASM.
+///
+/// - **Execution Mode**
+///     - `run_mode` selects the engine used to execute a WASM module: interpreter (default), JIT, or AOT.
+///
+///       Since WasmEdge 0.17.0, only the AOT mode loads the AOT custom sections from a universal WASM
+///       file or `dlopen`s a shared-library WASM artifact; in the other modes, the AOT data is ignored.
 ///
 /// API users can first set the options of interest, such as those related to the WebAssembly proposals,
 /// host registrations, AOT compiler options, and etc., then apply the configuration
@@ -554,16 +560,45 @@ impl Config {
         }
     }
 
+    /// Sets the execution mode: interpreter, JIT, or AOT. By default, the mode is
+    /// [RunMode::Interpreter].
+    ///
+    /// Since WasmEdge 0.17.0, only [RunMode::Aot] loads the AOT custom sections from a universal
+    /// WASM file or `dlopen`s a shared-library WASM artifact; in the other modes, the AOT data is
+    /// ignored and the WASM runs in the selected engine.
+    ///
+    /// # Argument
+    ///
+    /// * `mode` - The execution mode to set.
+    pub fn set_run_mode(&mut self, mode: RunMode) {
+        unsafe {
+            ffi::WasmEdge_ConfigureSetRunMode(
+                self.inner.0,
+                u32::from(mode) as ffi::WasmEdge_RunMode,
+            )
+        }
+    }
+
+    /// Returns the execution mode.
+    pub fn get_run_mode(&self) -> RunMode {
+        let mode = unsafe { ffi::WasmEdge_ConfigureGetRunMode(self.inner.0) };
+        (mode as u32).into()
+    }
+
     /// Enables or disables the `ForceInterpreter` option. By default, the option is disabled.
     ///
     /// # Argument
     ///
     /// * `enable` - Whether the option turns on or not.
+    #[deprecated(
+        note = "use `set_run_mode` instead; since WasmEdge 0.17.0, passing `false` is a no-op"
+    )]
     pub fn interpreter_mode(&mut self, enable: bool) {
         unsafe { ffi::WasmEdge_ConfigureSetForceInterpreter(self.inner.0, enable) }
     }
 
     /// Checks if the `ForceInterpreter` option turns on or not.
+    #[deprecated(note = "use `get_run_mode` instead")]
     pub fn interpreter_mode_enabled(&self) -> bool {
         unsafe { ffi::WasmEdge_ConfigureIsForceInterpreter(self.inner.0) }
     }
@@ -802,8 +837,8 @@ mod tests {
             config.get_aot_compiler_output_format(),
             CompilerOutputFormat::Wasm,
         );
-        // Note: interpreter_mode is enabled by default in WasmEdge 0.17.0+
-        assert!(config.interpreter_mode_enabled());
+        // Note: the default run mode is interpreter since WasmEdge 0.17.0
+        assert_eq!(config.get_run_mode(), RunMode::Interpreter);
         #[cfg(feature = "aot")]
         assert!(!config.interruptible_enabled());
 
@@ -828,7 +863,7 @@ mod tests {
         #[cfg(feature = "aot")]
         config.generic_binary(true);
         config.count_instructions(true);
-        config.interpreter_mode(true);
+        config.set_run_mode(RunMode::Aot);
 
         // check new settings
         assert!(config.multi_memories_enabled());
@@ -854,7 +889,13 @@ mod tests {
         assert!(config.generic_binary_enabled());
         assert!(config.is_instruction_counting());
         assert!(config.is_time_measuring());
-        assert!(config.interpreter_mode_enabled());
+        assert_eq!(config.get_run_mode(), RunMode::Aot);
+
+        // check the run mode round-trip
+        config.set_run_mode(RunMode::Jit);
+        assert_eq!(config.get_run_mode(), RunMode::Jit);
+        config.set_run_mode(RunMode::Interpreter);
+        assert_eq!(config.get_run_mode(), RunMode::Interpreter);
 
         // check function_references
         // Enabling function_references also enables reference_types.

@@ -230,6 +230,65 @@ impl From<CompilerOutputFormat> for i32 {
     }
 }
 
+/// Defines the execution mode of the WasmEdge runtime.
+///
+/// Since WasmEdge 0.17.0, the runtime no longer executes the AOT-compiled
+/// code embedded in a WASM file by default for safety reasons. The execution
+/// mode must be set explicitly to enable the JIT or AOT execution.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RunMode {
+    /// Executes WASM in the interpreter. AOT-compiled code embedded in a WASM
+    /// file is ignored. This is the default mode.
+    #[default]
+    Interpreter,
+
+    /// Executes WASM with the just-in-time compiler.
+    Jit,
+
+    /// Executes the AOT-compiled code. This is the only mode that loads AOT
+    /// custom sections from a universal WASM file or `dlopen`s a
+    /// shared-library WASM artifact.
+    Aot,
+}
+impl From<u32> for RunMode {
+    fn from(val: u32) -> RunMode {
+        match val {
+            0 => RunMode::Interpreter,
+            1 => RunMode::Jit,
+            2 => RunMode::Aot,
+            _ => panic!("Unknown RunMode value: {val}"),
+        }
+    }
+}
+impl From<RunMode> for u32 {
+    fn from(val: RunMode) -> u32 {
+        match val {
+            RunMode::Interpreter => 0,
+            RunMode::Jit => 1,
+            RunMode::Aot => 2,
+        }
+    }
+}
+impl From<i32> for RunMode {
+    fn from(val: i32) -> RunMode {
+        match val {
+            0 => RunMode::Interpreter,
+            1 => RunMode::Jit,
+            2 => RunMode::Aot,
+            _ => panic!("Unknown RunMode value: {val}"),
+        }
+    }
+}
+impl From<RunMode> for i32 {
+    fn from(val: RunMode) -> i32 {
+        match val {
+            RunMode::Interpreter => 0,
+            RunMode::Jit => 1,
+            RunMode::Aot => 2,
+        }
+    }
+}
+
 /// Defines WasmEdge host module registration enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HostRegistration {
