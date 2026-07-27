@@ -1,4 +1,4 @@
-name: Continuous integration
+name: Upstream canary (WasmEdge development HEAD)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -9,21 +9,18 @@ env:
   # group_imports, ...) that stable rustfmt silently ignores.
   RUSTFMT_TOOLCHAIN: "nightly-2026-07-16"
 
+# Every other workflow builds against a released WasmEdge. This one checks out
+# the WasmEdge repository without a ref, so it builds the runtime's development
+# HEAD and catches upstream C API breakage before it reaches a release.
+#
+# It is deliberately not attached to push or pull_request: the extra full
+# WasmEdge build would roughly double PR turnaround, and an upstream breakage
+# would then block changes that have nothing to do with it.
 on:
-  push:
-    branches:
-      - 'bump/**'
-    paths-ignore:
-      - "**/*.md"
-      - ".github/workflows/standalone.yml"
-      - ".github/workflows/rust-static-lib.yml"
-  pull_request:
-    branches:
-      - 'bump/**'
-    paths-ignore:
-      - "**/*.md"
-      - ".github/workflows/standalone.yml"
-      - ".github/workflows/rust-static-lib.yml"
+  schedule:
+    # Mondays, 03:00 UTC.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
 
 jobs:
   build_ubuntu:
