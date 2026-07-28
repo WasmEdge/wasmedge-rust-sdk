@@ -3,37 +3,8 @@ name: Release crates
 on:
   workflow_dispatch:
     inputs:
-      release_async_wasi:
-        description: "Release async-wasi"
-        required: true
-        default: false
-        type: boolean
-      release_wasmedge_macro:
-        description: "Release wasmedge-macro"
-        required: true
-        default: false
-        type: boolean
-      release_wasmedge_types:
-        description: "Release wasmedge-types"
-        required: true
-        default: false
-        type: boolean
-      release_wasmedge_sys:
-        description: "Release wasmedge-sys"
-        required: true
-        default: false
-        type: boolean
-      release_wasmedge_sdk:
-        description: "Release wasmedge-sdk"
-        required: true
-        default: false
-        type: boolean
-      wasmedge_version:
-        description: "WasmEdge version (required for wasmedge-sys or wasmedge-sdk)"
-        required: false
-        type: string
       dry_run:
-        description: "Validate selected releases without publishing or deploying documentation"
+        description: "Validate the release without publishing or deploying documentation"
         required: true
         default: true
         type: boolean
@@ -44,41 +15,29 @@ concurrency:
 
 permissions: {}
 
+env:
+  # Pinned so the OIDC-enabled publish job never executes unreviewed remote code.
+  WASMEDGE_INSTALLER: https://raw.githubusercontent.com/WasmEdge/WasmEdge/678e63744c8a774eb68695f6c496c4bcf802f850/utils/install_v2.sh
+
 jobs:
-  validate_inputs:
-    name: Validate release inputs
+  resolve_release_set:
+    name: Resolve release set
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
       DRY_RUN: ${{ inputs.dry_run }}
-      RELEASE_ASYNC_WASI: ${{ inputs.release_async_wasi }}
-      RELEASE_WASMEDGE_MACRO: ${{ inputs.release_wasmedge_macro }}
-      RELEASE_WASMEDGE_TYPES: ${{ inputs.release_wasmedge_types }}
-      RELEASE_WASMEDGE_SYS: ${{ inputs.release_wasmedge_sys }}
-      RELEASE_WASMEDGE_SDK: ${{ inputs.release_wasmedge_sdk }}
-      WASMEDGE_VERSION: ${{ inputs.wasmedge_version }}
       WORKFLOW_REF: ${{ github.ref }}
+    outputs:
+      crates: ${{ steps.resolve.outputs.crates }}
+      crates_macos: ${{ steps.resolve.outputs.crates_macos }}
+      has_macos_work: ${{ steps.resolve.outputs.has_macos_work }}
+      wasmedge_version: ${{ steps.wasmedge.outputs.version }}
 
     steps:
-      - name: Validate selection and version
+      - name: Validate workflow ref
         shell: bash
         run: |
-          if [[ "${RELEASE_ASYNC_WASI}" != "true" \
-            && "${RELEASE_WASMEDGE_MACRO}" != "true" \
-            && "${RELEASE_WASMEDGE_TYPES}" != "true" \
-            && "${RELEASE_WASMEDGE_SYS}" != "true" \
-            && "${RELEASE_WASMEDGE_SDK}" != "true" ]]; then
-            echo "::error::Select at least one crate to release."
-            exit 1
-          fi
-
-          if [[ ("${RELEASE_WASMEDGE_SYS}" == "true" || "${RELEASE_WASMEDGE_SDK}" == "true") \
-            && -z "${WASMEDGE_VERSION}" ]]; then
-            echo "::error::wasmedge_version is required when releasing wasmedge-sys or wasmedge-sdk."
-            exit 1
-          fi
-
           if [[ "${DRY_RUN}" == "false" && "${WORKFLOW_REF}" != "refs/heads/main" ]]; then
             echo "::error::Publishing is only allowed from the main branch."
             exit 1
@@ -92,176 +51,303 @@ jobs:
       - name: Install Rust-stable
         uses: dtolnay/rust-toolchain@stable
 
-      # `cargo publish --dry-run` never contacts the registry to check whether
-      # the version already exists -- it aborts right before the upload -- so a
-      # fully green dry run says nothing about whether these versions are
-      # actually publishable. Ask crates.io directly.
-      - name: Reject versions already published on crates.io
+      - name: Require cargo with workspace publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(cargo --version | awk '{print $2}')
+          if [[ "$(printf '%s\n1.90.0\n' "${version}" | sort -V | head -1)" != "1.90.0" ]]; then
+            echo "::error::cargo >= 1.90 is required for \`cargo publish\` workspace support; found ${version}."
+            exit 1
+          fi
+          echo "cargo ${version}"
+
+      # Single source of truth for the native library version, so the workflow
+      # cannot drift from what wasmedge-sys actually builds against.
+      - name: Resolve the WasmEdge library version
+        id: wasmedge
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^const WASMEDGE_RELEASE_VERSION: &str = "\(.*\)";$/\1/p' \
+            crates/wasmedge-sys/build.rs)
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not parse WASMEDGE_RELEASE_VERSION from crates/wasmedge-sys/build.rs."
+            exit 1
+          fi
+          echo "WasmEdge library version: ${version}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      # A crate is releasable exactly when its local version is not on crates.io
+      # yet. `cargo publish --dry-run` cannot tell us this -- it aborts right
+      # before the upload and never asks the registry -- so ask directly, and let
+      # the answer decide what gets published instead of trusting a checkbox.
+      - name: Resolve which crates need publishing
+        id: resolve
         shell: bash
         run: |
           set -euo pipefail
 
           metadata=$(cargo metadata --no-deps --format-version 1)
-          failed=0
+          crates=""
+          crates_macos=""
 
-          for entry in \
-            "async-wasi:${RELEASE_ASYNC_WASI}" \
-            "wasmedge-macro:${RELEASE_WASMEDGE_MACRO}" \
-            "wasmedge-types:${RELEASE_WASMEDGE_TYPES}" \
-            "wasmedge-sys:${RELEASE_WASMEDGE_SYS}" \
-            "wasmedge-sdk:${RELEASE_WASMEDGE_SDK}"; do
-            crate="${entry%%:*}"
-            [[ "${entry##*:}" == "true" ]] || continue
-
-            local_version=$(jq -r --arg c "${crate}" \
-              '.packages[] | select(.name == $c) | .version' <<<"${metadata}")
-            if [[ -z "${local_version}" ]]; then
-              echo "::error::Could not read the local version of ${crate}."
-              failed=1
-              continue
-            fi
-
+          while IFS=$'\t' read -r crate local_version; do
             if ! http_code=$(curl -sS --retry 3 -o /tmp/crates-io.json -w '%{http_code}' \
               -H 'User-Agent: wasmedge-rust-sdk release CI (https://github.com/WasmEdge/wasmedge-rust-sdk)' \
               "https://crates.io/api/v1/crates/${crate}"); then
               echo "::error::Could not reach crates.io while checking ${crate}."
-              failed=1
-              continue
+              exit 1
             fi
 
             case "${http_code}" in
-              200) ;;
-              404)
-                echo "${crate} has never been published; ${local_version} is free."
-                continue
+              200)
+                if jq -e --arg v "${local_version}" \
+                  '.versions[]? | select(.num == $v)' /tmp/crates-io.json >/dev/null; then
+                  echo "  ${crate} ${local_version} -- already published, skipping"
+                  continue
+                fi
                 ;;
+              404) ;;
               *)
                 echo "::error::crates.io returned HTTP ${http_code} for ${crate}."
-                failed=1
-                continue
+                exit 1
                 ;;
             esac
 
-            if jq -e --arg v "${local_version}" \
-              '.versions[]? | select(.num == $v)' /tmp/crates-io.json >/dev/null; then
-              echo "::error::${crate} ${local_version} is already published on crates.io. Bump the version in its Cargo.toml before releasing."
-              failed=1
-            else
-              echo "${crate} ${local_version} is not on crates.io yet."
+            echo "  ${crate} ${local_version} -- to be published"
+            crates="${crates} ${crate}"
+
+            # async-wasi calls socket2 APIs that only exist on Linux, so it cannot
+            # be verified on macOS. The workspace normally hides this because
+            # async-wasi is only a dependency under cfg(target_os = "linux").
+            if [[ "${crate}" != "async-wasi" ]]; then
+              crates_macos="${crates_macos} ${crate}"
             fi
+          done < <(jq -r '.packages[] | [.name, .version] | @tsv' <<<"${metadata}")
+
+          crates="${crates# }"
+          crates_macos="${crates_macos# }"
+
+          if [[ -z "${crates}" ]]; then
+            echo "::error::Every crate is already published at its current version. Bump something before releasing."
+            exit 1
+          fi
+
+          echo "Release set: ${crates}"
+          echo "crates=${crates}" >> "${GITHUB_OUTPUT}"
+          echo "crates_macos=${crates_macos}" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${crates_macos}" ]]; then
+            echo "has_macos_work=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_macos_work=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+  verify_linux:
+    name: Verify release (Linux)
+    needs: resolve_release_set
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    container:
+      image: wasmedge/wasmedge:ubuntu-build-clang
+    env:
+      RELEASE_CRATES: ${{ needs.resolve_release_set.outputs.crates }}
+      WASMEDGE_VERSION: ${{ needs.resolve_release_set.outputs.wasmedge_version }}
+
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        run: |
+          apt update
+          apt install -y software-properties-common libboost-all-dev ninja-build
+          apt install -y llvm-15-dev liblld-15-dev
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh "${WASMEDGE_INSTALLER}"
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p /usr/local
+          ldconfig
+          /usr/local/bin/wasmedge --version
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # `cargo publish` builds every crate in the release set against a temporary
+      # registry overlay holding the others, so each one is verified as if its
+      # siblings were already on crates.io. Nothing is uploaded here.
+      - name: Verify the release set
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          for crate in ${RELEASE_CRATES}; do
+            args+=(-p "${crate}")
           done
+          cargo publish "${args[@]}" --dry-run
 
-          exit "${failed}"
-
-  release_async_wasi:
-    name: Release async-wasi
-    needs: validate_inputs
-    if: inputs.release_async_wasi
+  verify_macos:
+    name: Verify release (macOS arm64)
+    needs: resolve_release_set
+    if: needs.resolve_release_set.outputs.has_macos_work == 'true'
+    runs-on: macos-15
     permissions:
       contents: read
-      id-token: write
-    uses: ./.github/workflows/release-async-wasi.yml
-    with:
-      dry_run: ${{ inputs.dry_run }}
+    env:
+      RELEASE_CRATES: ${{ needs.resolve_release_set.outputs.crates_macos }}
+      WASMEDGE_VERSION: ${{ needs.resolve_release_set.outputs.wasmedge_version }}
 
-  release_wasmedge_macro:
-    name: Release wasmedge-macro
-    needs: validate_inputs
-    if: inputs.release_wasmedge_macro
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/release-wasmedge-macro.yml
-    with:
-      dry_run: ${{ inputs.dry_run }}
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-  release_wasmedge_types:
-    name: Release wasmedge-types
-    needs: validate_inputs
-    if: inputs.release_wasmedge_types
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/release-wasmedge-types.yml
-    with:
-      dry_run: ${{ inputs.dry_run }}
+      - name: Install WasmEdge
+        run: |
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh "${WASMEDGE_INSTALLER}"
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p "$HOME/.wasmedge"
+          "$HOME/.wasmedge/bin/wasmedge" --version
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$HOME/.wasmedge/lib" >> "$GITHUB_ENV"
+          echo "$HOME/.wasmedge/bin" >> "$GITHUB_PATH"
 
-  release_wasmedge_sys:
-    name: Release wasmedge-sys
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify the release set
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          for crate in ${RELEASE_CRATES}; do
+            args+=(-p "${crate}")
+          done
+          cargo publish "${args[@]}" --dry-run
+
+  publish:
+    name: Publish to crates.io
     needs:
-      - validate_inputs
-      - release_async_wasi
-      - release_wasmedge_macro
-      - release_wasmedge_types
+      - resolve_release_set
+      - verify_linux
+      - verify_macos
     if: >-
       ${{
         always() &&
         !cancelled() &&
-        inputs.release_wasmedge_sys &&
-        needs.validate_inputs.result == 'success' &&
-        (needs.release_async_wasi.result == 'success' || needs.release_async_wasi.result == 'skipped') &&
-        (needs.release_wasmedge_macro.result == 'success' || needs.release_wasmedge_macro.result == 'skipped') &&
-        (needs.release_wasmedge_types.result == 'success' || needs.release_wasmedge_types.result == 'skipped')
-      }}
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/release-wasmedge-sys.yml
-    with:
-      wasmedge_version: ${{ inputs.wasmedge_version }}
-      dry_run: ${{ inputs.dry_run }}
-
-  release_wasmedge_sdk:
-    name: Release wasmedge-sdk
-    needs:
-      - validate_inputs
-      - release_async_wasi
-      - release_wasmedge_macro
-      - release_wasmedge_types
-      - release_wasmedge_sys
-    if: >-
-      ${{
-        always() &&
-        !cancelled() &&
-        inputs.release_wasmedge_sdk &&
-        needs.validate_inputs.result == 'success' &&
-        (needs.release_async_wasi.result == 'success' || needs.release_async_wasi.result == 'skipped') &&
-        (needs.release_wasmedge_macro.result == 'success' || needs.release_wasmedge_macro.result == 'skipped') &&
-        (needs.release_wasmedge_types.result == 'success' || needs.release_wasmedge_types.result == 'skipped') &&
-        (needs.release_wasmedge_sys.result == 'success' || needs.release_wasmedge_sys.result == 'skipped')
-      }}
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/release-wasmedge-sdk.yml
-    with:
-      wasmedge_version: ${{ inputs.wasmedge_version }}
-      dry_run: ${{ inputs.dry_run }}
-
-  deploy_api_document:
-    name: Deploy API document
-    needs: release_wasmedge_sdk
-    if: >-
-      ${{
-        always() &&
-        !cancelled() &&
-        github.ref == 'refs/heads/main' &&
-        inputs.release_wasmedge_sdk &&
         inputs.dry_run == false &&
-        needs.release_wasmedge_sdk.result == 'success'
+        github.ref == 'refs/heads/main' &&
+        needs.resolve_release_set.result == 'success' &&
+        needs.verify_linux.result == 'success' &&
+        (needs.verify_macos.result == 'success' || needs.verify_macos.result == 'skipped')
+      }}
+    runs-on: ubuntu-22.04
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: wasmedge/wasmedge:ubuntu-build-clang@sha256:a5cacfd0cd2d9ff2ba28f6581ab7dff3e4053145556f7e99b05249e9b7323d5b
+    env:
+      RELEASE_CRATES: ${{ needs.resolve_release_set.outputs.crates }}
+      WASMEDGE_VERSION: ${{ needs.resolve_release_set.outputs.wasmedge_version }}
+
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        run: |
+          apt update
+          apt install -y software-properties-common libboost-all-dev ninja-build
+          apt install -y llvm-15-dev liblld-15-dev
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh "${WASMEDGE_INSTALLER}"
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p /usr/local
+          ldconfig
+          /usr/local/bin/wasmedge --version
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Authenticate with crates.io
+        id: crates_io_auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      # Uploads are not atomic: a server, network or rate-limit error can leave
+      # the set partially published. Verification already ran across the whole
+      # set, so re-running this workflow to publish the remaining crates is safe.
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates_io_auth.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          for crate in ${RELEASE_CRATES}; do
+            args+=(-p "${crate}")
+          done
+          cargo publish "${args[@]}"
+
+  api_document:
+    name: API document
+    needs:
+      - resolve_release_set
+      - verify_linux
+      - publish
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        needs.resolve_release_set.result == 'success' &&
+        needs.verify_linux.result == 'success' &&
+        (needs.publish.result == 'success' || needs.publish.result == 'skipped')
       }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    container:
+      image: wasmedge/wasmedge:ubuntu-build-clang
+    env:
+      WASMEDGE_VERSION: ${{ needs.resolve_release_set.outputs.wasmedge_version }}
 
     steps:
-      - name: Download API document
-        uses: actions/download-artifact@v8
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
         with:
-          name: wasmedge-sdk-api-docs
-          path: target/doc
+          persist-credentials: false
+
+      - name: Set up build environment
+        run: |
+          apt update
+          apt install -y software-properties-common libboost-all-dev ninja-build
+          apt install -y llvm-15-dev liblld-15-dev
+
+      - name: Install WasmEdge
+        run: |
+          curl -sSfL --retry 3 --output /tmp/wasmedge-install.sh "${WASMEDGE_INSTALLER}"
+          bash /tmp/wasmedge-install.sh -v "${WASMEDGE_VERSION}" -p /usr/local
+          ldconfig
+          /usr/local/bin/wasmedge --version
+
+      # must use nightly, because of the feature `doc_cfg`
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Build API document
+        run: |
+          RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc -p wasmedge-sdk --workspace --no-deps --features aot,wasi_crypto,wasi_nn,wasmedge_process,ffi --target-dir=./target
 
       - name: Deploy API document
+        if: github.ref == 'refs/heads/main' && inputs.dry_run == false && needs.publish.result == 'success'
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
