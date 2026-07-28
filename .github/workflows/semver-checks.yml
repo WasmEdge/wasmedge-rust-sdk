@@ -1,0 +1,47 @@
+name: Semver Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'bump/**'
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  semver-checks:
+    name: API semver checks
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Scope note -- only two crates are checked:
+      #
+      # - wasmedge-macro is a proc-macro crate with no library target, so it has
+      #   no API surface to compare; cargo-semver-checks skips it outright.
+      # - wasmedge-sys and wasmedge-sdk build their rustdoc against libwasmedge,
+      #   and the baseline build needs the library version that matched the
+      #   *published* release rather than the one this workflow would install.
+      #
+      # Coverage note: this catches breaking API changes that the version bump
+      # does not account for. It does NOT catch purely additive changes shipped
+      # without any bump at all -- cargo-semver-checks passes those by design.
+      # The crates.io lookup in release-crates.yml covers that case instead.
+      - name: Check public API against the published baseline
+        uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        with:
+          package: wasmedge-types, async-wasi
