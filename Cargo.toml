@@ -54,6 +54,11 @@ path = "examples/run_wasm.rs"
 features = ["aot", "wasi_crypto", "wasi_nn", "wasmedge_process", "ffi"]
 rustdoc-args = ["--cfg", "docsrs"]
 
+# Dependencies are not stepped through in a debugger, and their debug info
+# dominates the size of target/ in dev builds.
+[profile.dev.package."*"]
+debug = false
+
 [workspace]
 members = [
     "crates/wasmedge-sys",
