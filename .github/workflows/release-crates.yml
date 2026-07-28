@@ -48,7 +48,8 @@ jobs:
   validate_inputs:
     name: Validate release inputs
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     env:
       DRY_RUN: ${{ inputs.dry_run }}
       RELEASE_ASYNC_WASI: ${{ inputs.release_async_wasi }}
@@ -82,6 +83,75 @@ jobs:
             echo "::error::Publishing is only allowed from the main branch."
             exit 1
           fi
+
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust-stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # `cargo publish --dry-run` never contacts the registry to check whether
+      # the version already exists -- it aborts right before the upload -- so a
+      # fully green dry run says nothing about whether these versions are
+      # actually publishable. Ask crates.io directly.
+      - name: Reject versions already published on crates.io
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          metadata=$(cargo metadata --no-deps --format-version 1)
+          failed=0
+
+          for entry in \
+            "async-wasi:${RELEASE_ASYNC_WASI}" \
+            "wasmedge-macro:${RELEASE_WASMEDGE_MACRO}" \
+            "wasmedge-types:${RELEASE_WASMEDGE_TYPES}" \
+            "wasmedge-sys:${RELEASE_WASMEDGE_SYS}" \
+            "wasmedge-sdk:${RELEASE_WASMEDGE_SDK}"; do
+            crate="${entry%%:*}"
+            [[ "${entry##*:}" == "true" ]] || continue
+
+            local_version=$(jq -r --arg c "${crate}" \
+              '.packages[] | select(.name == $c) | .version' <<<"${metadata}")
+            if [[ -z "${local_version}" ]]; then
+              echo "::error::Could not read the local version of ${crate}."
+              failed=1
+              continue
+            fi
+
+            if ! http_code=$(curl -sS --retry 3 -o /tmp/crates-io.json -w '%{http_code}' \
+              -H 'User-Agent: wasmedge-rust-sdk release CI (https://github.com/WasmEdge/wasmedge-rust-sdk)' \
+              "https://crates.io/api/v1/crates/${crate}"); then
+              echo "::error::Could not reach crates.io while checking ${crate}."
+              failed=1
+              continue
+            fi
+
+            case "${http_code}" in
+              200) ;;
+              404)
+                echo "${crate} has never been published; ${local_version} is free."
+                continue
+                ;;
+              *)
+                echo "::error::crates.io returned HTTP ${http_code} for ${crate}."
+                failed=1
+                continue
+                ;;
+            esac
+
+            if jq -e --arg v "${local_version}" \
+              '.versions[]? | select(.num == $v)' /tmp/crates-io.json >/dev/null; then
+              echo "::error::${crate} ${local_version} is already published on crates.io. Bump the version in its Cargo.toml before releasing."
+              failed=1
+            else
+              echo "${crate} ${local_version} is not on crates.io yet."
+            fi
+          done
+
+          exit "${failed}"
 
   release_async_wasi:
     name: Release async-wasi
