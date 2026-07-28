@@ -489,7 +489,7 @@ The versioning table below shows the version of the WasmEdge library required by
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
-  | 0.16.1        | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
+  | 0.16.1        | 0.17.1        | 0.20.0        | 0.6.1         | 0.6.1         | 0.2.1     |
   | 0.14.1        | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.0        | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |
   | 0.13.5-newapi | 0.13.5        | 0.18.0        | 0.5.0         | 0.6.1         | 0.2.0     |
