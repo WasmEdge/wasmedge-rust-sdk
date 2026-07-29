@@ -141,8 +141,10 @@ runtime surface as `CoreError`.
 - The version compatibility table is duplicated in `README.md`, `src/lib.rs`, and
   `crates/wasmedge-sys/src/lib.rs` — update all three on a version bump.
 - Releases are manual: `workflow_dispatch` on `.github/workflows/release-crates.yml`, dry-run first, publish
-  only from `main` (crates.io trusted publishing / OIDC). Job dependencies enforce the order
-  async-wasi → wasmedge-macro → wasmedge-types → wasmedge-sys → wasmedge-sdk.
+  only from `main` (crates.io trusted publishing / OIDC). A single `cargo publish -p … -p …` call publishes the
+  whole release set and works out the inter-crate order itself, so it needs cargo ≥ 1.90; `resolve_release_set`
+  asks crates.io which versions already exist and drops those from the set. Uploads are not atomic — if one
+  fails partway, re-running the workflow to publish the remainder is safe.
 
 ## Gotchas
 
