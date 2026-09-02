@@ -48,8 +48,8 @@ jobs:
         working-directory: WasmEdge
         run: |
           apt update
-          apt install -y software-properties-common libboost-all-dev llvm-15-dev liblld-15-dev ninja-build libssl-dev
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_PROCESS=On -DWASMEDGE_PLUGIN_WASI_CRYPTO=On .
+          apt install -y software-properties-common libboost-all-dev ninja-build libssl-dev
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_PLUGIN_WASI_CRYPTO=On .
           cmake --build build
           cmake --install build
           ldconfig
@@ -111,16 +111,54 @@ jobs:
           path: WasmEdge
 
       - name: Install build tools
-        run: brew install llvm ninja boost cmake
+        run: |
+          brew install llvm ninja boost cmake
+          brew tap WasmEdge/llvm
+          brew trust WasmEdge/llvm
+
+      - name: Resolve matching lld formula
+        id: resolve-lld
+        run: |
+          LLVM_VERSION=$(brew info --json llvm | jq -r '.[0].versions.stable')
+          LLD_VERSION=$(brew info --json WasmEdge/llvm/lld | jq -r '.[0].versions.stable')
+          echo "Homebrew LLVM version: ${LLVM_VERSION}"
+          echo "WasmEdge/llvm/lld version: ${LLD_VERSION}"
+          if [ "${LLVM_VERSION}" = "${LLD_VERSION}" ]; then
+            LLD_FORMULA="WasmEdge/llvm/lld"
+            LLD_KEG="lld"
+          else
+            OLDER=$(printf '%s\n%s\n' "${LLVM_VERSION}" "${LLD_VERSION}" | sort -V | head -n1)
+            if [ "${OLDER}" = "${LLD_VERSION}" ]; then
+              echo "Homebrew LLVM (${LLVM_VERSION}) is newer than WasmEdge/llvm/lld (${LLD_VERSION}). Please update the WasmEdge/llvm/lld formula to match."
+              exit 1
+            fi
+            LLD_FORMULA="WasmEdge/llvm/lld@${LLVM_VERSION}"
+            LLD_KEG="lld@${LLVM_VERSION}"
+          fi
+          echo "lld_formula=${LLD_FORMULA}" >> "$GITHUB_OUTPUT"
+          echo "lld_keg=${LLD_KEG}" >> "$GITHUB_OUTPUT"
+
+      - name: Install lld
+        env:
+          LLD_FORMULA: ${{ steps.resolve-lld.outputs.lld_formula }}
+          LLD_KEG: ${{ steps.resolve-lld.outputs.lld_keg }}
+        run: |
+          brew install "${LLD_FORMULA}" || brew install --build-from-source "${LLD_FORMULA}"
+          brew link "${LLD_KEG}" || true
 
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
+        env:
+          LLD_KEG: ${{ steps.resolve-lld.outputs.lld_keg }}
         run: |
-          export LLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
           export CC=clang
           export CXX=clang++
           rm -rf build
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release .
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX:PATH="$HOME/.wasmedge" \
+            -DLLVM_DIR:PATH="$(brew --prefix)/opt/llvm/lib/cmake/llvm" \
+            -DLLD_DIR:PATH="$(brew --prefix)/opt/${LLD_KEG}/lib/cmake/lld" \
+            -DWASMEDGE_LINK_LLVM_STATIC=ON .
           cmake --build build
           cmake --install build
 
@@ -142,18 +180,18 @@ jobs:
 
       - name: Test Rust Bindings
         run: |
+          export DYLD_LIBRARY_PATH="/Users/runner/.wasmedge/lib"
           cargo test --workspace --exclude async-wasi --locked --features aot,ffi -- --nocapture --test-threads=1
 
   build_windows:
     name: Windows
-    runs-on: windows-2022
+    runs-on: windows-2025
     strategy:
       matrix:
         rust: [stable]
     env:
       WASMEDGE_DIR: ${{ github.workspace }}\WasmEdge
       WASMEDGE_BUILD_DIR: ${{ github.workspace }}\WasmEdge\build
-      WASMEDGE_PLUGIN_PATH: ${{ github.workspace }}\WasmEdge\build\wasmedge\plugins\wasmedge_process
       LD_LIBRARY_PATH: ${{ github.workspace }}\WasmEdge\build\lib\api
     steps:
       - uses: actions/checkout@v7
@@ -171,20 +209,26 @@ jobs:
         with:
           args: install cmake ninja vswhere
 
+      - name: Install Windows SDK
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v2.5
+        with:
+          sdk-version: 26100
+
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
-          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
-          $llvm = "LLVM-13.0.1-win64.zip"
-          curl -sLO https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-13.0.1/LLVM-13.0.1-win64.zip -o $llvm
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.26100.0"
+          $llvm = "LLVM-21.1.3-win64-MultiThreadedDLL.zip"
+          Invoke-WebRequest -Uri "https://github.com/WasmEdge/llvm-windows/releases/download/llvmorg-21.1.3/$llvm" -HttpVersion 2.0 -OutFile $llvm
           Expand-Archive -Path $llvm
-          $llvm_dir = "$pwd\\LLVM-13.0.1-win64\\LLVM-13.0.1-win64\\lib\\cmake\\llvm"
-          $Env:CC = "clang-cl"
-          $Env:CXX = "clang-cl"
-          $cmake_sys_version = "10.0.19041.0"
-          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
+          $llvm_dir = "$pwd\LLVM-21.1.3-win64-MultiThreadedDLL\LLVM-21.1.3-win64\lib\cmake\llvm"
+          $Env:CC = "$pwd\LLVM-21.1.3-win64-MultiThreadedDLL\LLVM-21.1.3-win64\bin\clang-cl.exe"
+          $Env:CXX = "$pwd\LLVM-21.1.3-win64-MultiThreadedDLL\LLVM-21.1.3-win64\bin\clang-cl.exe"
+          $llvm_mt = "mt"
+          $cmake_sys_version = "10.0.26100.0"
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SYSTEM_VERSION=$cmake_sys_version" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL -DCMAKE_MT="$llvm_mt" "-DLLVM_DIR=$llvm_dir" -DWASMEDGE_BUILD_PACKAGE="ZIP" .
           cmake --build build
 
       - name: Install Rust-stable
@@ -202,7 +246,7 @@ jobs:
         run: |
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
-          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.26100.0"
           cargo clippy -V
           cargo clippy --lib --examples --features aot,ffi -- -D warnings
 
@@ -210,6 +254,6 @@ jobs:
         run: |
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
-          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.26100.0"
           $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\wasmedge-rust-sdk\wasmedge-rust-sdk\WasmEdge\build\lib\api"
           cargo test --workspace --exclude async-wasi --features aot,ffi --locked -- --nocapture --test-threads=1
