@@ -20,7 +20,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["bundled"] }
+wasmedge-sdk = { version = "0.17.1", features = ["bundled"] }
 ```
 
 This creates a fully self-contained executable with no runtime dependencies. Your binary will work on any compatible Linux system without needing WasmEdge installed.
@@ -39,13 +39,13 @@ sudo dnf install -y libzstd-devel fmt-devel
 For dynamic linking with automatic download (all platforms):
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["standalone"] }
+wasmedge-sdk = { version = "0.17.1", features = ["standalone"] }
 ```
 
 For dynamic linking with system-installed WasmEdge:
 ```toml
 [dependencies]
-wasmedge-sdk = "0.16.1"
+wasmedge-sdk = "0.17.1"
 ```
 
 ### Run a WebAssembly Function
@@ -140,7 +140,7 @@ The `bundled` feature enables static linking of the WasmEdge library into your a
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["bundled"] }
+wasmedge-sdk = { version = "0.17.1", features = ["bundled"] }
 ```
 
 The `bundled` feature is equivalent to enabling both `standalone` and `static` features together. It downloads the static WasmEdge library at build time and links it directly into your binary.
@@ -273,7 +273,7 @@ Add the WasmEdge SDK to `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmedge-sdk = { version = "0.16.1", features = ["standalone"] }
+wasmedge-sdk = { version = "0.17.1", features = ["standalone"] }
 ```
 
 ### Step 5: Load and Run the WASM Module
@@ -489,6 +489,7 @@ The versioning table below shows the version of the WasmEdge library required by
 
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
+  | 0.17.1        | 0.17.1        | 0.21.0        | 0.6.1         | 0.6.1         | 0.2.2     |
   | 0.16.1        | 0.16.1        | 0.20.0        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.1        | 0.14.1        | 0.19.4        | 0.6.0         | 0.6.1         | 0.2.1     |
   | 0.14.0        | 0.14.0        | 0.19.0        | 0.6.0         | 0.6.1         | 0.2.0     |

@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1] - 2026-09-02
+
+### ⛰️  Features
+
+- *(sys)* Upgrade to WasmEdge 0.17.1 ([#142](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/142))
+- *(sys)* Upgrade to WasmEdge 0.17.0 and add macOS arm64 static support ([#141](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/141))
+- *(uncategorized)* Add run-mode support ([#148](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/148))
+
+### 🐛 Bug Fixes
+
+- *(sys)* Point rerun-if-changed at build_standalone.rs ([#150](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/150))
+
+### 📚 Documentation
+
+- *(uncategorized)* Add CLAUDE.md with repository guidance
+
+### ⚙️ Miscellaneous Tasks
+
+- *(uncategorized)* Drop debug info for dependencies in dev builds
+- *(uncategorized)* Prune .rustfmt.toml to options that differ from defaults ([#149](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/149))
+
+### Ci
+
+- *(uncategorized)* Fix upstream canary build of WasmEdge HEAD ([#154](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/154))
+- *(uncategorized)* Convert ci-build.yml into a scheduled upstream canary ([#151](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/151))
+- *(uncategorized)* Migrate crate releases to trusted publishing ([#146](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/146))
+- *(uncategorized)* Upgrade workflows and add release dry runs ([#144](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/144))
+
 ## [0.13.5-newapi] - 2024-04-30
 
 [The sdk has changed a lot, please read this document.](docs/Upgrade_to_0.14.0.md)
@@ -13,7 +41,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
-- Fix the static build to link against `zstd` ([#91](https://github.com/orhun/git-cliff/issues/91))
+- Fix the static build to link against `zstd` ([#91](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/91))
 
 ## [0.13.1] - 2023-11-14
 
