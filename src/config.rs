@@ -79,13 +79,16 @@ impl ConfigBuilder {
         inner.sign_extension_operators(self.common_config.sign_extension_operators);
         inner.multi_value(self.common_config.multi_value);
         inner.bulk_memory_operations(self.common_config.bulk_memory_operations);
-        inner.reference_types(self.common_config.reference_types);
         inner.simd(self.common_config.simd);
         inner.multi_memories(self.common_config.multi_memories);
         inner.threads(self.common_config.threads);
-        inner.gc(self.common_config.gc);
         inner.tail_call(self.common_config.tail_call);
+        // The GC proposal depends on FunctionReferences, and both depend on ReferenceTypes.
+        // Apply the dependents first, so that disabling a dependency is not silently ignored
+        // by the runtime while a dependent is still enabled.
+        inner.gc(self.common_config.gc);
         inner.function_references(self.common_config.function_references);
+        inner.reference_types(self.common_config.reference_types);
         inner.set_run_mode(self.common_config.run_mode);
 
         if let Some(stat_config) = self.stat_config {
@@ -760,6 +763,44 @@ impl StatisticsConfigOptions {
             measure_time: enable,
             ..self
         }
+    }
+}
+
+#[cfg(test)]
+mod proposal_tests {
+    use super::*;
+
+    /// Disabling ReferenceTypes together with its dependents must not be silently ignored:
+    /// the dependents (GC, FunctionReferences) must be disabled before the dependency.
+    #[test]
+    fn test_config_disable_proposals_in_dependency_order() {
+        let config = ConfigBuilder::new(
+            CommonConfigOptions::default()
+                .gc(false)
+                .function_references(false)
+                .reference_types(false),
+        )
+        .build()
+        .unwrap();
+
+        assert!(!config.function_references_enabled());
+        assert!(!config.reference_types_enabled());
+    }
+
+    /// While GC stays enabled, the runtime keeps its dependencies enabled.
+    #[test]
+    fn test_config_gc_keeps_dependencies_enabled() {
+        let config = ConfigBuilder::new(
+            CommonConfigOptions::default()
+                .gc(true)
+                .function_references(false)
+                .reference_types(false),
+        )
+        .build()
+        .unwrap();
+
+        assert!(config.function_references_enabled());
+        assert!(config.reference_types_enabled());
     }
 }
 
