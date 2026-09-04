@@ -1,7 +1,7 @@
 //! Defines WasmEdge Config struct.
 
 use crate::{ffi, WasmEdgeResult};
-use wasmedge_types::{error::WasmEdgeError, RunMode};
+use wasmedge_types::{error::WasmEdgeError, RunMode, WasmStandard};
 #[cfg(feature = "aot")]
 use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 
@@ -48,9 +48,17 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 ///       Also see [SIMD Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md).
 ///  
+///     - `RelaxSIMD` supports the relaxed SIMD instructions.
+///
+///       Also see [Relaxed SIMD Proposal](https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md).
+///
 ///     - `TailCall` supports tail call optimization.
 ///
 ///       Also see [Tail Call Proposal](https://github.com/WebAssembly/tail-call/blob/master/proposals/tail-call/Overview.md).
+///
+///     - `ExtendedConst` supports extended constant expressions.
+///
+///       Also see [Extended Const Expressions Proposal](https://github.com/WebAssembly/extended-const/blob/main/proposals/extended-const/Overview.md).
 ///
 ///     - `Annotations` supports annotations in WASM text format.
 ///
@@ -72,6 +80,10 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 ///       Also see [Function References Proposal](https://github.com/WebAssembly/function-references/blob/master/proposals/function-references/Overview.md).
 ///
+///     - `Component` supports the WebAssembly component model. The support is experimental.
+///
+///       Also see [Component Model Proposal](https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md).
+///
 /// - **Host Registrations**
 ///     - `Wasi` turns on the `WASI` support.
 ///
@@ -79,6 +91,9 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///     
 /// - **Memory Management**
 ///     - `maximum_memory_page` limits the page size of [Memory](crate::Memory).
+///
+/// - **Runtime**
+///     - `allow_afunix` allows the use of `AF_UNIX` sockets in the WASI socket implementation.
 ///
 /// - **AOT Compilation**
 ///
@@ -166,6 +181,21 @@ impl Config {
     /// Returns the number of the memory pages available.
     pub fn get_max_memory_pages(&self) -> u32 {
         unsafe { ffi::WasmEdge_ConfigureGetMaxMemoryPage(self.inner.0) as u32 }
+    }
+
+    /// Allows or disallows the use of `AF_UNIX` sockets in the WASI socket implementation.
+    /// By default, the option is disabled.
+    ///
+    /// # Argument
+    ///
+    /// * `enable` - Whether the option turns on or not.
+    pub fn allow_afunix(&mut self, enable: bool) {
+        unsafe { ffi::WasmEdge_ConfigureSetAllowAFUNIX(self.inner.0, enable) }
+    }
+
+    /// Checks if the `AF_UNIX` sockets option turns on or not.
+    pub fn allow_afunix_enabled(&self) -> bool {
+        unsafe { ffi::WasmEdge_ConfigureIsAllowAFUNIX(self.inner.0) }
     }
 
     /// Enables or disables the ImportExportMutGlobals option. By default, the option is enabled.
@@ -365,7 +395,32 @@ impl Config {
         unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_SIMD) }
     }
 
-    /// Enables or disables the TailCall option. By default, the option is disabled.
+    /// Enables or disables the RelaxSIMD option. By default, the option is enabled.
+    ///
+    /// # Argument
+    ///
+    /// * `enable` - Whether the option turns on or not.
+    pub fn relax_simd(&mut self, enable: bool) {
+        unsafe {
+            if enable {
+                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_RelaxSIMD)
+            } else {
+                ffi::WasmEdge_ConfigureRemoveProposal(
+                    self.inner.0,
+                    ffi::WasmEdge_Proposal_RelaxSIMD,
+                )
+            }
+        }
+    }
+
+    /// Checks if the RelaxSIMD option turns on or not.
+    pub fn relax_simd_enabled(&self) -> bool {
+        unsafe {
+            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_RelaxSIMD)
+        }
+    }
+
+    /// Enables or disables the TailCall option. By default, the option is enabled.
     ///
     /// # Argument
     ///
@@ -383,6 +438,34 @@ impl Config {
     /// Checks if the TailCall option turns on or not.
     pub fn tail_call_enabled(&self) -> bool {
         unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_TailCall) }
+    }
+
+    /// Enables or disables the ExtendedConst option. By default, the option is enabled.
+    ///
+    /// # Argument
+    ///
+    /// * `enable` - Whether the option turns on or not.
+    pub fn extended_const(&mut self, enable: bool) {
+        unsafe {
+            if enable {
+                ffi::WasmEdge_ConfigureAddProposal(
+                    self.inner.0,
+                    ffi::WasmEdge_Proposal_ExtendedConst,
+                )
+            } else {
+                ffi::WasmEdge_ConfigureRemoveProposal(
+                    self.inner.0,
+                    ffi::WasmEdge_Proposal_ExtendedConst,
+                )
+            }
+        }
+    }
+
+    /// Checks if the ExtendedConst option turns on or not.
+    pub fn extended_const_enabled(&self) -> bool {
+        unsafe {
+            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_ExtendedConst)
+        }
     }
 
     /// Enables or disables the Annotations option. By default, the option is disabled.
@@ -410,7 +493,7 @@ impl Config {
         }
     }
 
-    /// Enables or disables the Memory64 option. By default, the option is disabled.
+    /// Enables or disables the Memory64 option. By default, the option is enabled.
     ///
     /// # Argument
     ///
@@ -450,7 +533,11 @@ impl Config {
         unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_Threads) }
     }
 
-    /// Enables or disables the GC option. By default, the option is disabled.
+    /// Enables or disables the GC option. By default, the option is enabled.
+    ///
+    /// The GC proposal depends on the FunctionReferences and ReferenceTypes proposals: enabling
+    /// GC keeps both dependencies enabled, and disabling either dependency is ignored while GC
+    /// stays enabled.
     ///
     /// # Argument
     ///
@@ -470,7 +557,7 @@ impl Config {
         unsafe { ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_GC) }
     }
 
-    /// Enables or disables the ExceptionHandling option. By default, the option is disabled.
+    /// Enables or disables the ExceptionHandling option. By default, the option is enabled.
     ///
     /// # Argument
     ///
@@ -501,7 +588,12 @@ impl Config {
         }
     }
 
-    /// Enables or disables the FunctionReferences option. By default, the option is disabled.
+    /// Enables or disables the FunctionReferences option. By default, the option is enabled.
+    ///
+    /// The FunctionReferences proposal depends on the ReferenceTypes proposal: enabling
+    /// FunctionReferences keeps ReferenceTypes enabled, and disabling ReferenceTypes is ignored
+    /// while FunctionReferences stays enabled. Disabling FunctionReferences is ignored while the
+    /// GC proposal stays enabled.
     ///
     /// # Argument
     ///
@@ -532,7 +624,7 @@ impl Config {
         }
     }
 
-    /// Enables or disables the MultiMemories option. By default, the option is disabled.
+    /// Enables or disables the MultiMemories option. By default, the option is enabled.
     ///
     /// # Argument
     ///
@@ -557,6 +649,50 @@ impl Config {
     pub fn multi_memories_enabled(&self) -> bool {
         unsafe {
             ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_MultiMemories)
+        }
+    }
+
+    /// Enables or disables the Component option. By default, the option is disabled.
+    ///
+    /// Notice that the WebAssembly component model support in WasmEdge is experimental.
+    ///
+    /// # Argument
+    ///
+    /// * `enable` - Whether the option turns on or not.
+    pub fn component_model(&mut self, enable: bool) {
+        unsafe {
+            if enable {
+                ffi::WasmEdge_ConfigureAddProposal(self.inner.0, ffi::WasmEdge_Proposal_Component)
+            } else {
+                ffi::WasmEdge_ConfigureRemoveProposal(
+                    self.inner.0,
+                    ffi::WasmEdge_Proposal_Component,
+                )
+            }
+        }
+    }
+
+    /// Checks if the Component option turns on or not.
+    pub fn component_model_enabled(&self) -> bool {
+        unsafe {
+            ffi::WasmEdge_ConfigureHasProposal(self.inner.0, ffi::WasmEdge_Proposal_Component)
+        }
+    }
+
+    /// Resets the enabled proposals to the preset of the given WebAssembly standard.
+    ///
+    /// All proposals set before this call are overwritten; the proposals that do not belong to
+    /// the given standard, such as `Annotations`, `Threads`, and `Component`, are disabled.
+    ///
+    /// # Argument
+    ///
+    /// * `standard` - The WebAssembly standard whose proposal preset is applied.
+    pub fn set_wasm_standard(&mut self, standard: WasmStandard) {
+        unsafe {
+            ffi::WasmEdge_ConfigureSetWASMStandard(
+                self.inner.0,
+                u32::from(standard) as ffi::WasmEdge_Standard,
+            )
         }
     }
 
@@ -813,11 +949,17 @@ mod tests {
         assert!(config.sign_extension_operators_enabled());
         assert!(config.reference_types_enabled());
         assert!(config.simd_enabled());
+        // Note: relax_simd is enabled by default in WasmEdge 0.17.0+
+        assert!(config.relax_simd_enabled());
+        // Note: extended_const is enabled by default in WasmEdge 0.17.0+
+        assert!(config.extended_const_enabled());
         // Note: tail_call is enabled by default in WasmEdge 0.16.1+
         assert!(config.tail_call_enabled());
         assert!(!config.threads_enabled());
         // Note: gc is enabled by default in WasmEdge 0.16.1+
         assert!(config.gc_enabled());
+        assert!(!config.component_model_enabled());
+        assert!(!config.allow_afunix_enabled());
         assert!(!config.is_cost_measuring());
         #[cfg(feature = "aot")]
         assert!(!config.dump_ir_enabled());
@@ -854,8 +996,12 @@ mod tests {
         config.sign_extension_operators(false);
         config.reference_types(false);
         config.simd(false);
+        config.relax_simd(false);
+        config.extended_const(false);
         config.tail_call(true);
         config.threads(true);
+        config.component_model(true);
+        config.allow_afunix(true);
         config.measure_cost(true);
         config.measure_time(true);
         #[cfg(feature = "aot")]
@@ -880,8 +1026,12 @@ mod tests {
         // Note: reference_types stays enabled in WasmEdge 0.16.1+ because GC requires it
         assert!(config.reference_types_enabled());
         assert!(!config.simd_enabled());
+        assert!(!config.relax_simd_enabled());
+        assert!(!config.extended_const_enabled());
         assert!(config.tail_call_enabled());
         assert!(config.threads_enabled());
+        assert!(config.component_model_enabled());
+        assert!(config.allow_afunix_enabled());
         assert!(config.is_cost_measuring());
         #[cfg(feature = "aot")]
         assert!(config.dump_ir_enabled());
@@ -937,6 +1087,81 @@ mod tests {
             config.get_aot_compiler_output_format(),
             CompilerOutputFormat::Native,
         );
+    }
+
+    #[test]
+    fn test_config_wasm_standard() {
+        // create a Config instance
+        let result = Config::create();
+        assert!(result.is_ok());
+        let mut config = result.unwrap();
+
+        // WASM 1.0: only the ImportExportMutGlobals proposal is enabled
+        config.set_wasm_standard(WasmStandard::Wasm1);
+        assert!(config.mutable_globals_enabled());
+        assert!(!config.non_trap_conversions_enabled());
+        assert!(!config.sign_extension_operators_enabled());
+        assert!(!config.multi_value_enabled());
+        assert!(!config.bulk_memory_operations_enabled());
+        assert!(!config.reference_types_enabled());
+        assert!(!config.simd_enabled());
+        assert!(!config.relax_simd_enabled());
+        assert!(!config.tail_call_enabled());
+        assert!(!config.extended_const_enabled());
+        assert!(!config.function_references_enabled());
+        assert!(!config.gc_enabled());
+        assert!(!config.multi_memories_enabled());
+        assert!(!config.exception_handling_enabled());
+        assert!(!config.memory64_enabled());
+        assert!(!config.annotations_enabled());
+        assert!(!config.threads_enabled());
+        assert!(!config.component_model_enabled());
+
+        // WASM 2.0: WASM 1.0 plus the WASM 2.0 proposals
+        config.set_wasm_standard(WasmStandard::Wasm2);
+        assert!(config.mutable_globals_enabled());
+        assert!(config.non_trap_conversions_enabled());
+        assert!(config.sign_extension_operators_enabled());
+        assert!(config.multi_value_enabled());
+        assert!(config.bulk_memory_operations_enabled());
+        assert!(config.reference_types_enabled());
+        assert!(config.simd_enabled());
+        assert!(!config.relax_simd_enabled());
+        assert!(!config.tail_call_enabled());
+        assert!(!config.extended_const_enabled());
+        assert!(!config.function_references_enabled());
+        assert!(!config.gc_enabled());
+        assert!(!config.multi_memories_enabled());
+        assert!(!config.exception_handling_enabled());
+        assert!(!config.memory64_enabled());
+
+        // WASM 3.0: WASM 2.0 plus the WASM 3.0 proposals; matches the default proposal set
+        config.set_wasm_standard(WasmStandard::Wasm3);
+        assert!(config.mutable_globals_enabled());
+        assert!(config.non_trap_conversions_enabled());
+        assert!(config.sign_extension_operators_enabled());
+        assert!(config.multi_value_enabled());
+        assert!(config.bulk_memory_operations_enabled());
+        assert!(config.reference_types_enabled());
+        assert!(config.simd_enabled());
+        assert!(config.relax_simd_enabled());
+        assert!(config.tail_call_enabled());
+        assert!(config.extended_const_enabled());
+        assert!(config.function_references_enabled());
+        assert!(config.gc_enabled());
+        assert!(config.multi_memories_enabled());
+        assert!(config.exception_handling_enabled());
+        assert!(config.memory64_enabled());
+        assert!(!config.annotations_enabled());
+        assert!(!config.threads_enabled());
+        assert!(!config.component_model_enabled());
+
+        // applying a standard overwrites the proposals set before
+        config.threads(true);
+        config.component_model(true);
+        config.set_wasm_standard(WasmStandard::Wasm3);
+        assert!(!config.threads_enabled());
+        assert!(!config.component_model_enabled());
     }
 
     #[test]
