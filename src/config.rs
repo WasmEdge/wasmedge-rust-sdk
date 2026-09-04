@@ -6,7 +6,7 @@ use crate::WasmEdgeResult;
 #[cfg(feature = "aot")]
 use crate::{CompilerOptimizationLevel, CompilerOutputFormat};
 use wasmedge_sys as sys;
-use wasmedge_types::RunMode;
+use wasmedge_types::{RunMode, WasmStandard};
 
 /// Defines a builder for creating a [Config].
 #[derive(Debug, Default)]
@@ -80,9 +80,15 @@ impl ConfigBuilder {
         inner.multi_value(self.common_config.multi_value);
         inner.bulk_memory_operations(self.common_config.bulk_memory_operations);
         inner.simd(self.common_config.simd);
+        inner.relax_simd(self.common_config.relax_simd);
         inner.multi_memories(self.common_config.multi_memories);
         inner.threads(self.common_config.threads);
         inner.tail_call(self.common_config.tail_call);
+        inner.extended_const(self.common_config.extended_const);
+        inner.annotations(self.common_config.annotations);
+        inner.memory64(self.common_config.memory64);
+        inner.exception_handling(self.common_config.exception_handling);
+        inner.component_model(self.common_config.component_model);
         // The GC proposal depends on FunctionReferences, and both depend on ReferenceTypes.
         // Apply the dependents first, so that disabling a dependency is not silently ignored
         // by the runtime while a dependent is still enabled.
@@ -106,6 +112,7 @@ impl ConfigBuilder {
         }
         if let Some(runtim_config) = self.runtime_config {
             inner.set_max_memory_pages(runtim_config.max_memory_pages);
+            inner.allow_afunix(runtim_config.allow_afunix);
         }
 
         Ok(Config {
@@ -194,6 +201,11 @@ impl Config {
         self.inner.simd_enabled()
     }
 
+    /// Checks if the RelaxSIMD option turns on or not.
+    pub fn relax_simd_enabled(&self) -> bool {
+        self.inner.relax_simd_enabled()
+    }
+
     /// Checks if the MultiMemories option turns on or not.
     pub fn multi_memories_enabled(&self) -> bool {
         self.inner.multi_memories_enabled()
@@ -209,9 +221,44 @@ impl Config {
         self.inner.tail_call_enabled()
     }
 
+    /// Checks if the ExtendedConst option turns on or not.
+    pub fn extended_const_enabled(&self) -> bool {
+        self.inner.extended_const_enabled()
+    }
+
+    /// Checks if the Annotations option turns on or not.
+    pub fn annotations_enabled(&self) -> bool {
+        self.inner.annotations_enabled()
+    }
+
+    /// Checks if the Memory64 option turns on or not.
+    pub fn memory64_enabled(&self) -> bool {
+        self.inner.memory64_enabled()
+    }
+
+    /// Checks if the ExceptionHandling option turns on or not.
+    pub fn exception_handling_enabled(&self) -> bool {
+        self.inner.exception_handling_enabled()
+    }
+
+    /// Checks if the GC option turns on or not.
+    pub fn gc_enabled(&self) -> bool {
+        self.inner.gc_enabled()
+    }
+
     /// Checks if the FunctionReferences option turns on or not.
     pub fn function_references_enabled(&self) -> bool {
         self.inner.function_references_enabled()
+    }
+
+    /// Checks if the Component option turns on or not.
+    pub fn component_model_enabled(&self) -> bool {
+        self.inner.component_model_enabled()
+    }
+
+    /// Checks if the `AF_UNIX` sockets option turns on or not.
+    pub fn allow_afunix_enabled(&self) -> bool {
+        self.inner.allow_afunix_enabled()
     }
 
     /// Checks if the `ForceInterpreter` option turns on or not.
@@ -308,6 +355,50 @@ impl Config {
 ///  - `SIMD` supports 128-bit packed SIMD extension to WebAssembly.
 ///
 ///    Also see [SIMD Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md).
+///
+///  - `RelaxSIMD` supports the relaxed SIMD instructions.
+///
+///    Also see [Relaxed SIMD Proposal](https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md).
+///
+///  - `MultiMemories` enables the use of multiple memories within a single Wasm module.
+///
+///    Also see [Multiple Memories Proposal](https://github.com/WebAssembly/multi-memory/blob/main/proposals/multi-memory/Overview.md).
+///
+///  - `Threads` supports the threading feature.
+///
+///    Also see [Threading Proposal](https://github.com/WebAssembly/threads/blob/main/proposals/threads/Overview.md).
+///
+///  - `TailCall` supports tail call optimization.
+///
+///    Also see [Tail Call Proposal](https://github.com/WebAssembly/tail-call/blob/master/proposals/tail-call/Overview.md).
+///
+///  - `ExtendedConst` supports extended constant expressions.
+///
+///    Also see [Extended Const Expressions Proposal](https://github.com/WebAssembly/extended-const/blob/main/proposals/extended-const/Overview.md).
+///
+///  - `Annotations` supports annotations in the WASM text format.
+///
+///    Also see [Annotations Proposal](https://github.com/WebAssembly/annotations/blob/master/proposals/annotations/Overview.md).
+///
+///  - `Memory64` supports 64-bit memory indexes.
+///
+///    Also see [Memory64 Proposal](https://github.com/WebAssembly/memory64/blob/main/proposals/memory64/Overview.md).
+///
+///  - `ExceptionHandling` supports exception handling.
+///
+///    Also see [Exception Handling Proposal](https://github.com/WebAssembly/exception-handling/blob/main/proposals/exception-handling/Exceptions.md).
+///
+///  - `FunctionReferences` supports typed function references for WebAssembly.
+///
+///    Also see [Function References Proposal](https://github.com/WebAssembly/function-references/blob/master/proposals/function-references/Overview.md).
+///
+///  - `GC` supports garbage collection.
+///
+///    Also see [GC Proposal](https://github.com/WebAssembly/gc/blob/main/proposals/gc/Overview.md).
+///
+///  - `Component` supports the WebAssembly component model. The support is experimental.
+///
+///    Also see [Component Model Proposal](https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md).
 #[derive(Debug, Clone, Copy)]
 pub struct CommonConfigOptions {
     mutable_globals: bool,
@@ -317,17 +408,24 @@ pub struct CommonConfigOptions {
     bulk_memory_operations: bool,
     reference_types: bool,
     simd: bool,
+    relax_simd: bool,
     multi_memories: bool,
     threads: bool,
     gc: bool,
     tail_call: bool,
+    extended_const: bool,
+    annotations: bool,
+    memory64: bool,
+    exception_handling: bool,
     function_references: bool,
+    component_model: bool,
     run_mode: RunMode,
 }
 impl CommonConfigOptions {
     /// Creates a new instance of [CommonConfigOptions].
     ///
-    /// The default options are:
+    /// The default options match the default proposal set of WasmEdge 0.17.1, which enables all
+    /// the proposals of the WebAssembly 3.0 standard:
     /// * mutable_globals: true,
     /// * non_trap_conversions: true,
     /// * sign_extension_operators: true,
@@ -335,11 +433,17 @@ impl CommonConfigOptions {
     /// * bulk_memory_operations: true,
     /// * reference_types: true,
     /// * simd: true,
-    /// * multi_memories: false,
+    /// * relax_simd: true,
+    /// * multi_memories: true,
     /// * threads: false,
-    /// * gc: false,
-    /// * tail_call: false,
-    /// * function_references: false,
+    /// * gc: true,
+    /// * tail_call: true,
+    /// * extended_const: true,
+    /// * annotations: false,
+    /// * memory64: true,
+    /// * exception_handling: true,
+    /// * function_references: true,
+    /// * component_model: false,
     /// * run_mode: RunMode::Interpreter,
     pub fn new() -> Self {
         Self {
@@ -350,12 +454,80 @@ impl CommonConfigOptions {
             bulk_memory_operations: true,
             reference_types: true,
             simd: true,
+            relax_simd: true,
+            multi_memories: true,
+            threads: false,
+            gc: true,
+            tail_call: true,
+            extended_const: true,
+            annotations: false,
+            memory64: true,
+            exception_handling: true,
+            function_references: true,
+            component_model: false,
+            run_mode: RunMode::Interpreter,
+        }
+    }
+
+    /// Creates a new instance of [CommonConfigOptions] with the proposal preset of the given
+    /// WebAssembly standard.
+    ///
+    /// The proposals that do not belong to the given standard, such as `Annotations`, `Threads`,
+    /// and `Component`, are disabled.
+    ///
+    /// # Argument
+    ///
+    /// - `standard` specifies the WebAssembly standard whose proposal preset is applied.
+    pub fn from_wasm_standard(standard: WasmStandard) -> Self {
+        let wasm1 = Self {
+            mutable_globals: true,
+            non_trap_conversions: false,
+            sign_extension_operators: false,
+            multi_value: false,
+            bulk_memory_operations: false,
+            reference_types: false,
+            simd: false,
+            relax_simd: false,
             multi_memories: false,
             threads: false,
             gc: false,
             tail_call: false,
+            extended_const: false,
+            annotations: false,
+            memory64: false,
+            exception_handling: false,
             function_references: false,
+            component_model: false,
             run_mode: RunMode::Interpreter,
+        };
+        match standard {
+            WasmStandard::Wasm1 => wasm1,
+            WasmStandard::Wasm2 => Self {
+                non_trap_conversions: true,
+                sign_extension_operators: true,
+                multi_value: true,
+                bulk_memory_operations: true,
+                reference_types: true,
+                simd: true,
+                ..wasm1
+            },
+            WasmStandard::Wasm3 => Self {
+                non_trap_conversions: true,
+                sign_extension_operators: true,
+                multi_value: true,
+                bulk_memory_operations: true,
+                reference_types: true,
+                simd: true,
+                relax_simd: true,
+                tail_call: true,
+                extended_const: true,
+                function_references: true,
+                gc: true,
+                multi_memories: true,
+                exception_handling: true,
+                memory64: true,
+                ..wasm1
+            },
         }
     }
 
@@ -443,6 +615,18 @@ impl CommonConfigOptions {
         }
     }
 
+    /// Enables or disables the RelaxSIMD option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn relax_simd(self, enable: bool) -> Self {
+        Self {
+            relax_simd: enable,
+            ..self
+        }
+    }
+
     /// Enables or disables the MultiMemories option.
     ///
     /// # Argument
@@ -469,6 +653,9 @@ impl CommonConfigOptions {
 
     /// Enables or disables the GC option.
     ///
+    /// The GC proposal depends on the FunctionReferences and ReferenceTypes proposals: while GC
+    /// is enabled, the runtime keeps both dependencies enabled and ignores disabling them.
+    ///
     /// # Argument
     ///
     /// - `enable` specifies if the option turns on or not.
@@ -488,7 +675,59 @@ impl CommonConfigOptions {
         }
     }
 
+    /// Enables or disables the ExtendedConst option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn extended_const(self, enable: bool) -> Self {
+        Self {
+            extended_const: enable,
+            ..self
+        }
+    }
+
+    /// Enables or disables the Annotations option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn annotations(self, enable: bool) -> Self {
+        Self {
+            annotations: enable,
+            ..self
+        }
+    }
+
+    /// Enables or disables the Memory64 option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn memory64(self, enable: bool) -> Self {
+        Self {
+            memory64: enable,
+            ..self
+        }
+    }
+
+    /// Enables or disables the ExceptionHandling option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn exception_handling(self, enable: bool) -> Self {
+        Self {
+            exception_handling: enable,
+            ..self
+        }
+    }
+
     /// Enables or disables the FunctionReferences option.
+    ///
+    /// The FunctionReferences proposal depends on the ReferenceTypes proposal: while
+    /// FunctionReferences is enabled, the runtime keeps ReferenceTypes enabled and ignores
+    /// disabling it. Disabling FunctionReferences is ignored while the GC proposal stays enabled.
     ///
     /// # Argument
     ///
@@ -496,6 +735,20 @@ impl CommonConfigOptions {
     pub fn function_references(self, enable: bool) -> Self {
         Self {
             function_references: enable,
+            ..self
+        }
+    }
+
+    /// Enables or disables the Component option.
+    ///
+    /// Notice that the WebAssembly component model support in WasmEdge is experimental.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn component_model(self, enable: bool) -> Self {
+        Self {
+            component_model: enable,
             ..self
         }
     }
@@ -538,7 +791,8 @@ impl CommonConfigOptions {
 impl Default for CommonConfigOptions {
     /// Creates a new default instance of [CommonConfigOptions].
     ///
-    /// The default options are:
+    /// The default options match the default proposal set of WasmEdge 0.17.1, which enables all
+    /// the proposals of the WebAssembly 3.0 standard:
     /// * mutable_globals: true,
     /// * non_trap_conversions: true,
     /// * sign_extension_operators: true,
@@ -546,10 +800,17 @@ impl Default for CommonConfigOptions {
     /// * bulk_memory_operations: true,
     /// * reference_types: true,
     /// * simd: true,
-    /// * multi_memories: false,
+    /// * relax_simd: true,
+    /// * multi_memories: true,
     /// * threads: false,
-    /// * tail_call: false,
-    /// * function_references: false,
+    /// * gc: true,
+    /// * tail_call: true,
+    /// * extended_const: true,
+    /// * annotations: false,
+    /// * memory64: true,
+    /// * exception_handling: true,
+    /// * function_references: true,
+    /// * component_model: false,
     /// * run_mode: RunMode::Interpreter,
     fn default() -> Self {
         Self::new()
@@ -679,15 +940,23 @@ impl Default for CompilerConfigOptions {
 ///
 /// - `maximum_memory_page` limits the page size of [Memory](crate::Memory). This option is only effective to
 ///   [Executor](crate::Executor).
+///
+/// - `allow_afunix` allows the use of `AF_UNIX` sockets in the WASI socket implementation.
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeConfigOptions {
     max_memory_pages: u32,
+    allow_afunix: bool,
 }
 impl RuntimeConfigOptions {
     /// Creates a new instance of [RuntimeConfigOptions].
+    ///
+    /// The default options are:
+    /// * max_memory_pages: 65536,
+    /// * allow_afunix: false,
     pub fn new() -> Self {
         Self {
             max_memory_pages: 65536,
+            allow_afunix: false,
         }
     }
 
@@ -699,6 +968,19 @@ impl RuntimeConfigOptions {
     pub fn max_memory_pages(self, count: u32) -> Self {
         Self {
             max_memory_pages: count,
+            ..self
+        }
+    }
+
+    /// Allows or disallows the use of `AF_UNIX` sockets in the WASI socket implementation.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` specifies if the option turns on or not.
+    pub fn allow_afunix(self, enable: bool) -> Self {
+        Self {
+            allow_afunix: enable,
+            ..self
         }
     }
 }
@@ -770,6 +1052,110 @@ impl StatisticsConfigOptions {
 mod proposal_tests {
     use super::*;
 
+    /// The default configuration must match the default proposal set of WasmEdge 0.17.1.
+    #[test]
+    fn test_config_defaults_match_runtime() {
+        let config = ConfigBuilder::new(CommonConfigOptions::default())
+            .build()
+            .unwrap();
+
+        // enabled by default in WasmEdge 0.17.1
+        assert!(config.mutable_globals_enabled());
+        assert!(config.non_trap_conversions_enabled());
+        assert!(config.sign_extension_operators_enabled());
+        assert!(config.multi_value_enabled());
+        assert!(config.bulk_memory_operations_enabled());
+        assert!(config.reference_types_enabled());
+        assert!(config.simd_enabled());
+        assert!(config.relax_simd_enabled());
+        assert!(config.tail_call_enabled());
+        assert!(config.extended_const_enabled());
+        assert!(config.function_references_enabled());
+        assert!(config.gc_enabled());
+        assert!(config.multi_memories_enabled());
+        assert!(config.exception_handling_enabled());
+        assert!(config.memory64_enabled());
+
+        // disabled by default in WasmEdge 0.17.1
+        assert!(!config.threads_enabled());
+        assert!(!config.annotations_enabled());
+        assert!(!config.component_model_enabled());
+        assert!(!config.allow_afunix_enabled());
+
+        assert_eq!(config.run_mode(), RunMode::Interpreter);
+        assert_eq!(config.max_memory_pages(), 65536);
+
+        // the built defaults must be identical to a fresh runtime configuration
+        let runtime_defaults = sys::Config::create().unwrap();
+        assert_eq!(
+            config.mutable_globals_enabled(),
+            runtime_defaults.mutable_globals_enabled()
+        );
+        assert_eq!(
+            config.non_trap_conversions_enabled(),
+            runtime_defaults.non_trap_conversions_enabled()
+        );
+        assert_eq!(
+            config.sign_extension_operators_enabled(),
+            runtime_defaults.sign_extension_operators_enabled()
+        );
+        assert_eq!(
+            config.multi_value_enabled(),
+            runtime_defaults.multi_value_enabled()
+        );
+        assert_eq!(
+            config.bulk_memory_operations_enabled(),
+            runtime_defaults.bulk_memory_operations_enabled()
+        );
+        assert_eq!(
+            config.reference_types_enabled(),
+            runtime_defaults.reference_types_enabled()
+        );
+        assert_eq!(config.simd_enabled(), runtime_defaults.simd_enabled());
+        assert_eq!(
+            config.relax_simd_enabled(),
+            runtime_defaults.relax_simd_enabled()
+        );
+        assert_eq!(
+            config.tail_call_enabled(),
+            runtime_defaults.tail_call_enabled()
+        );
+        assert_eq!(
+            config.extended_const_enabled(),
+            runtime_defaults.extended_const_enabled()
+        );
+        assert_eq!(
+            config.function_references_enabled(),
+            runtime_defaults.function_references_enabled()
+        );
+        assert_eq!(config.gc_enabled(), runtime_defaults.gc_enabled());
+        assert_eq!(
+            config.multi_memories_enabled(),
+            runtime_defaults.multi_memories_enabled()
+        );
+        assert_eq!(
+            config.exception_handling_enabled(),
+            runtime_defaults.exception_handling_enabled()
+        );
+        assert_eq!(
+            config.memory64_enabled(),
+            runtime_defaults.memory64_enabled()
+        );
+        assert_eq!(config.threads_enabled(), runtime_defaults.threads_enabled());
+        assert_eq!(
+            config.annotations_enabled(),
+            runtime_defaults.annotations_enabled()
+        );
+        assert_eq!(
+            config.component_model_enabled(),
+            runtime_defaults.component_model_enabled()
+        );
+        assert_eq!(
+            config.allow_afunix_enabled(),
+            runtime_defaults.allow_afunix_enabled()
+        );
+    }
+
     /// Disabling ReferenceTypes together with its dependents must not be silently ignored:
     /// the dependents (GC, FunctionReferences) must be disabled before the dependency.
     #[test]
@@ -783,6 +1169,7 @@ mod proposal_tests {
         .build()
         .unwrap();
 
+        assert!(!config.gc_enabled());
         assert!(!config.function_references_enabled());
         assert!(!config.reference_types_enabled());
     }
@@ -799,8 +1186,131 @@ mod proposal_tests {
         .build()
         .unwrap();
 
+        assert!(config.gc_enabled());
         assert!(config.function_references_enabled());
         assert!(config.reference_types_enabled());
+    }
+
+    #[test]
+    fn test_config_wasm_standard_presets() {
+        // WASM 1.0
+        let config =
+            ConfigBuilder::new(CommonConfigOptions::from_wasm_standard(WasmStandard::Wasm1))
+                .build()
+                .unwrap();
+        assert!(config.mutable_globals_enabled());
+        assert!(!config.non_trap_conversions_enabled());
+        assert!(!config.sign_extension_operators_enabled());
+        assert!(!config.multi_value_enabled());
+        assert!(!config.bulk_memory_operations_enabled());
+        assert!(!config.reference_types_enabled());
+        assert!(!config.simd_enabled());
+        assert!(!config.relax_simd_enabled());
+        assert!(!config.tail_call_enabled());
+        assert!(!config.extended_const_enabled());
+        assert!(!config.function_references_enabled());
+        assert!(!config.gc_enabled());
+        assert!(!config.multi_memories_enabled());
+        assert!(!config.exception_handling_enabled());
+        assert!(!config.memory64_enabled());
+
+        // WASM 2.0
+        let config =
+            ConfigBuilder::new(CommonConfigOptions::from_wasm_standard(WasmStandard::Wasm2))
+                .build()
+                .unwrap();
+        assert!(config.mutable_globals_enabled());
+        assert!(config.non_trap_conversions_enabled());
+        assert!(config.sign_extension_operators_enabled());
+        assert!(config.multi_value_enabled());
+        assert!(config.bulk_memory_operations_enabled());
+        assert!(config.reference_types_enabled());
+        assert!(config.simd_enabled());
+        assert!(!config.relax_simd_enabled());
+        assert!(!config.tail_call_enabled());
+        assert!(!config.gc_enabled());
+        assert!(!config.memory64_enabled());
+
+        // WASM 3.0: matches the WasmEdge 0.17.1 defaults
+        let config =
+            ConfigBuilder::new(CommonConfigOptions::from_wasm_standard(WasmStandard::Wasm3))
+                .build()
+                .unwrap();
+        let defaults = ConfigBuilder::new(CommonConfigOptions::default())
+            .build()
+            .unwrap();
+        assert_eq!(
+            config.mutable_globals_enabled(),
+            defaults.mutable_globals_enabled()
+        );
+        assert_eq!(
+            config.non_trap_conversions_enabled(),
+            defaults.non_trap_conversions_enabled()
+        );
+        assert_eq!(
+            config.sign_extension_operators_enabled(),
+            defaults.sign_extension_operators_enabled()
+        );
+        assert_eq!(config.multi_value_enabled(), defaults.multi_value_enabled());
+        assert_eq!(
+            config.bulk_memory_operations_enabled(),
+            defaults.bulk_memory_operations_enabled()
+        );
+        assert_eq!(
+            config.reference_types_enabled(),
+            defaults.reference_types_enabled()
+        );
+        assert_eq!(config.simd_enabled(), defaults.simd_enabled());
+        assert_eq!(config.relax_simd_enabled(), defaults.relax_simd_enabled());
+        assert_eq!(config.tail_call_enabled(), defaults.tail_call_enabled());
+        assert_eq!(
+            config.extended_const_enabled(),
+            defaults.extended_const_enabled()
+        );
+        assert_eq!(
+            config.function_references_enabled(),
+            defaults.function_references_enabled()
+        );
+        assert_eq!(config.gc_enabled(), defaults.gc_enabled());
+        assert_eq!(
+            config.multi_memories_enabled(),
+            defaults.multi_memories_enabled()
+        );
+        assert_eq!(
+            config.exception_handling_enabled(),
+            defaults.exception_handling_enabled()
+        );
+        assert_eq!(config.memory64_enabled(), defaults.memory64_enabled());
+        assert_eq!(config.threads_enabled(), defaults.threads_enabled());
+        assert_eq!(config.annotations_enabled(), defaults.annotations_enabled());
+        assert_eq!(
+            config.component_model_enabled(),
+            defaults.component_model_enabled()
+        );
+    }
+
+    #[test]
+    fn test_config_toggle_new_proposals() {
+        let config = ConfigBuilder::new(
+            CommonConfigOptions::default()
+                .relax_simd(false)
+                .extended_const(false)
+                .exception_handling(false)
+                .memory64(false)
+                .annotations(true)
+                .component_model(true),
+        )
+        .with_runtime_config(RuntimeConfigOptions::default().allow_afunix(true))
+        .build()
+        .unwrap();
+
+        assert!(!config.relax_simd_enabled());
+        assert!(!config.extended_const_enabled());
+        assert!(!config.exception_handling_enabled());
+        assert!(!config.memory64_enabled());
+        assert!(config.annotations_enabled());
+        assert!(config.component_model_enabled());
+        assert!(config.allow_afunix_enabled());
     }
 }
 
