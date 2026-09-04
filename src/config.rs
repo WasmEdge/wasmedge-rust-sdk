@@ -84,6 +84,7 @@ impl ConfigBuilder {
         inner.multi_memories(self.common_config.multi_memories);
         inner.threads(self.common_config.threads);
         inner.gc(self.common_config.gc);
+        inner.exception_handling(self.common_config.exception_handling);
         inner.tail_call(self.common_config.tail_call);
         inner.function_references(self.common_config.function_references);
         inner.set_run_mode(self.common_config.run_mode);
@@ -201,6 +202,16 @@ impl Config {
         self.inner.threads_enabled()
     }
 
+    /// Checks if the GC option turns on or not.
+    pub fn gc_enabled(&self) -> bool {
+        self.inner.gc_enabled()
+    }
+
+    /// Checks if the ExceptionHandling option turns on or not.
+    pub fn exception_handling_enabled(&self) -> bool {
+        self.inner.exception_handling_enabled()
+    }
+
     /// Checks if the TailCall option turns on or not.
     pub fn tail_call_enabled(&self) -> bool {
         self.inner.tail_call_enabled()
@@ -305,6 +316,10 @@ impl Config {
 ///  - `SIMD` supports 128-bit packed SIMD extension to WebAssembly.
 ///
 ///    Also see [SIMD Proposal](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md).
+/// 
+///  - `ExceptionHandling` supports exception handling.
+///     
+///       Also see [Exception Handling Proposal](https://github.com/WebAssembly/exception-handling/blob/main/proposals/exception-handling/Exceptions.md).
 #[derive(Debug, Clone, Copy)]
 pub struct CommonConfigOptions {
     mutable_globals: bool,
@@ -317,6 +332,7 @@ pub struct CommonConfigOptions {
     multi_memories: bool,
     threads: bool,
     gc: bool,
+    exception_handling: bool,
     tail_call: bool,
     function_references: bool,
     run_mode: RunMode,
@@ -335,6 +351,7 @@ impl CommonConfigOptions {
     /// * multi_memories: false,
     /// * threads: false,
     /// * gc: false,
+    /// * exception_handling: false,
     /// * tail_call: false,
     /// * function_references: false,
     /// * run_mode: RunMode::Interpreter,
@@ -350,6 +367,7 @@ impl CommonConfigOptions {
             multi_memories: false,
             threads: false,
             gc: false,
+            exception_handling: false,
             tail_call: false,
             function_references: false,
             run_mode: RunMode::Interpreter,
@@ -473,6 +491,15 @@ impl CommonConfigOptions {
         Self { gc: enable, ..self }
     }
 
+    /// Enables or disables the ExceptionHandling option.
+    ///
+    /// # Argument
+    ///
+    /// - `enable` - Whether the option turns on or not.
+    pub fn exception_handling(self, enable: bool) -> Self {
+        Self { exception_handling: enable, ..self }
+    }
+
     /// Enables or disables the TailCall option.
     ///
     /// # Argument
@@ -545,6 +572,8 @@ impl Default for CommonConfigOptions {
     /// * simd: true,
     /// * multi_memories: false,
     /// * threads: false,
+    /// * gc: false,
+    /// * exception_handling: false,
     /// * tail_call: false,
     /// * function_references: false,
     /// * run_mode: RunMode::Interpreter,
