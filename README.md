@@ -487,6 +487,8 @@ This project is licensed under the terms of the [Apache 2.0 license](https://git
 
 The versioning table below shows the version of the WasmEdge library required by each version of the `wasmedge-sdk` crate.
 
+> **Note:** `wasmedge-sdk` is the primary crate intended for most developers. The other crates in this table are lower-level components.
+
   | wasmedge-sdk  | WasmEdge lib  | wasmedge-sys  | wasmedge-types| wasmedge-macro| async-wasi|
   | :-----------: | :-----------: | :-----------: | :-----------: | :-----------: | :-------: |
   | 0.17.1        | 0.17.1        | 0.21.0        | 0.6.1         | 0.6.1         | 0.2.2     |
