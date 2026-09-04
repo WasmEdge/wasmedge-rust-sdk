@@ -289,6 +289,65 @@ impl From<RunMode> for i32 {
     }
 }
 
+/// Defines the WebAssembly standard versions.
+///
+/// A standard selects the preset of WebAssembly proposals that belong to that
+/// version of the specification. Applying a standard to a configuration resets
+/// the enabled proposals to exactly that preset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WasmStandard {
+    /// WebAssembly 1.0: the MVP plus the `ImportExportMutGlobals` proposal.
+    Wasm1,
+
+    /// WebAssembly 2.0: WASM 1.0 plus the `NonTrapFloatToIntConversions`,
+    /// `SignExtensionOperators`, `MultiValue`, `BulkMemoryOperations`,
+    /// `ReferenceTypes`, and `SIMD` proposals.
+    Wasm2,
+
+    /// WebAssembly 3.0: WASM 2.0 plus the `TailCall`, `ExtendedConst`,
+    /// `FunctionReferences`, `GC`, `MultiMemories`, `RelaxSIMD`,
+    /// `ExceptionHandling`, and `Memory64` proposals.
+    Wasm3,
+}
+impl From<u32> for WasmStandard {
+    fn from(val: u32) -> WasmStandard {
+        match val {
+            0 => WasmStandard::Wasm1,
+            1 => WasmStandard::Wasm2,
+            2 => WasmStandard::Wasm3,
+            _ => panic!("Unknown WasmStandard value: {val}"),
+        }
+    }
+}
+impl From<WasmStandard> for u32 {
+    fn from(val: WasmStandard) -> u32 {
+        match val {
+            WasmStandard::Wasm1 => 0,
+            WasmStandard::Wasm2 => 1,
+            WasmStandard::Wasm3 => 2,
+        }
+    }
+}
+impl From<i32> for WasmStandard {
+    fn from(val: i32) -> WasmStandard {
+        match val {
+            0 => WasmStandard::Wasm1,
+            1 => WasmStandard::Wasm2,
+            2 => WasmStandard::Wasm3,
+            _ => panic!("Unknown WasmStandard value: {val}"),
+        }
+    }
+}
+impl From<WasmStandard> for i32 {
+    fn from(val: WasmStandard) -> i32 {
+        match val {
+            WasmStandard::Wasm1 => 0,
+            WasmStandard::Wasm2 => 1,
+            WasmStandard::Wasm3 => 2,
+        }
+    }
+}
+
 /// Defines WasmEdge host module registration enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HostRegistration {
