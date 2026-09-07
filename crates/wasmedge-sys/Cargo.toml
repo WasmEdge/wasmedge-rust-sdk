@@ -14,7 +14,6 @@ version = "0.21.0"
 
 [dependencies]
 log = "0.4"
-fiber-for-wasmedge = { version = "14.0.4", optional = true }
 libc = "0.2.94"
 paste = "1.0.5"
 scoped-tls = "1"
@@ -30,6 +29,7 @@ cfg-if.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 async-wasi = { workspace = true, optional = true }
+fiber-for-wasmedge = { version = "14.0.4", optional = true }
 setjmp = "0.1"
 
 [build-dependencies]
