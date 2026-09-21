@@ -102,33 +102,16 @@ impl Compiler {
         wasm_bytes: impl AsRef<[u8]>,
         aot_file: impl AsRef<Path>,
     ) -> WasmEdgeResult<()> {
+        let wasm_bytes = wasm_bytes.as_ref();
         let out_path = utils::path_to_cstring(aot_file.as_ref())?;
         unsafe {
-            let ptr = libc::malloc(wasm_bytes.as_ref().len());
-            let dst = ::core::slice::from_raw_parts_mut(
-                ptr.cast::<std::mem::MaybeUninit<u8>>(),
-                wasm_bytes.as_ref().len(),
-            );
-            let src = ::core::slice::from_raw_parts(
-                wasm_bytes
-                    .as_ref()
-                    .as_ptr()
-                    .cast::<std::mem::MaybeUninit<u8>>(),
-                wasm_bytes.as_ref().len(),
-            );
-            dst.copy_from_slice(src);
-
             check(ffi::WasmEdge_CompilerCompileFromBuffer(
                 self.inner.0,
-                ptr as *const u8,
-                wasm_bytes.as_ref().len() as u64,
+                wasm_bytes.as_ptr(),
+                wasm_bytes.len() as u64,
                 out_path.as_ptr(),
-            ))?;
-
-            libc::free(ptr);
+            ))
         }
-
-        Ok(())
     }
 
     /// Provides a raw pointer to the inner Compiler context.
@@ -206,6 +189,29 @@ mod tests {
                     CoreLoadError::IllegalPath
                 )))
             );
+
+            // the text format is not accepted
+            let out_path = std::path::PathBuf::from("test_aot_malformed.wasm");
+            let result = compiler.compile_from_bytes(b"(module)", &out_path);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err(),
+                Box::new(WasmEdgeError::Core(CoreError::Load(
+                    CoreLoadError::MalformedMagic
+                )))
+            );
+            assert!(!out_path.exists());
+
+            // empty is not accepted
+            let result = compiler.compile_from_bytes([], &out_path);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err(),
+                Box::new(WasmEdgeError::Core(CoreError::Load(
+                    CoreLoadError::UnexpectedEnd
+                )))
+            );
+            assert!(!out_path.exists());
         }
 
         {
