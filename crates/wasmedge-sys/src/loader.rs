@@ -120,28 +120,16 @@ impl Loader {
     /// assert!(loader.from_bytes(b"(module)").is_err());
     /// ```
     pub fn from_bytes(&self, bytes: impl AsRef<[u8]>) -> WasmEdgeResult<Arc<Module>> {
+        let bytes = bytes.as_ref();
         let mut mod_ctx: *mut ffi::WasmEdge_ASTModuleContext = std::ptr::null_mut();
 
         unsafe {
-            let ptr = libc::malloc(bytes.as_ref().len());
-            let dst = ::core::slice::from_raw_parts_mut(
-                ptr.cast::<std::mem::MaybeUninit<u8>>(),
-                bytes.as_ref().len(),
-            );
-            let src = ::core::slice::from_raw_parts(
-                bytes.as_ref().as_ptr().cast::<std::mem::MaybeUninit<u8>>(),
-                bytes.as_ref().len(),
-            );
-            dst.copy_from_slice(src);
-
             check(ffi::WasmEdge_LoaderParseFromBuffer(
                 self.inner.0,
                 &mut mod_ctx,
-                ptr as *const u8,
-                bytes.as_ref().len() as u32,
+                bytes.as_ptr(),
+                bytes.len() as u32,
             ))?;
-
-            libc::free(ptr);
         }
 
         match mod_ctx.is_null() {

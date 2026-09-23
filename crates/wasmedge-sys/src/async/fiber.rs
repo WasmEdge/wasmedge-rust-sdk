@@ -186,6 +186,11 @@ impl Future for TimeoutFiberFuture<'_> {
             };
 
             ASYNC_CX.set(&async_cx, || {
+                let timeout = match self.deadline.duration_since(std::time::SystemTime::now()) {
+                    Ok(timeout) => timeout.max(std::time::Duration::from_millis(100)),
+                    Err(_) => return Poll::Ready(Err(())),
+                };
+
                 let mut self_thread = libc::pthread_self();
                 let mut timerid: libc::timer_t = std::mem::zeroed();
                 let mut sev: libc::sigevent = std::mem::zeroed();
@@ -196,11 +201,6 @@ impl Future for TimeoutFiberFuture<'_> {
                 if libc::timer_create(libc::CLOCK_REALTIME, &mut sev, &mut timerid) < 0 {
                     return Poll::Ready(Err(()));
                 }
-
-                let timeout = match self.deadline.duration_since(std::time::SystemTime::now()) {
-                    Ok(timeout) => timeout.max(std::time::Duration::from_millis(100)),
-                    Err(_) => return Poll::Ready(Err(())),
-                };
 
                 let mut value: libc::itimerspec = std::mem::zeroed();
                 value.it_value.tv_sec = timeout.as_secs() as _;
