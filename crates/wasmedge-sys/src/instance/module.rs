@@ -548,6 +548,47 @@ impl WasiModule {
         envs: Option<Vec<&str>>,
         preopens: Option<Vec<&str>>,
     ) -> WasmEdgeResult<Self> {
+        Self::create_impl(args, envs, preopens, None)
+    }
+
+    /// Creates a WASI host module with custom standard-stream file descriptors.
+    ///
+    /// `args`, `envs`, and `preopens` have the same meaning as in [`Self::create`].
+    /// `stdin_fd`, `stdout_fd`, and `stderr_fd` are mapped to WASI descriptors 0,
+    /// 1, and 2, respectively. The runtime borrows these descriptors; it does
+    /// not duplicate them or take ownership of them.
+    ///
+    /// On Unix, these are native file descriptors. On Windows, these must be
+    /// C runtime file descriptors, not Windows `HANDLE` values.
+    ///
+    /// # Safety
+    ///
+    /// The caller must keep all three descriptors valid and open until this
+    /// WASI module is dropped. They must be suitable for reading from
+    /// stdin and writing to stdout and stderr, respectively. Closing a
+    /// descriptor early can cause the guest to access a different resource
+    /// if the operating system reuses its descriptor number.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the runtime fails to create the host module.
+    pub unsafe fn create_with_fds(
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<&str>>,
+        preopens: Option<Vec<&str>>,
+        stdin_fd: i32,
+        stdout_fd: i32,
+        stderr_fd: i32,
+    ) -> WasmEdgeResult<Self> {
+        Self::create_impl(args, envs, preopens, Some([stdin_fd, stdout_fd, stderr_fd]))
+    }
+
+    fn create_impl(
+        args: Option<Vec<&str>>,
+        envs: Option<Vec<&str>>,
+        preopens: Option<Vec<&str>>,
+        fds: Option<[i32; 3]>,
+    ) -> WasmEdgeResult<Self> {
         // parse args
         let cstr_args: Vec<_> = match args {
             Some(args) => args
@@ -585,14 +626,29 @@ impl WasiModule {
         p_preopens.push(std::ptr::null());
 
         let ctx = unsafe {
-            ffi::WasmEdge_ModuleInstanceCreateWASI(
-                p_args.as_ptr(),
-                p_args_len as u32,
-                p_envs.as_ptr(),
-                p_envs_len as u32,
-                p_preopens.as_ptr(),
-                p_preopens_len as u32,
-            )
+            match fds {
+                Some([stdin_fd, stdout_fd, stderr_fd]) => {
+                    ffi::WasmEdge_ModuleInstanceCreateWASIWithFds(
+                        p_args.as_ptr(),
+                        p_args_len as u32,
+                        p_envs.as_ptr(),
+                        p_envs_len as u32,
+                        p_preopens.as_ptr(),
+                        p_preopens_len as u32,
+                        stdin_fd,
+                        stdout_fd,
+                        stderr_fd,
+                    )
+                }
+                None => ffi::WasmEdge_ModuleInstanceCreateWASI(
+                    p_args.as_ptr(),
+                    p_args_len as u32,
+                    p_envs.as_ptr(),
+                    p_envs_len as u32,
+                    p_preopens.as_ptr(),
+                    p_preopens_len as u32,
+                ),
+            }
         };
         match ctx.is_null() {
             true => Err(Box::new(WasmEdgeError::ImportObjCreate)),
