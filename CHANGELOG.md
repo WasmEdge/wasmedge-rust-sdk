@@ -2,20 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.17.1] - 2026-09-02
+## [0.17.1] - 2026-10-13
 
 ### ⛰️  Features
 
+- *(sys)* Wrap the missing WasmEdge 0.17.1 configure C APIs
 - *(sys)* Upgrade to WasmEdge 0.17.1 ([#142](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/142))
 - *(sys)* Upgrade to WasmEdge 0.17.0 and add macOS arm64 static support ([#141](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/141))
+- *(types)* Add the WasmStandard enum
+- *(uncategorized)* Align the SDK config defaults and proposals with WasmEdge 0.17.1
 - *(uncategorized)* Add run-mode support ([#148](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/148))
 
 ### 🐛 Bug Fixes
 
+- *(sys)* Pass wasm bytes to the C API without a leaking heap copy ([#160](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/160))
+- *(sys)* Compile fiber-for-wasmedge only on Linux targets ([#158](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/158))
 - *(sys)* Point rerun-if-changed at build_standalone.rs ([#150](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/150))
+- *(uncategorized)* Disable config proposals in dependency order
 
 ### 📚 Documentation
 
+- *(uncategorized)* Describe the new release flow in CLAUDE.md
 - *(uncategorized)* Add CLAUDE.md with repository guidance
 
 ### ⚙️ Miscellaneous Tasks
@@ -25,6 +32,11 @@ All notable changes to this project will be documented in this file.
 
 ### Ci
 
+- *(uncategorized)* Build the pinned WasmEdge release in the Windows job ([#163](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/163))
+- *(uncategorized)* Delete publish-async-api-docs.yml
+- *(uncategorized)* Replace the release DAG with cargo publish workspace support
+- *(uncategorized)* Check the public API against the published baseline on pull requests
+- *(uncategorized)* Reject already-published versions before releasing
 - *(uncategorized)* Fix upstream canary build of WasmEdge HEAD ([#154](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/154))
 - *(uncategorized)* Convert ci-build.yml into a scheduled upstream canary ([#151](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/151))
 - *(uncategorized)* Migrate crate releases to trusted publishing ([#146](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/146))
