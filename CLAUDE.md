@@ -24,19 +24,25 @@ test-wasm/                                   guest module for tests; excluded fr
 
 ## Build prerequisites
 
-`crates/wasmedge-sys/build.rs` must locate `libwasmedge` headers + library. Two paths:
+`crates/wasmedge-sys/build.rs` must locate `libwasmedge` headers + library. Two paths, plus a docs.rs escape hatch:
 
 - **No local install** — `--features bundled` (= `standalone` + `static`): downloads a pinned prebuilt archive
   and links it statically. CI exercises this on both Ubuntu and macOS arm64 (`rust-static-lib.yml`).
   Linux needs `libzstd-dev libfmt-dev` (`zstd-devel fmt-devel` on Fedora).
-- **System install** — searched in order (`SEARCH_LOCATIONS`, build.rs:34): `$WASMEDGE_INCLUDE_DIR`/`$WASMEDGE_LIB_DIR`
+- **System install** — searched in order (`SEARCH_LOCATIONS`, build.rs:35): `$WASMEDGE_INCLUDE_DIR`/`$WASMEDGE_LIB_DIR`
   → `$WASMEDGE_DIR` → `$WASMEDGE_BUILD_DIR` → `$HOME/.wasmedge` → `/usr/local` → `$HOME/.local`.
   Dynamic linking also needs `LD_LIBRARY_PATH` (`DYLD_LIBRARY_PATH` on macOS) set to `$WASMEDGE_DIR/lib` at
   **run** time.
+- **docs.rs** — the sandbox has no network and no libwasmedge, so when `DOCS_RS` is set build.rs skips the
+  search and the link directives and copies `crates/wasmedge-sys/bindings/wasmedge.rs` (bindgen output for the
+  pinned runtime, generated on Linux x86_64) into `OUT_DIR`. The Ubuntu CI job diffs that file against freshly
+  generated bindings; the `docs.rs` job builds with `cargo docs-rs`.
 
 The downloaded runtime version is pinned by `WASMEDGE_RELEASE_VERSION` (build.rs:12) plus a sha256 table
-`REMOTE_ARCHIVES` (build.rs:13); workflows pin the same value in `WASMEDGE_VERSION`. Bumping the runtime means
-updating the constant, every sha, and the workflow envs together.
+`REMOTE_ARCHIVES` (build.rs:14); workflows pin the same value in `WASMEDGE_VERSION`. Bumping the runtime means
+updating the constant, every sha, the workflow envs, and the pregenerated bindings together — build once on
+Linux against the new runtime and copy `target/debug/build/wasmedge-sys-*/out/wasmedge.rs` over
+`crates/wasmedge-sys/bindings/wasmedge.rs`.
 
 Feature meanings: `standalone` = download at build time (system search is skipped), `static` = link
 `libwasmedge.a`, `bundled` = both, `ffi` = re-export raw bindings, `aot`/`wasi_crypto`/`wasi_nn`/`wasmedge_process`
