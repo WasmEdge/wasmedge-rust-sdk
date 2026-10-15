@@ -31,7 +31,7 @@ impl AsyncWasiSocketInner {
                 }
                 AsyncWasiSocketInner::AsyncFd(_) => return Ok(()),
             };
-            let mut new_self = Self::AsyncFd(AsyncFd::new(inner)?);
+            let mut new_self = Self::AsyncFd(AsyncFd::register(inner)?);
             std::mem::swap(self, &mut new_self);
             std::mem::forget(new_self);
             Ok(())
@@ -245,7 +245,7 @@ impl AsyncWasiSocket {
         let socket = Socket::from(listener);
         socket.set_nonblocking(true)?;
         Ok(Self {
-            inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?),
+            inner: AsyncWasiSocketInner::AsyncFd(unsafe { AsyncFd::register(socket) }?),
             state: Box::new(state),
             writable: Default::default(),
         })
@@ -255,7 +255,7 @@ impl AsyncWasiSocket {
         let socket = Socket::from(socket);
         socket.set_nonblocking(true)?;
         Ok(Self {
-            inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(socket)?),
+            inner: AsyncWasiSocketInner::AsyncFd(unsafe { AsyncFd::register(socket) }?),
             state: Box::new(state),
             writable: Default::default(),
         })
@@ -372,7 +372,7 @@ impl AsyncWasiSocket {
         new_state.local_addr = cs.local_addr().ok().and_then(|addr| addr.as_socket());
 
         Ok(AsyncWasiSocket {
-            inner: AsyncWasiSocketInner::AsyncFd(AsyncFd::new(cs)?),
+            inner: AsyncWasiSocketInner::AsyncFd(unsafe { AsyncFd::register(cs) }?),
             state: Box::new(new_state),
             writable: Default::default(),
         })
