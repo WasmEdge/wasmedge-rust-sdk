@@ -30,8 +30,7 @@ jobs:
       WORKFLOW_REF: ${{ github.ref }}
     outputs:
       crates: ${{ steps.resolve.outputs.crates }}
-      crates_macos: ${{ steps.resolve.outputs.crates_macos }}
-      has_macos_work: ${{ steps.resolve.outputs.has_macos_work }}
+      verify_macos: ${{ steps.resolve.outputs.verify_macos }}
       wasmedge_version: ${{ steps.wasmedge.outputs.version }}
 
     steps:
@@ -90,7 +89,7 @@ jobs:
 
           metadata=$(cargo metadata --no-deps --format-version 1)
           crates=""
-          crates_macos=""
+          verify_macos=true
 
           while IFS=$'\t' read -r crate local_version; do
             if ! http_code=$(curl -sS --retry 3 -o /tmp/crates-io.json -w '%{http_code}' \
@@ -118,30 +117,25 @@ jobs:
             echo "  ${crate} ${local_version} -- to be published"
             crates="${crates} ${crate}"
 
-            # async-wasi calls socket2 APIs that only exist on Linux, so it cannot
-            # be verified on macOS. The workspace normally hides this because
-            # async-wasi is only a dependency under cfg(target_os = "linux").
-            if [[ "${crate}" != "async-wasi" ]]; then
-              crates_macos="${crates_macos} ${crate}"
+            if [[ "${crate}" == "async-wasi" ]]; then
+              verify_macos=false
             fi
           done < <(jq -r '.packages[] | [.name, .version] | @tsv' <<<"${metadata}")
 
           crates="${crates# }"
-          crates_macos="${crates_macos# }"
 
           if [[ -z "${crates}" ]]; then
             echo "::error::Every crate is already published at its current version. Bump something before releasing."
             exit 1
           fi
 
+          if [[ "${verify_macos}" == "false" ]]; then
+            echo "async-wasi is in the release set; its dependents cannot be dry-run published on macOS until it is on crates.io, skipping the macOS verification."
+          fi
+
           echo "Release set: ${crates}"
           echo "crates=${crates}" >> "${GITHUB_OUTPUT}"
-          echo "crates_macos=${crates_macos}" >> "${GITHUB_OUTPUT}"
-          if [[ -n "${crates_macos}" ]]; then
-            echo "has_macos_work=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "has_macos_work=false" >> "${GITHUB_OUTPUT}"
-          fi
+          echo "verify_macos=${verify_macos}" >> "${GITHUB_OUTPUT}"
 
   verify_linux:
     name: Verify release (Linux)
@@ -193,12 +187,12 @@ jobs:
   verify_macos:
     name: Verify release (macOS arm64)
     needs: resolve_release_set
-    if: needs.resolve_release_set.outputs.has_macos_work == 'true'
+    if: needs.resolve_release_set.outputs.verify_macos == 'true'
     runs-on: macos-15
     permissions:
       contents: read
     env:
-      RELEASE_CRATES: ${{ needs.resolve_release_set.outputs.crates_macos }}
+      RELEASE_CRATES: ${{ needs.resolve_release_set.outputs.crates }}
       WASMEDGE_VERSION: ${{ needs.resolve_release_set.outputs.wasmedge_version }}
 
     steps:
