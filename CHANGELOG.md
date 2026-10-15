@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.17.1] - 2026-10-13
+## [0.17.1] - 2026-10-15
 
 ### ⛰️  Features
 
@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
+- *(async-wasi)* Register sockets with AsyncFd::register ([#165](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/165))
 - *(sys)* Pass wasm bytes to the C API without a leaking heap copy ([#160](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/160))
 - *(sys)* Compile fiber-for-wasmedge only on Linux targets ([#158](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/158))
 - *(sys)* Point rerun-if-changed at build_standalone.rs ([#150](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/150))
@@ -32,6 +33,7 @@ All notable changes to this project will be documented in this file.
 
 ### Ci
 
+- *(uncategorized)* Skip the macOS release verification while async-wasi is unpublished ([#164](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/164))
 - *(uncategorized)* Build the pinned WasmEdge release in the Windows job ([#163](https://github.com/WasmEdge/wasmedge-rust-sdk/pull/163))
 - *(uncategorized)* Delete publish-async-api-docs.yml
 - *(uncategorized)* Replace the release DAG with cargo publish workspace support
