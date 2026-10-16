@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Advice","SystemTimeSpec"],"mod":["impls","virtual_sys"],"struct":["FdFlags","FdStat","FileType","Filestat","Lookupflags","OFlags","ReaddirEntity","RiFlags","RoFlags","SdFlags","SiFlags","WASIRights"],"trait":["WasiDir","WasiFile","WasiFileSys","WasiNode"]};

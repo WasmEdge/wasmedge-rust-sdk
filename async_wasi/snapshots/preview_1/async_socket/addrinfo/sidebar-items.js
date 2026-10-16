@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AddressFamily"],"fn":["sock_getaddrinfo"],"struct":["WasiAddrinfo","WasiSockaddr"]};

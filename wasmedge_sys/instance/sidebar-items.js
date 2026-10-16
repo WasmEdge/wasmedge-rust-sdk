@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["function","global","memory","module","table"],"struct":["FuncType","GlobalType","InnerRef","MemoryType","TableType"]};

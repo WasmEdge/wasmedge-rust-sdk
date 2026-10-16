@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProgramOptionType"],"struct":["ModuleDescriptor","Plugin","PluginDescriptor","PluginManager","PluginVersion","ProgramOption"],"type":["ModuleInstanceCreateFn","PluginModule"]};

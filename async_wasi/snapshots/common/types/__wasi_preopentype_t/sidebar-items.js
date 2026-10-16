@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["__WASI_PREOPENTYPE_DIR"],"type":["Type"]};
