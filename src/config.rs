@@ -776,7 +776,8 @@ impl CommonConfigOptions {
     ///
     /// Since WasmEdge 0.17.0, only [RunMode::Aot] loads the AOT custom sections from a universal
     /// WASM file or `dlopen`s a shared-library WASM artifact; in the other modes, the AOT data is
-    /// ignored and the WASM runs in the selected engine.
+    /// ignored and the WASM runs in the selected engine. Since WasmEdge 0.17.2, the other modes
+    /// reject shared-library WASM artifacts instead of reloading their embedded WASM.
     ///
     /// # Argument
     ///

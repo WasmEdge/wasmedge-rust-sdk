@@ -5,7 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  WASMEDGE_VERSION: "0.17.1"
+  WASMEDGE_VERSION: "0.17.2"
   # .rustfmt.toml relies on nightly-only options (imports_granularity,
   # group_imports, ...) that stable rustfmt silently ignores.
   RUSTFMT_TOOLCHAIN: "nightly-2026-07-16"

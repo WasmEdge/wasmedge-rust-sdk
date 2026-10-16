@@ -342,6 +342,8 @@ pub const WasmEdge_ErrCode_AccessNullI31: WasmEdge_ErrCode = 1046;
 pub const WasmEdge_ErrCode_AccessNullException: WasmEdge_ErrCode = 1047;
 pub const WasmEdge_ErrCode_CastFailed: WasmEdge_ErrCode = 1048;
 pub const WasmEdge_ErrCode_UncaughtException: WasmEdge_ErrCode = 1049;
+pub const WasmEdge_ErrCode_PendingException: WasmEdge_ErrCode = 1050;
+pub const WasmEdge_ErrCode_CallStackExhausted: WasmEdge_ErrCode = 1051;
 #[doc = " Error code C enumeration."]
 pub type WasmEdge_ErrCode = ::std::os::raw::c_uint;
 pub const WasmEdge_TypeCode_TypeIndex: WasmEdge_TypeCode = 0;
@@ -1071,7 +1073,7 @@ extern "C" {
     pub fn WasmEdge_ConfigureGetMaxMemoryPage(Cxt: *const WasmEdge_ConfigureContext) -> u64;
 }
 extern "C" {
-    #[doc = " Set the run mode for module execution.\n\n Selects the engine used to execute a WebAssembly module: interpreter\n (default), JIT, or AOT. Only `WasmEdge_RunMode_AOT` will load AOT custom\n sections from universal WASM, or `dlopen` shared-library WASM artifacts;\n in the other modes, AOT data is ignored, and shared-library inputs are\n re-loaded as plain WASM after extracting their embedded bytes.\n\n This function is thread-safe.\n\n \\param Cxt the WasmEdge_ConfigureContext to set the run mode.\n \\param Mode the WasmEdge_RunMode value."]
+    #[doc = " Set the run mode for module execution.\n\n Selects the engine used to execute a WebAssembly module: interpreter\n (default), JIT, or AOT. Only `WasmEdge_RunMode_AOT` will load AOT custom\n sections from universal WASM, or `dlopen` shared-library WASM artifacts;\n in the other modes, AOT data is ignored, and shared-library inputs are\n rejected.\n\n This function is thread-safe.\n\n \\param Cxt the WasmEdge_ConfigureContext to set the run mode.\n \\param Mode the WasmEdge_RunMode value."]
     pub fn WasmEdge_ConfigureSetRunMode(
         Cxt: *mut WasmEdge_ConfigureContext,
         Mode: WasmEdge_RunMode,
