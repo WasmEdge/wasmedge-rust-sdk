@@ -140,6 +140,7 @@ use wasmedge_types::{CompilerOptimizationLevel, CompilerOutputFormat};
 ///
 ///       Since WasmEdge 0.17.0, only the AOT mode loads the AOT custom sections from a universal WASM
 ///       file or `dlopen`s a shared-library WASM artifact; in the other modes, the AOT data is ignored.
+///       Since WasmEdge 0.17.2, the other modes reject shared-library WASM artifacts.
 ///
 /// API users can first set the options of interest, such as those related to the WebAssembly proposals,
 /// host registrations, AOT compiler options, and etc., then apply the configuration

@@ -1,7 +1,7 @@
 name: Integration Tests
 
 env:
-  WASMEDGE_VERSION: "0.17.1"
+  WASMEDGE_VERSION: "0.17.2"
 
 on:
   push:

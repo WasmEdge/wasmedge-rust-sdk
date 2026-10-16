@@ -9,7 +9,7 @@ use build_standalone::*;
 
 use crate::build_paths::AsPath;
 
-const WASMEDGE_RELEASE_VERSION: &str = "0.17.1";
+const WASMEDGE_RELEASE_VERSION: &str = "0.17.2";
 const PREGENERATED_BINDINGS: &str = "bindings/wasmedge.rs";
 const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = phf_map! {
     // The key is: {os}/{arch}[/{libc}][/static]
@@ -19,15 +19,15 @@ const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = ph
     // The value is a tuple containing the sha256sum of the archive, and the platform slug as it appears in the archive name:
     //  * The archive name is WasmEdge-{version}-{slug}.tar.gz
 
-    "macos/aarch64"                => ("7f6810f0676f8405586a3edb350ce9a6eb256ef7118f2e327f131b7833d0033e", "darwin_arm64"),
-    "macos/aarch64/static"         => ("ca319dc10e0aaa70535b5b3023dc74763efe3fbecb37aff609bdb48a4d2653e9", "darwin_arm64_static"),
-    "macos/x86_64"                 => ("e96d10da0dfe560ff17775cf4a205ed43cd855dafbb4056ea908865066666660", "darwin_x86_64"),
-    "linux/aarch64/gnu"            => ("6d7762429083e787ccbddf629868bb59de4325ccdcc31d9f7bd240adcdd9fe9d", "manylinux_2_28_aarch64"),
-    "linux/x86_64/gnu"             => ("27a1abec072ddf45b40e2e81e33c1e5fe9b241f31fd1bbf0182f05097489a07a", "manylinux_2_28_x86_64"),
-    "linux/aarch64/gnu/static"     => ("e3de8926cef486a3af855513239e411db68b8b4f01c4060ee9d5206ca118ca50", "debian11_aarch64_static"),
-    "linux/x86_64/gnu/static"      => ("0d99d3c3d71ec020cfc287215c2234d8be799970d03857f037d7015979f0749d", "debian11_x86_64_static"),
-    "linux/aarch64/musl/static"    => ("c3eced9ecfcedc71725c34b4f85812e67de11cfe4edbf9a923717a2948a28148", "alpine3.23_aarch64_static"),
-    "linux/x86_64/musl/static"     => ("b30a522c886996cbc5eaca1eac7a44c8d457b61507bca449e6b673a5e89df2c7", "alpine3.23_x86_64_static"),
+    "macos/aarch64"                => ("95b1d8e86d3710b9d8da1fcf020380ae58e904ee09dd90e73cb7da010ed2005b", "darwin_arm64"),
+    "macos/aarch64/static"         => ("73283a45072afb3d32c23ad1c95fd91bf71f1f433e1856c78af51589c7781370", "darwin_arm64_static"),
+    "macos/x86_64"                 => ("a3ad1e5f613d4c3d1caf0c6bda972ccf52e68f3b6d7086c0f091d6af13f891cc", "darwin_x86_64"),
+    "linux/aarch64/gnu"            => ("dcbd9756bb5526698e186b2568324c9ddfa295b8a535347a9755a8bb12fdbb1e", "manylinux_2_28_aarch64"),
+    "linux/x86_64/gnu"             => ("995a2d27b3bb2d027176971a349b72fbf6401d25068383d29bceb585f83d234b", "manylinux_2_28_x86_64"),
+    "linux/aarch64/gnu/static"     => ("5b50939a0f7ab68e4d4a55933c53bc6611577367365b07b707c70c5efe17c154", "debian12_aarch64_static"),
+    "linux/x86_64/gnu/static"      => ("563563db550988f4a9f127cd856e0f18b57ce98f9ca9376f1e1cd65a90abad68", "debian12_x86_64_static"),
+    "linux/aarch64/musl/static"    => ("4c3f35e20968c32ecba5b2583c858058f94394d339729b46d975f75e2ccf130b", "alpine3.23_aarch64_static"),
+    "linux/x86_64/musl/static"     => ("e8277d2fee924d2ca8c8a2866d13faeef40028e442a207da0a31da9fed0930ab", "alpine3.23_x86_64_static"),
 };
 
 lazy_static! {
