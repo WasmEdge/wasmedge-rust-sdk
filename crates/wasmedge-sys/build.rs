@@ -10,6 +10,7 @@ use build_standalone::*;
 use crate::build_paths::AsPath;
 
 const WASMEDGE_RELEASE_VERSION: &str = "0.17.1";
+const PREGENERATED_BINDINGS: &str = "bindings/wasmedge.rs";
 const REMOTE_ARCHIVES: phf::Map<&'static str, (&'static str, &'static str)> = phf_map! {
     // The key is: {os}/{arch}[/{libc}][/static]
     //  * The libc abi is only added on linux.
@@ -70,6 +71,13 @@ fn main() {
     // rerun if the other build sources change
     println!("cargo:rerun-if-changed=build_paths.rs");
     println!("cargo:rerun-if-changed=build_standalone.rs");
+
+    if Env("DOCS_RS").lossy().is_some() {
+        println!("cargo:rerun-if-changed={PREGENERATED_BINDINGS}");
+        std::fs::copy(PREGENERATED_BINDINGS, OUT_DIR.join("wasmedge.rs"))
+            .expect("failed to copy the pregenerated bindings");
+        return;
+    }
 
     // find the location of the libwasmedge
     let paths = if cfg!(feature = "standalone") {
@@ -179,6 +187,7 @@ fn main() {
             .arg(header)
             .arg("--")
             .arg(format!("-I{inc_dir}"))
+            .arg("-fretain-comments-from-system-headers")
             .status()
             .expect("failed to run rust bindgen")
             .success();
@@ -187,6 +196,7 @@ fn main() {
         bindgen::builder()
             .header(header)
             .clang_arg(format!("-I{inc_dir}"))
+            .clang_arg("-fretain-comments-from-system-headers")
             .prepend_enum_name(false)
             .dynamic_link_require_all(true)
             .allowlist_item("WasmEdge.*")

@@ -69,6 +69,18 @@ jobs:
           cargo clippy -V
           cargo clippy --lib --examples --features aot,async,wasi_nn,wasmedge_process,ffi -- -D warnings
 
+      - name: Check the pregenerated bindings against the installed headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp crates/wasmedge-sys/bindings/wasmedge.rs /tmp/pregenerated.rs
+          rustfmt --edition 2021 /tmp/pregenerated.rs
+          for generated in target/debug/build/wasmedge-sys-*/out/wasmedge.rs; do
+            cp "${generated}" /tmp/generated.rs
+            rustfmt --edition 2021 /tmp/generated.rs
+            diff -u /tmp/pregenerated.rs /tmp/generated.rs
+          done
+
       - name: Build Async-Hello for Testing
         working-directory: examples/wasmedge-sys
         run: |
@@ -148,6 +160,7 @@ jobs:
         with:
           repository: WasmEdge/WasmEdge
           path: WasmEdge
+          ref: ${{ env.WASMEDGE_VERSION }}
           fetch-depth: 0
 
       - name: Install dependency
@@ -158,7 +171,6 @@ jobs:
       - name: Build WasmEdge with Release mode
         working-directory: WasmEdge
         run: |
-          git checkout $(git tag -l --sort=-version:refname | Where-Object { $_ -match '^0.[0-9][0-9].[0-9]$' } | Select-Object -First 1)
           $vsPath = (vswhere -latest -property installationPath)
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
@@ -198,3 +210,21 @@ jobs:
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=10.0.19041.0"
           $env:Path="$env:Path;C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;D:\a\wasmedge-rust-sdk\wasmedge-rust-sdk\WasmEdge\build\lib\api"
           cargo test --workspace --exclude async-wasi --features aot,ffi --locked -- --nocapture --test-threads=1
+
+  docs_rs:
+    name: docs.rs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout WasmEdge Rust SDK
+        uses: actions/checkout@v7
+
+      - name: Install Rust-nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-docs-rs
+        uses: dtolnay/install@cargo-docs-rs
+
+      - name: Build the documentation the way docs.rs does
+        run: |
+          cargo docs-rs -p wasmedge-sys
+          cargo docs-rs -p wasmedge-sdk
